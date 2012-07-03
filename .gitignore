@@ -1,6 +1,6 @@
+leo_*.sh
 .eunit
+ebin
 deps
-priv
-*.o
-*.beam
-*.plt
+snmp/*/db
+ring_*
