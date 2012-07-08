@@ -56,7 +56,7 @@ find_by_parent_dir(ParentDir) ->
     case lists:foldl(fun({ok, List}, Acc) ->
                              Acc ++ List
                      end, [], ResL0) of
-        []   -> not_found;
+        []   -> {ok, []};
         List -> {ok, ordsets:from_list(lists:flatten(List))}
     end.
 
