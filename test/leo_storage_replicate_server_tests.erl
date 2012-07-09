@@ -71,6 +71,9 @@ setup() ->
     net_kernel:start([Test0Node, shortnames]),
     {ok, Test1Node} = slave:start_link(list_to_atom(Hostname), 'test_rep_1'),
 
+    true = rpc:call(Test0Node, code, add_path, ["../deps/meck/ebin"]),
+    true = rpc:call(Test1Node, code, add_path, ["../deps/meck/ebin"]),
+
     timer:sleep(100),
     {ok, _Pid} = leo_storage_replicate_server:start_link(?TEST_SERVER_ID),
     {Test0Node, Test1Node}.

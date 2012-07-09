@@ -51,6 +51,9 @@ setup() ->
     net_kernel:start([Node0, shortnames]),
     {ok, Node1} = slave:start_link(list_to_atom(Hostname), 'node_1'),
 
+    true = rpc:call(Node0, code, add_path, ["../deps/meck/ebin"]),
+    true = rpc:call(Node1, code, add_path, ["../deps/meck/ebin"]),
+
     [Node0, Node1].
 
 teardown([_, Node1]) ->

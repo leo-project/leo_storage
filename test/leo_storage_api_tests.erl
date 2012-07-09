@@ -61,6 +61,9 @@ setup() ->
     net_kernel:start([Node0, shortnames]),
     {ok, Node1} = slave:start_link(list_to_atom(Hostname), 'manager_0'),
 
+    true = rpc:call(Node0, code, add_path, ["../deps/meck/ebin"]),
+    true = rpc:call(Node1, code, add_path, ["../deps/meck/ebin"]),
+
     meck:new(leo_logger_api),
     meck:expect(leo_logger_api, new,          fun(_,_,_) -> ok end),
     meck:expect(leo_logger_api, new,          fun(_,_,_,_,_) -> ok end),

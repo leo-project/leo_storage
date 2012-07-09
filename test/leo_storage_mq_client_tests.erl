@@ -84,6 +84,9 @@ setup() ->
     net_kernel:start([Test0Node, shortnames]),
     {ok, Test1Node} = slave:start_link(list_to_atom(Hostname), 'test_1'),
 
+    true = rpc:call(Test0Node, code, add_path, ["../deps/meck/ebin"]),
+    true = rpc:call(Test1Node, code, add_path, ["../deps/meck/ebin"]),
+
     %% gen mock.
     meck:new(leo_logger_api),
     meck:expect(leo_logger_api, new,          fun(_,_,_) -> ok end),
