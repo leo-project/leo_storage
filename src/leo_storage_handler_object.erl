@@ -51,7 +51,6 @@
              {ok, reference(), binary(), binary(), binary()} |
              {error, reference(), any()}).
 get({Ref, Key}) ->
-    %% ?debugVal({Ref, Key}),
     _ = leo_statistics_req_counter:increment(?STAT_REQ_GET),
 
     case leo_redundant_manager_api:get_redundancies_by_key(get, Key) of
@@ -78,15 +77,14 @@ get({Ref, Key}) ->
              {ok, #metadata{}, binary()} |
              {error, any()}).
 get(AddrId, Key, ReqId) ->
-    %% ?debugVal({AddrId, Key, ReqId}),
     _ = leo_statistics_req_counter:increment(?STAT_REQ_GET),
 
-    case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
-        {ok, #redundancies{nodes = Redundancies, r = ReadQuorum}} ->
-            Ret = read_repair(ReadQuorum, AddrId, Key, ReqId, Redundancies);
-        _Error ->
-            Ret = {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
-    end,
+    Ret = case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
+              {ok, #redundancies{nodes = Redundancies, r = ReadQuorum}} ->
+                  read_repair(ReadQuorum, AddrId, Key, ReqId, Redundancies);
+              _Error ->
+                  {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
+          end,
 
     case Ret of
         {ok, NewMeta, ObjectPool} ->
@@ -104,8 +102,6 @@ get(AddrId, Key, ReqId) ->
 %% @doc Retrieve an object which is requested from gateway w/etag.
 %%
 get(AddrId, Key, ETag, ReqId) ->
-    %% ?debugVal({AddrId, Key, ETag, ReqId}),
-
     case leo_object_storage_api:head(term_to_binary({AddrId, Key})) of
         {ok, MetaBin} ->
             Metadata = binary_to_term(MetaBin),
@@ -450,16 +446,14 @@ replicate(Method, DataObject) when is_record(DataObject, object) == true ->
         _Other ->
             ObjectPool = leo_object_storage_pool:new(DataObject),
             Ref  = make_ref(),
-
-            case Method of
-                ?CMD_PUT    -> Ret0 = put_fun(ObjectPool, Ref);
-                ?CMD_DELETE -> Ret0 = delete_fun(ObjectPool, Ref)
-            end,
-
-            case Ret0 of
-                {ok, Ref}           -> Ret1 = ok;
-                {error, Ref, Cause} -> Ret1 = {error, Cause}
-            end,
+            Ret0 = case Method of
+                       ?CMD_PUT    -> put_fun(ObjectPool, Ref);
+                       ?CMD_DELETE -> delete_fun(ObjectPool, Ref)
+                   end,
+            Ret1 = case Ret0 of
+                       {ok, Ref}           -> ok;
+                       {error, Ref, Cause} -> {error, Cause}
+                   end,
 
             ok = leo_object_storage_pool:destroy(ObjectPool),
             Ret1

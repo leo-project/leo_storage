@@ -59,11 +59,12 @@
 %%
 -spec(start(string()) ->
              ok | {error, any()}).
-start(RootPath) ->
-    case (string:len(RootPath) == string:rstr(RootPath, ?SLASH)) of
-        true  -> NewRootPath = RootPath;
-        false -> NewRootPath = RootPath ++ ?SLASH
-    end,
+start(RootPath0) ->
+    RootPath1 =
+        case (string:len(RootPath0) == string:rstr(RootPath0, ?SLASH)) of
+            true  -> RootPath0;
+            false -> RootPath0 ++ ?SLASH
+        end,
 
     ?TBL_REBALANCE_COUNTER = ets:new(?TBL_REBALANCE_COUNTER,
                                      [named_table, public, {read_concurrency, true}]),
@@ -71,7 +72,7 @@ start(RootPath) ->
       fun({Id, Path}) ->
               leo_mq_api:new(Id, [{?MQ_PROP_MOD,          ?MODULE},
                                   {?MQ_PROP_FUN,          ?MQ_SUBSCRIBE_FUN},
-                                  {?MQ_PROP_ROOT_PATH,    NewRootPath ++ Path},
+                                  {?MQ_PROP_ROOT_PATH,    RootPath1 ++ Path},
                                   {?MQ_PROP_DB_PROCS,     ?env_num_of_mq_procs()},
                                   {?MQ_PROP_MAX_INTERVAL, 1000}, %% 1000 ms
                                   {?MQ_PROP_MIN_INTERVAL,  200}  %%  200 ms
@@ -165,10 +166,10 @@ subscribe(Id, MessageBin) when Id == ?QUEUE_ID_REPLICATE_MISS;
                 ok ->
                     ok;
                 Error ->
-                    case Id of
-                        ?QUEUE_ID_REPLICATE_MISS    -> Type = ?QUEUE_TYPE_REPLICATION_MISS;
-                        ?QUEUE_ID_INCONSISTENT_DATA -> Type = ?QUEUE_TYPE_INCONSISTENT_DATA
-                    end,
+                    Type = case Id of
+                               ?QUEUE_ID_REPLICATE_MISS    -> ?QUEUE_TYPE_REPLICATION_MISS;
+                               ?QUEUE_ID_INCONSISTENT_DATA -> ?QUEUE_TYPE_INCONSISTENT_DATA
+                           end,
                     publish(Type, AddrId, Key, ErrorType),
                     Error
             end
@@ -243,19 +244,19 @@ sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
 notify_message_to_manager([],_VNodeId,_Node) ->
     {error, 'fail_notification'};
 notify_message_to_manager([Manager|T], VNodeId, Node) ->
-    case rpc:call(list_to_atom(Manager), leo_manager_api, notify,
-                  [synchronized, VNodeId, Node]) of
-        ok ->
-            Res = ok;
-        {_, Cause} ->
-            ?warn("notify_message_to_manager/3","vnode-id:~w, node:~w, cause:~p",
-                  [VNodeId, Node, Cause]),
-            Res = {error, Cause};
-        timeout = Cause ->
-            ?warn("notify_message_to_manager/3","vnode-id:~w, node:~w, cause:~p",
-                  [VNodeId, Node, Cause]),
-            Res = {error, Cause}
-    end,
+    Res = case rpc:call(list_to_atom(Manager), leo_manager_api, notify,
+                        [synchronized, VNodeId, Node]) of
+              ok ->
+                  ok;
+              {_, Cause} ->
+                  ?warn("notify_message_to_manager/3","vnode-id:~w, node:~w, cause:~p",
+                        [VNodeId, Node, Cause]),
+                  {error, Cause};
+              timeout = Cause ->
+                  ?warn("notify_message_to_manager/3","vnode-id:~w, node:~w, cause:~p",
+                        [VNodeId, Node, Cause]),
+                  {error, Cause}
+          end,
 
     case Res of
         ok ->
@@ -335,16 +336,16 @@ correct_redundancies3(_, [], _) ->
 correct_redundancies3(InconsistentNodes, [Node|Rest], Metadata) ->
     RPCKey = rpc:async_call(Node, leo_storage_api, synchronize,
                             [?TYPE_OBJ, InconsistentNodes, Metadata]),
-    case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
-        {value, ok} ->
-            Ret = ok;
-        {value, {error, Cause}} ->
-            Ret = {error, Cause};
-        {value, {badrpc = Cause, _}} ->
-            Ret = {error, Cause};
-        timeout = Cause->
-            Ret = {error, Cause}
-    end,
+    Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
+              {value, ok} ->
+                  ok;
+              {value, {error, Cause}} ->
+                  {error, Cause};
+              {value, {badrpc = Cause, _}} ->
+                  {error, Cause};
+              timeout = Cause->
+                  {error, Cause}
+          end,
 
     case Ret of
         ok ->
@@ -366,23 +367,23 @@ notify_rebalance_message_to_manager(VNodeId) ->
         {ok, NumOfMessages} ->
             lists:foldl(fun(_Manager, true) ->
                                 void;
-                           (Manager, false = Res) ->
-                                case is_atom(Manager) of
-                                    true  -> NewManager = Manager;
-                                    false -> NewManager = list_to_atom(Manager)
-                                end,
+                           (Manager0, false = Res) ->
+                                Manager1 = case is_atom(Manager0) of
+                                               true  -> Manager0;
+                                               false -> list_to_atom(Manager0)
+                                           end,
 
-                                case catch rpc:call(NewManager, leo_manager_api, notify,
+                                case catch rpc:call(Manager1, leo_manager_api, notify,
                                                     [rebalance, VNodeId, erlang:node(), NumOfMessages], ?DEF_TIMEOUT) of
                                     ok ->
                                         true;
                                     {_, Cause} ->
                                         ?error("notify_rebalance_message_to_manager/1","manager:~p, vnode_id:~w, ~ncause:~p",
-                                               [NewManager, VNodeId, Cause]),
+                                               [Manager1, VNodeId, Cause]),
                                         Res;
                                     timeout = Cause ->
                                         ?error("notify_rebalance_message_to_manager/1","manager:~p, vnode_id:~w, ~ncause:~p",
-                                               [NewManager, VNodeId, Cause]),
+                                               [Manager1, VNodeId, Cause]),
                                         Res
                                 end
                         end, false, ?env_manager_nodes(leo_storage)),

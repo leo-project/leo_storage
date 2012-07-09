@@ -175,16 +175,15 @@ replicate1(local, #req_params{pid      = Pid,
                               req_id   = ReqId}) ->
     Ref  = make_ref(),
     Node = erlang:node(),
-
-    case leo_storage_handler_object:put(ObjPool, Ref) of
-        {ok, Ref} ->
-            Ret = {ok, Node};
-        {error, Ref, Cause} ->
-            ?warn("replicate1/2", "key:~s, node:~w, reqid:~w, cause:~p",
-                  [Key, local, ReqId, Cause]),
-            enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
-            Ret = {error, Node, Cause}
-    end,
+    Ret  = case leo_storage_handler_object:put(ObjPool, Ref) of
+               {ok, Ref} ->
+                   {ok, Node};
+               {error, Ref, Cause} ->
+                   ?warn("replicate1/2", "key:~s, node:~w, reqid:~w, cause:~p",
+                         [Key, local, ReqId, Cause]),
+                   enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
+                   {error, Node, Cause}
+           end,
 
     catch leo_object_storage_pool:destroy(ObjPool),
     Pid ! Ret;
@@ -195,15 +194,15 @@ replicate1(Node, #req_params{pid     = Pid,
                              rpc_key = RPCKey,
                              addr_id = AddrId,
                              key     = Key}) ->
-    case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
+    Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
         {value, ok} ->
-            Ret = {ok, Node};
+            {ok, Node};
         {value, {error, Cause}} ->
-            Ret = {error, Cause};
+            {error, Cause};
         {value, {badrpc, Cause}} ->
-            Ret = {error, Cause};
+            {error, Cause};
         timeout = Cause ->
-            Ret = {error, Cause}
+            {error, Cause}
     end,
 
     case Ret of

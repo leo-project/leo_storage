@@ -51,20 +51,20 @@ register_in_monitor(RequestedTimes) ->
         undefined ->
             {error, not_found};
         Pid ->
-            Fun = fun(Node, Res) ->
-                          case is_atom(Node) of
-                              true  -> NewNode = Node;
-                              false -> NewNode = list_to_atom(Node)
-                          end,
+            Fun = fun(Node0, Res) ->
+                          Node1 = case is_atom(Node0) of
+                                      true  -> Node0;
+                                      false -> list_to_atom(Node0)
+                                  end,
 
-                          case leo_utils:node_existence(NewNode) of
+                          case leo_utils:node_existence(Node1) of
                               true ->
-                                  case rpc:call(NewNode, leo_manager_api, register,
+                                  case rpc:call(Node1, leo_manager_api, register,
                                                 [RequestedTimes, Pid, erlang:node(), storage], ?DEF_TIMEOUT) of
                                       ok ->
                                           true;
                                       Error ->
-                                          ?error("register_in_monitor/1", "manager:~w, cause:~p", [NewNode, Error]),
+                                          ?error("register_in_monitor/1", "manager:~w, cause:~p", [Node1, Error]),
                                           Res
                                   end;
                               false ->
@@ -168,15 +168,16 @@ compact() ->
 %%
 -spec(get_cluster_node_status() -> {ok, #cluster_node_status{}}).
 get_cluster_node_status() ->
-    case application:get_key(leo_storage, vsn) of
-        {ok, Ver} -> Version = Ver;
-        undefined -> Version = []
-    end,
+    Version = case application:get_key(leo_storage, vsn) of
+                  {ok, Vsn} -> Vsn;
+                  undefined -> []
+              end,
 
-    case leo_redundant_manager_api:checksum(ring) of
-        {ok, {Chksum0, Chksum1}} -> {RingHashCur, RingHashPrev} = {Chksum0, Chksum1};
-        _ -> {RingHashCur, RingHashPrev} = {[], []}
-    end,
+    {RingHashCur, RingHashPrev} =
+        case leo_redundant_manager_api:checksum(ring) of
+            {ok, {Chksum0, Chksum1}} -> {Chksum0, Chksum1};
+            _ -> {[], []}
+        end,
 
     Directories = [{log,    ?env_log_dir(leo_storage)},
                    {mnesia, mnesia:system_info(directory)}

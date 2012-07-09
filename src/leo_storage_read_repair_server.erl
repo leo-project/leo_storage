@@ -154,20 +154,20 @@ compare(From, Ref, #req_params{read_quorum  = ReadQuorum,
 compare(Pid, RPCKey, Node, #req_params{metadata = #metadata{addr_id = AddrId,
                                                             key     = Key,
                                                             clock   = Clock}}) ->
-    case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
-        {value, {ok, #metadata{clock = RemoteClock}}} when Clock == RemoteClock ->
-            Ret = ok;
-        {value, {ok, #metadata{clock = RemoteClock}}} when Clock  > RemoteClock ->
-            Ret = {error, {Node, secondary_inconsistency}};
-        {value, {ok, #metadata{clock = RemoteClock}}} when Clock  < RemoteClock ->
-            Ret = {error, {Node, primary_inconsistency}};
-        {value, {error, Cause}} ->
-            Ret = {error, {Node, Cause}};
-        {value, {badrpc, Cause}} ->
-            Ret = {error, {Node, Cause}};
-        timeout = Cause ->
-            Ret = {error, {Node, Cause}}
-    end,
+    Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
+              {value, {ok, #metadata{clock = RemoteClock}}} when Clock == RemoteClock ->
+                  ok;
+              {value, {ok, #metadata{clock = RemoteClock}}} when Clock  > RemoteClock ->
+                  {error, {Node, secondary_inconsistency}};
+              {value, {ok, #metadata{clock = RemoteClock}}} when Clock  < RemoteClock ->
+                  {error, {Node, primary_inconsistency}};
+              {value, {error, Cause}} ->
+                  {error, {Node, Cause}};
+              {value, {badrpc, Cause}} ->
+                  {error, {Node, Cause}};
+              timeout = Cause ->
+                  {error, {Node, Cause}}
+          end,
 
     case Ret of
         ok ->
