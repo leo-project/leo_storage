@@ -25,7 +25,7 @@
 %%====================================================================
 -module(leo_storage_mq_statistics_tests).
 -author('yosuke hara').
--vsn('0.9.0').
+-vsn('0.9.1').
 
 -include("leo_storage.hrl").
 -include_lib("leo_statistics/include/leo_statistics.hrl").

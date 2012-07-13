@@ -25,7 +25,7 @@
 %%====================================================================
 -module(leo_storage_read_repair_server_tests).
 -author('yosuke hara').
--vsn('0.9.0').
+-vsn('0.9.1').
 
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").

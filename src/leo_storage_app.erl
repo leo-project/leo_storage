@@ -26,7 +26,7 @@
 -module(leo_storage_app).
 
 -author('Yosuke Hara').
--vsn('0.9.0').
+-vsn('0.9.1').
 -behaviour(application).
 
 %% Application and Supervisor callbacks

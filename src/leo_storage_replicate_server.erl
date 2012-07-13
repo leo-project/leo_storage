@@ -26,7 +26,7 @@
 -module(leo_storage_replicate_server).
 
 -author('Yosuke Hara').
--vsn('0.9.0').
+-vsn('0.9.1').
 
 -behaviour(gen_server).
 
