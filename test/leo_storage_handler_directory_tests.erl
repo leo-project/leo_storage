@@ -25,7 +25,7 @@
 %%====================================================================
 -module(leo_storage_handler_directory_tests).
 -author('yosuke hara').
--vsn('0.9.0').
+-vsn('0.9.1').
 
 
 -include("leo_storage.hrl").
