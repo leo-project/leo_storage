@@ -265,7 +265,11 @@ prefix_search(ParentDir) ->
                       true ->
                           case (Length2 -1) of
                               Length0 when Metadata#metadata.del == 0 ->
-                                  ordsets:add_element(Metadata, Acc);
+                                  case (string:rstr(Key, "/") == length(Key)) of
+                                      true  -> ordsets:add_element(#metadata{key   = Key,
+                                                                             dsize = -1}, Acc);
+                                      false -> ordsets:add_element(Metadata, Acc)
+                                  end;
                               Length1 when Metadata#metadata.del == 0 ->
                                   {Token2, _} = lists:split(Length1, Token1),
                                   Dir = lists:foldl(fun(Str0, []  ) -> Str0 ++ ?SLASH;
