@@ -136,18 +136,6 @@
             _ -> []
         end).
 
-%% -define(env_directory_db_path(),
-%%         case application:get_env(leo_storage, directory_db_path) of
-%%             {ok, DirectoryDBPath} -> DirectoryDBPath;
-%%             _ -> ""
-%%         end).
-
-%% -define(env_num_of_dir_backend_db_procs(),
-%%         case application:get_env(leo_storage, directory_db_procs) of
-%%             {ok, DirectoryDBProcs} -> DirectoryDBProcs;
-%%             _ -> 8
-%%         end).
-
 -define(env_num_of_replicators(),
         case application:get_env(leo_storage, num_of_replicators) of
             {ok, NumOfReplicators} -> NumOfReplicators;

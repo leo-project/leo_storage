@@ -26,7 +26,6 @@
 -module(leo_storage_mq_client).
 
 -author('Yosuke Hara').
--vsn('0.9.1').
 
 -include("leo_storage.hrl").
 -include_lib("leo_commons/include/leo_commons.hrl").

@@ -26,7 +26,6 @@
 -module(leo_storage_handler_object).
 
 -author('Yosuke Hara').
--vsn('0.9.1').
 
 -include("leo_storage.hrl").
 -include_lib("leo_commons/include/leo_commons.hrl").
@@ -36,11 +35,21 @@
 -include_lib("leo_statistics/include/leo_statistics.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
--export([get/1, get/3, get/4, put/1, put/2, put/6, delete/1, delete/4,
+-export([get/1, get/3, get/4, get/5,
+         put/1, put/2, put/6, delete/1, delete/4,
          head/2, copy/3, prefix_search/1]).
 
 -define(PROC_TYPE_REPLICATE,   'replicate').
 -define(PROC_TYPE_READ_REPAIR, 'read_repair').
+
+-record(read_parameter, {
+          addr_id       :: integer(),
+          key           :: string(),
+          start_pos = 0 :: integer(),
+          end_pos   = 0 :: integer(),
+          quorum        :: integer(),
+          req_id        :: integer()
+         }).
 
 %%--------------------------------------------------------------------
 %% API - GET
@@ -77,11 +86,47 @@ get({Ref, Key}) ->
              {ok, #metadata{}, binary()} |
              {error, any()}).
 get(AddrId, Key, ReqId) ->
+    get(AddrId, Key, 0, 0, ReqId).
+
+%% @doc Retrieve an object which is requested from gateway w/etag.
+%%
+-spec(get(integer(), string(), string(), integer()) ->
+                 {ok, #metadata{}, binary()} |
+                 {ok, match} |
+                 {error, any()}).
+get(AddrId, Key, ETag, ReqId) ->
+    case leo_object_storage_api:head(term_to_binary({AddrId, Key})) of
+        {ok, MetaBin} ->
+            Metadata = binary_to_term(MetaBin),
+            case (Metadata#metadata.checksum == ETag) of
+                true ->
+                    {ok, match};
+                false ->
+                    get(AddrId, Key, ReqId)
+            end;
+        not_found = Cause ->
+            {error, Cause};
+        Error ->
+            Error
+    end.
+
+%% @doc Retrieve a part of an object.
+%%
+-spec(get(integer(), string(), integer(), integer(), integer()) ->
+             {ok, #metadata{}, binary()} |
+             {error, any()}).
+get(AddrId, Key, StartPos, EndPos, ReqId) ->
     _ = leo_statistics_req_counter:increment(?STAT_REQ_GET),
 
     Ret = case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
               {ok, #redundancies{nodes = Redundancies, r = ReadQuorum}} ->
-                  read_repair(ReadQuorum, AddrId, Key, ReqId, Redundancies);
+                  ReadParameter = #read_parameter{addr_id   = AddrId,
+                                                  key       = Key,
+                                                  start_pos = StartPos,
+                                                  end_pos   = EndPos,
+                                                  quorum    = ReadQuorum,
+                                                  req_id    = ReqId},
+                  read_and_repair(ReadParameter, Redundancies);
               _Error ->
                   {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
           end,
@@ -95,26 +140,8 @@ get(AddrId, Key, ReqId) ->
                     ok = leo_object_storage_pool:destroy(ObjectPool),
                     {ok, NewMeta, Bin}
             end;
-        {error, Reason} ->
-            {error, Reason}
-    end.
-
-%% @doc Retrieve an object which is requested from gateway w/etag.
-%%
-get(AddrId, Key, ETag, ReqId) ->
-    case leo_object_storage_api:head(term_to_binary({AddrId, Key})) of
-        {ok, MetaBin} ->
-            Metadata = binary_to_term(MetaBin),
-            case (Metadata#metadata.checksum == ETag) of
-                true ->
-                    {ok, match};
-                false ->
-                    get(AddrId, Key, ReqId)
-            end;
-        not_found = Cause ->
-            {error, Cause};
-        {error, Why} ->
-            {error, Why}
+        Error ->
+            Error
     end.
 
 
@@ -265,7 +292,11 @@ prefix_search(ParentDir) ->
                       true ->
                           case (Length2 -1) of
                               Length0 when Metadata#metadata.del == 0 ->
-                                  ordsets:add_element(Metadata, Acc);
+                                  case (string:rstr(Key, "/") == length(Key)) of
+                                      true  -> ordsets:add_element(#metadata{key   = Key,
+                                                                             dsize = -1}, Acc);
+                                      false -> ordsets:add_element(Metadata, Acc)
+                                  end;
                               Length1 when Metadata#metadata.del == 0 ->
                                   {Token2, _} = lists:split(Length1, Token1),
                                   Dir = lists:foldl(fun(Str0, []  ) -> Str0 ++ ?SLASH;
@@ -313,7 +344,12 @@ put_fun(ObjectPool, Ref) ->
 -spec(get_fun(reference(), integer(), string()) ->
              {ok, reference(), #metadata{}, pid()} | {error, reference(), any()}).
 get_fun(Ref, AddrId, Key) ->
-    case leo_object_storage_api:get(term_to_binary({AddrId, Key})) of
+    get_fun(Ref, AddrId, Key, 0, 0).
+
+-spec(get_fun(reference(), integer(), string(), integer(), integer()) ->
+             {ok, reference(), #metadata{}, pid()} | {error, reference(), any()}).
+get_fun(Ref, AddrId, Key, StartPos, EndPos) ->
+    case leo_object_storage_api:get(term_to_binary({AddrId, Key}), StartPos, EndPos) of
         {ok, Metadata, ObjectPool} ->
             {ok, Ref, Metadata, ObjectPool};
         not_found = Cause ->
@@ -356,16 +392,21 @@ delete_fun(ObjectPool, Ref) ->
 
 %% @doc read reapir - compare with remote-node's meta-data.
 %%
--spec(read_repair(integer(), integer(), string(), integer(), list()) ->
+-spec(read_and_repair(#read_parameter{}, list()) ->
              {ok, #metadata{}, binary()} |
              {error, any()}).
-read_repair(_, _, _, _, []) ->
+read_and_repair(_, []) ->
     {error, ?ERROR_COULD_NOT_GET_DATA};
 
-read_repair(ReadQuorum, AddrId, Key, ReqId, [_|T]) ->
+read_and_repair(#read_parameter{addr_id   = AddrId,
+                                key       = Key,
+                                start_pos = StartPos,
+                                end_pos   = EndPos,
+                                quorum    = ReadQuorum,
+                                req_id    = ReqId} = ReadParameter, [_|T]) ->
     Ref   = make_ref(),
 
-    case get_fun(Ref, AddrId, Key) of
+    case get_fun(Ref, AddrId, Key, StartPos, EndPos) of
         {ok, Ref, Metadata, ObjectPool} when T =:= [] ->
             {ok, Metadata, ObjectPool};
         {ok, Ref, Metadata, ObjectPool} when T =/= [] ->
@@ -380,8 +421,10 @@ read_repair(ReadQuorum, AddrId, Key, ReqId, [_|T]) ->
             {error, Cause};
         {error, Ref, _Cause} ->
             case (erlang:length(T) >= ReadQuorum) of
-                true  -> read_repair(ReadQuorum, AddrId, Key, ReqId, T);
-                false -> {error, ?ERROR_COULD_NOT_GET_DATA}
+                true ->
+                    read_and_repair(ReadParameter, T);
+                false ->
+                    {error, ?ERROR_COULD_NOT_GET_DATA}
             end
     end.
 

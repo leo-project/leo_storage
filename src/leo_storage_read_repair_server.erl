@@ -26,7 +26,6 @@
 -module(leo_storage_read_repair_server).
 
 -author('Yosuke Hara').
--vsn('0.9.1').
 
 -behaviour(gen_server).
 
