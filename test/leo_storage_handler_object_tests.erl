@@ -61,7 +61,6 @@ object_handler_test_() ->
                            fun get_b2_/1,
                            fun get_b3_/1,
                            fun get_c0_/1,
-                           fun get_d0_/1,
                            fun put_0_/1,
                            fun put_1_/1,
                            fun put_2_/1,
@@ -345,12 +344,6 @@ get_c0_({Node0, Node1}) ->
     Res1 = leo_storage_handler_object:get(0, ?TEST_KEY_0, Checksum1, 0),
     ?assertEqual({error,not_found}, Res1),
     ok.
-
-get_d0_(_) ->
-    %% case of "start_pos > end_pos"
-    {error, badarg} = leo_storage_handler_object:get(0, ?TEST_KEY_0, 3, 1, 0),
-    ok.
-
 
 
 %%--------------------------------------------------------------------

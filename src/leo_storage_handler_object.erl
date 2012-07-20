@@ -44,12 +44,12 @@
 -define(PROC_TYPE_READ_REPAIR, 'read_repair').
 
 -record(read_parameter, {
-          addr_id        :: integer(),
-          key            :: string(),
-          start_pos = -1 :: integer(),
-          end_pos   = -1 :: integer(),
-          quorum         :: integer(),
-          req_id         :: integer()
+          addr_id       :: integer(),
+          key           :: string(),
+          start_pos = 0 :: integer(),
+          end_pos   = 0 :: integer(),
+          quorum        :: integer(),
+          req_id        :: integer()
          }).
 
 %%--------------------------------------------------------------------
@@ -87,7 +87,7 @@ get({Ref, Key}) ->
              {ok, #metadata{}, binary()} |
              {error, any()}).
 get(AddrId, Key, ReqId) ->
-    get(AddrId, Key, -1, -1, ReqId).
+    get(AddrId, Key, 0, 0, ReqId).
 
 %% @doc Retrieve an object which is requested from gateway w/etag.
 %%
@@ -116,8 +116,6 @@ get(AddrId, Key, ETag, ReqId) ->
 -spec(get(integer(), string(), integer(), integer(), integer()) ->
              {ok, #metadata{}, binary()} |
              {error, any()}).
-get(_AddrId,_Key, StartPos, EndPos,_ReqId) when StartPos > EndPos ->
-    {error, badarg};
 get(AddrId, Key, StartPos, EndPos, ReqId) ->
     _ = leo_statistics_req_counter:increment(?STAT_REQ_GET),
 
@@ -347,7 +345,7 @@ put_fun(ObjectPool, Ref) ->
 -spec(get_fun(reference(), integer(), string()) ->
              {ok, reference(), #metadata{}, pid()} | {error, reference(), any()}).
 get_fun(Ref, AddrId, Key) ->
-    get_fun(Ref, AddrId, Key, -1, -1).
+    get_fun(Ref, AddrId, Key, 0, 0).
 
 -spec(get_fun(reference(), integer(), string(), integer(), integer()) ->
              {ok, reference(), #metadata{}, pid()} | {error, reference(), any()}).
