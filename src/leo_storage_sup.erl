@@ -26,7 +26,6 @@
 -module(leo_storage_sup).
 
 -author('Yosuke Hara').
--vsn('0.9.1').
 
 -behaviour(supervisor).
 

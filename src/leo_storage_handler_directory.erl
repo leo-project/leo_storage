@@ -26,7 +26,6 @@
 -module(leo_storage_handler_directory).
 
 -author('Yosuke Hara').
--vsn('0.9.1').
 
 -include("leo_storage.hrl").
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
