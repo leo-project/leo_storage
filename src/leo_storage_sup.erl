@@ -46,8 +46,6 @@
 %% @doc start link...
 %% @end
 start_link() ->
-    ok  = setup_mnesia(),
-
     case (Ret = supervisor:start_link({local, ?MODULE}, ?MODULE, [])) of
         {ok, _} ->
             lists:foldl(fun({{volume, Path}, {num_of_containers, NumOfContainers}}, Index) ->
@@ -140,17 +138,6 @@ init([]) ->
 %% ---------------------------------------------------------------------
 %% Inner Function(s)
 %% ---------------------------------------------------------------------
-setup_mnesia() ->
-    ok = application:start(mnesia),
-
-    MnesiaMode = disc_copies,
-    mnesia:change_table_copy_type(schema, node(), MnesiaMode),
-    leo_redundant_manager_mnesia:create_members(MnesiaMode),
-    mnesia:wait_for_tables([members], 30000),
-    timer:sleep(1000),
-    ok.
-
-
 %% @doc Retrieve log-appneder(s)
 %% @private
 -spec(log_file_appender() ->
@@ -168,7 +155,7 @@ log_file_appender([], Acc) ->
     lists:reverse(Acc);
 log_file_appender([{Type, _}|T], Acc) when Type == file ->
     log_file_appender(T, [{?LOG_ID_FILE_ERROR, ?LOG_APPENDER_FILE}|[{?LOG_ID_FILE_INFO, ?LOG_APPENDER_FILE}|Acc]]);
+%% @TODO
 log_file_appender([{Type, _}|T], Acc) when Type == zmq ->
-    %% @TODO
     log_file_appender(T, [{?LOG_ID_ZMQ, ?LOG_APPENDER_ZMQ}|Acc]).
 
