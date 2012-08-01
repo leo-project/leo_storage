@@ -37,7 +37,7 @@
 
 -export([get/1, get/3, get/4, get/5,
          put/1, put/2, put/6, delete/1, delete/4,
-         head/2, copy/3, prefix_search/1]).
+         head/2, copy/3, prefix_search/4]).
 
 -define(PROC_TYPE_REPLICATE,   'replicate').
 -define(PROC_TYPE_READ_REPAIR, 'read_repair').
@@ -91,9 +91,9 @@ get(AddrId, Key, ReqId) ->
 %% @doc Retrieve an object which is requested from gateway w/etag.
 %%
 -spec(get(integer(), string(), string(), integer()) ->
-                 {ok, #metadata{}, binary()} |
-                 {ok, match} |
-                 {error, any()}).
+             {ok, #metadata{}, binary()} |
+             {ok, match} |
+             {error, any()}).
 get(AddrId, Key, ETag, ReqId) ->
     case leo_object_storage_api:head(term_to_binary({AddrId, Key})) of
         {ok, MetaBin} ->
@@ -274,33 +274,36 @@ copy(Method, InconsistentNodes, #metadata{key       = Key,
 %%--------------------------------------------------------------------
 %% API - Prefix Search (Fetch)
 %%--------------------------------------------------------------------
--define(SLASH,       "/").
--define(ROWS_LIMIT, 1000).
-prefix_search(ParentDir) ->
-    Fun = fun(K, V, Acc) when length(Acc) =< ?ROWS_LIMIT ->
+prefix_search(ParentDir, Delimiter, Marker, MaxKeys) ->
+    Fun = fun(K, V, Acc) when length(Acc) =< MaxKeys ->
                   {_AddrId, Key} = binary_to_term(K),
                   Metadata       = binary_to_term(V),
+                  InRange = case Marker of
+                                [] -> true;
+                                _  ->
+                                    (Marker == hd(lists:sort([Marker, Key])))
+                            end,
 
-                  Token0  = string:tokens(ParentDir, ?SLASH),
-                  Token1  = string:tokens(Key,       ?SLASH),
+                  Token0  = string:tokens(ParentDir, Delimiter),
+                  Token1  = string:tokens(Key,       Delimiter),
 
                   Length0 = erlang:length(Token0),
                   Length1 = Length0 + 1,
                   Length2 = erlang:length(Token1),
 
-                  case (string:str(Key, ParentDir) == 1) of
+                  case (InRange == true andalso string:str(Key, ParentDir) == 1) of
                       true ->
                           case (Length2 -1) of
                               Length0 when Metadata#metadata.del == 0 ->
-                                  case (string:rstr(Key, "/") == length(Key)) of
+                                  case (string:rstr(Key, Delimiter) == length(Key)) of
                                       true  -> ordsets:add_element(#metadata{key   = Key,
                                                                              dsize = -1}, Acc);
                                       false -> ordsets:add_element(Metadata, Acc)
                                   end;
                               Length1 when Metadata#metadata.del == 0 ->
                                   {Token2, _} = lists:split(Length1, Token1),
-                                  Dir = lists:foldl(fun(Str0, []  ) -> Str0 ++ ?SLASH;
-                                                       (Str0, Str1) -> Str1 ++ Str0 ++ ?SLASH
+                                  Dir = lists:foldl(fun(Str0, []  ) -> Str0 ++ Delimiter;
+                                                       (Str0, Str1) -> Str1 ++ Str0 ++ Delimiter
                                                     end, [], Token2),
                                   ordsets:add_element(#metadata{key   = Dir,
                                                                 dsize = -1}, Acc);

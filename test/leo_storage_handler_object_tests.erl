@@ -665,7 +665,7 @@ prefix_search_({_Node0, _Node1}) ->
                         Fun(term_to_binary({0, ?TEST_KEY_1}), term_to_binary(#metadata{}), [#metadata{key=?TEST_KEY_0}])
                 end),
 
-    Res = leo_storage_handler_object:prefix_search(?TEST_DIR_0),
+    Res = leo_storage_handler_object:prefix_search(?TEST_DIR_0, "/", [], 1000),
     ?assertEqual(2, length(Res)),
     ok.
 
