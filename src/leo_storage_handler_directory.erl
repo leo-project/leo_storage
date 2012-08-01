@@ -43,13 +43,7 @@
 %%
 -spec(find_by_parent_dir(string(), string()|null, string()|null, integer()) ->
              {ok, list()} | {error, any()}).
-find_by_parent_dir(ParentDir, Delimiter, Marker, MaxKeys) ->
-    NewDlmtr   = case is_list(Delimiter) of
-                     true when length(Delimiter) > 0 ->
-                         Delimiter;
-                     true  -> ?DEF_DELIMITER;
-                     false -> ?DEF_DELIMITER
-                 end,
+find_by_parent_dir(ParentDir, _Delimiter, Marker, MaxKeys) ->
     NewMaxKeys = case is_integer(MaxKeys) of
                      true  -> MaxKeys;
                      false -> ?DEF_MAX_KEYS
@@ -68,7 +62,7 @@ find_by_parent_dir(ParentDir, Delimiter, Marker, MaxKeys) ->
                         end, [], Members),
 
     {ResL0, _BadNodes} = rpc:multicall(Nodes, leo_storage_handler_object, prefix_search,
-                                       [ParentDir, NewDlmtr, NewMarker, NewMaxKeys]),
+                                       [ParentDir, NewMarker, NewMaxKeys]),
 
     case lists:foldl(fun({ok, List}, Acc) ->
                              Acc ++ List

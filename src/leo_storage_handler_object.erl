@@ -37,7 +37,7 @@
 
 -export([get/1, get/3, get/4, get/5,
          put/1, put/2, put/6, delete/1, delete/4,
-         head/2, copy/3, prefix_search/4]).
+         head/2, copy/3, prefix_search/3]).
 
 -define(PROC_TYPE_REPLICATE,   'replicate').
 -define(PROC_TYPE_READ_REPAIR, 'read_repair').
@@ -274,7 +274,8 @@ copy(Method, InconsistentNodes, #metadata{key       = Key,
 %%--------------------------------------------------------------------
 %% API - Prefix Search (Fetch)
 %%--------------------------------------------------------------------
-prefix_search(ParentDir, Delimiter, Marker, MaxKeys) ->
+prefix_search(ParentDir, Marker, MaxKeys) ->
+    Delimiter = "/",
     Fun = fun(K, V, Acc) when length(Acc) =< MaxKeys ->
                   {_AddrId, Key} = binary_to_term(K),
                   Metadata       = binary_to_term(V),
