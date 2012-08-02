@@ -93,7 +93,18 @@ start(Members) ->
     case leo_redundant_manager_api:create(Members) of
         {ok, _NewMembers, [{?CHECKSUM_RING,   Chksums},
                            {?CHECKSUM_MEMBER,_Chksum1}]} ->
-            {ok, {node(), Chksums}};
+            %% Note:
+            %%   Launch Object-Storage
+            %%
+            Path = ?env_object_storage_path(),
+            {ok, Ring} = leo_redundant_manager_api:get_ring(),
+            %% @TODO
+            case leo_object_storage_api:start(Ring, Path) of
+                ok ->
+                    {ok, {node(), Chksums}};
+                {error, Cause} ->
+                    {error, {node(), Cause}}
+            end;
         {error, Cause} ->
             {error, {node(), Cause}}
     end.
@@ -179,7 +190,7 @@ get_cluster_node_status() ->
         end,
 
     Directories = [{log,    ?env_log_dir(leo_storage)},
-                   {mnesia, mnesia:system_info(directory)}
+                   {mnesia, []}
                   ],
     RingHashes  = [{ring_cur,  RingHashCur},
                    {ring_prev, RingHashPrev }
@@ -194,7 +205,7 @@ get_cluster_node_status() ->
     {ok, #cluster_node_status{type    = server,
                               version = Version,
                               dirs    = Directories,
-                              avs     = ?env_storage_device(),
+                              avs     = ?env_object_storage_path(),
                               ring_checksum = RingHashes,
                               statistics    = Statistics}}.
 

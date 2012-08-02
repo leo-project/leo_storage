@@ -95,7 +95,7 @@ get(AddrId, Key, ReqId) ->
              {ok, match} |
              {error, any()}).
 get(AddrId, Key, ETag, ReqId) ->
-    case leo_object_storage_api:head(term_to_binary({AddrId, Key})) of
+    case leo_object_storage_api:head({AddrId, Key}) of
         {ok, MetaBin} ->
             Metadata = binary_to_term(MetaBin),
             case (Metadata#metadata.checksum == ETag) of
@@ -207,7 +207,7 @@ delete(DataObject) ->
              {ok, #metadata{}} |
              {error, any}).
 head(AddrId, Key) ->
-    case leo_object_storage_api:head(term_to_binary({AddrId, Key})) of
+    case leo_object_storage_api:head({AddrId, Key}) of
         {ok, MetaBin} ->
             {ok, binary_to_term(MetaBin)};
         not_found = Cause ->
@@ -334,7 +334,7 @@ put_fun(ObjectPool, Ref) ->
         not_found ->
             {error, Ref, timeout};
         #metadata{key = Key, addr_id = AddrId} ->
-            case leo_object_storage_api:put(term_to_binary({AddrId, Key}), ObjectPool) of
+            case leo_object_storage_api:put({AddrId, Key}, ObjectPool) of
                 ok ->
                     {ok, Ref};
                 {error, Cause} ->
@@ -353,7 +353,7 @@ get_fun(Ref, AddrId, Key) ->
 -spec(get_fun(reference(), integer(), string(), integer(), integer()) ->
              {ok, reference(), #metadata{}, pid()} | {error, reference(), any()}).
 get_fun(Ref, AddrId, Key, StartPos, EndPos) ->
-    case leo_object_storage_api:get(term_to_binary({AddrId, Key}), StartPos, EndPos) of
+    case leo_object_storage_api:get({AddrId, Key}, StartPos, EndPos) of
         {ok, Metadata, ObjectPool} ->
             {ok, Ref, Metadata, ObjectPool};
         not_found = Cause ->
@@ -375,14 +375,13 @@ delete_fun(ObjectPool, Ref) ->
             {error, Ref, timeout};
         #object{addr_id = AddrId,
                 key      = Key} ->
-            KeyBin = term_to_binary({AddrId, Key}),
-            case leo_object_storage_api:head(KeyBin) of
+            case leo_object_storage_api:head({AddrId, Key}) of
                 not_found = Cause ->
                     {error, Ref, Cause};
                 {ok, Metadata} when Metadata#metadata.del == 1 ->
                     {error, Ref, not_found};
                 {ok, Metadata} when Metadata#metadata.del == 0 ->
-                    case leo_object_storage_api:delete(KeyBin, ObjectPool) of
+                    case leo_object_storage_api:delete({AddrId, Key}, ObjectPool) of
                         ok ->
                             {ok, Ref};
                         {error, Why} ->
@@ -484,8 +483,7 @@ replicate(Method, DataObject) when is_record(DataObject, object) == true ->
             addr_id  = AddrId,
             clock    = Clock,
             checksum = Checksum} = DataObject,
-
-    case leo_object_storage_api:head(term_to_binary({AddrId, Key})) of
+    case leo_object_storage_api:head({AddrId, Key}) of
         {ok, Metadata} when Metadata#metadata.clock    =:= Clock andalso
                             Metadata#metadata.checksum =:= Checksum ->
             {ok, erlang:node()};

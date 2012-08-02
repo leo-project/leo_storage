@@ -48,19 +48,6 @@
 start_link() ->
     case (Ret = supervisor:start_link({local, ?MODULE}, ?MODULE, [])) of
         {ok, _} ->
-            lists:foldl(fun({{volume, Path}, {num_of_containers, NumOfContainers}}, Index) ->
-                                leo_object_storage_api:new(Index, NumOfContainers, Path),
-                                Index + 1
-                        end, 0, ?env_storage_device()),
-            lists:foreach(fun(N) ->
-                                  supervisor:start_child(leo_storage_replicator_sup,
-                                                         [list_to_atom(?PFIX_REPLICATOR ++ integer_to_list(N))])
-                          end, lists:seq(0, ?env_num_of_replicators() - 1)),
-            lists:foreach(fun(N) ->
-                                  supervisor:start_child(leo_storage_read_repairer_sup,
-                                                         [list_to_atom(?PFIX_REPAIRER   ++ integer_to_list(N))])
-                          end, lists:seq(0, ?env_num_of_repairers() - 1)),
-
             %% Launch Logger
             App = leo_storage,
             DefLogDir = "./log/",
@@ -72,6 +59,21 @@ start_link() ->
                         end,
             ok = leo_logger_client_message:new(
                    LogDir, ?env_log_level(App), log_file_appender()),
+
+            %% Launch Object-Storage
+            ok = leo_object_storage_api:new(),
+
+            %% Launch Replicator
+            lists:foreach(fun(N) ->
+                                  supervisor:start_child(leo_storage_replicator_sup,
+                                                         [list_to_atom(?PFIX_REPLICATOR ++ integer_to_list(N))])
+                          end, lists:seq(0, ?env_num_of_replicators() - 1)),
+
+            %% Launch Read-Repairer
+            lists:foreach(fun(N) ->
+                                  supervisor:start_child(leo_storage_read_repairer_sup,
+                                                         [list_to_atom(?PFIX_REPAIRER   ++ integer_to_list(N))])
+                          end, lists:seq(0, ?env_num_of_repairers() - 1)),
 
             %% Launch MQ
             QDBRootPath = ?env_queue_dir(App),

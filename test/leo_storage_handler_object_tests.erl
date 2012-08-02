@@ -117,7 +117,7 @@ get_a0_({Node0, Node1}) ->
 
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, get,
-                fun(_KeyBin, _StartPos, _EndPos) ->
+                fun(_Key, _StartPos, _EndPos) ->
                         {ok, ?TEST_META_0, []}
                 end),
 
@@ -148,7 +148,7 @@ get_a1_({Node0, Node1}) ->
 
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, get,
-                fun(_KeyBin, _StartPos, _EndPos) ->
+                fun(_Key, _StartPos, _EndPos) ->
                         {ok, ?TEST_META_0, []}
                 end),
 
@@ -180,7 +180,7 @@ get_b0_({Node0, Node1}) ->
 
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, get,
-                fun(_KeyBin, _StartPos, _EndPos) ->
+                fun(_Key, _StartPos, _EndPos) ->
                         not_found
                 end),
 
@@ -208,7 +208,7 @@ get_b1_({Node0, Node1}) ->
 
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, get,
-                fun(_KeyBin, _StartPos, _EndPos) ->
+                fun(_Key, _StartPos, _EndPos) ->
                         {ok, ?TEST_META_0, []}
                 end),
 
@@ -244,7 +244,7 @@ get_b2_({Node0, _Node1}) ->
 
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, get,
-                fun(_KeyBin, _StartPos, _EndPos) ->
+                fun(_Key, _StartPos, _EndPos) ->
                         {ok, ?TEST_META_0, []}
                 end),
 
@@ -280,7 +280,7 @@ get_b3_({Node0, Node1}) ->
 
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, get,
-                fun(_KeyBin, _StartPos, _EndPos) ->
+                fun(_Key, _StartPos, _EndPos) ->
                         {ok, ?TEST_META_0, []}
                 end),
 
@@ -324,11 +324,11 @@ get_c0_({Node0, Node1}) ->
 
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, get,
-                fun(_KeyBin, _StartPos, _EndPos) ->
+                fun(_Key, _StartPos, _EndPos) ->
                         not_found
                 end),
     meck:expect(leo_object_storage_api, head,
-                fun(_KeyBin) ->
+                fun(_Key) ->
                         {ok, term_to_binary(#metadata{checksum = Checksum0})}
                 end),
 
@@ -417,7 +417,7 @@ put_2_({_Node0, _Node1}) ->
 
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, put,
-                fun(_KeyBin, _ObjPool) ->
+                fun(_Key, _ObjPool) ->
                         ok
                 end),
 
@@ -444,7 +444,7 @@ put_3_(_) ->
 
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, head,
-                fun(_KeyBin) ->
+                fun(_Key) ->
                         {ok, term_to_binary(#metadata{checksum = 12345})}
                 end),
 
@@ -503,7 +503,7 @@ delete_1_({_Node0, _Node1}) ->
 
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, head,
-                fun(_KeyBin) ->
+                fun(_Key) ->
                         {ok, #metadata{checksum = Checksum,
                                        clock    = Clock}}
                 end),
@@ -522,12 +522,12 @@ delete_2_({_Node0, _Node1}) ->
 
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, head,
-                fun(_KeyBin) ->
+                fun(_Key) ->
                         {ok, #metadata{checksum = Checksum0,
                                        clock    = Clock0}}
                 end),
     meck:expect(leo_object_storage_api, delete,
-                fun(_KeyBin, _ObjPool) ->
+                fun(_Key, _ObjPool) ->
                         ok
                 end),
 
@@ -561,7 +561,7 @@ head_({_Node0, _Node1}) ->
     %% 1.
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, head,
-                fun(_KeyBin) ->
+                fun(_Key) ->
                         {ok, term_to_binary(?TEST_META_0)}
                 end),
     Res0 = leo_storage_handler_object:head(0, ?TEST_KEY_0),
@@ -571,7 +571,7 @@ head_({_Node0, _Node1}) ->
     meck:unload(),
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, head,
-                fun(_KeyBin) ->
+                fun(_Key) ->
                         not_found
                 end),
     Res1 = leo_storage_handler_object:head(0, ?TEST_KEY_0),
@@ -581,7 +581,7 @@ head_({_Node0, _Node1}) ->
     meck:unload(),
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, head,
-                fun(_KeyBin) ->
+                fun(_Key) ->
                         {error, []}
                 end),
     Res2 = leo_storage_handler_object:head(0, ?TEST_KEY_0),
@@ -595,11 +595,11 @@ copy_({Node0, Node1}) ->
     %% Retrieve metadata from head-func
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, head,
-                fun(_KeyBin) ->
+                fun(_Key) ->
                         {ok, term_to_binary(?TEST_META_0)}
                 end),
     meck:expect(leo_object_storage_api, get,
-                fun(_KeyBin, _StartPos, _EndPos) ->
+                fun(_Key, _StartPos, _EndPos) ->
                         {ok, ?TEST_META_0, []}
                 end),
 
@@ -643,11 +643,11 @@ copy_({Node0, Node1}) ->
     meck:unload(leo_object_storage_api),
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, head,
-                fun(_KeyBin) ->
+                fun(_Key) ->
                         {ok, term_to_binary(?TEST_META_1)}
                 end),
     meck:expect(leo_object_storage_api, get,
-                fun(_KeyBin, _StartPos, _EndPos) ->
+                fun(_Key, _StartPos, _EndPos) ->
                         {ok, ?TEST_META_1, []}
                 end),
 
