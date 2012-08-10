@@ -61,7 +61,11 @@ start_link() ->
                    LogDir, ?env_log_level(App), log_file_appender()),
 
             %% Launch Object-Storage
-            ok = leo_object_storage_api:new(),
+            Device     = ?env_storage_device(),
+            Containers = proplists:get_value(num_of_containers, Device),
+            Path       = proplists:get_value(path,              Device),
+            ?debugVal({Device, Containers, Path}),
+            ok = leo_object_storage_api:start(Containers, Path),
 
             %% Launch Replicator
             lists:foreach(fun(N) ->

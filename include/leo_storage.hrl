@@ -129,10 +129,12 @@
 
 %% @doc macros.
 %%
--define(env_object_storage_path(),
-        case application:get_env(leo_storage, obj_storage_path) of
-            {ok, ObjStoragePath} -> ObjStoragePath;
-            _ -> []
+-define(env_storage_device(),
+        case application:get_env(leo_storage, obj_containers) of
+            {ok, EnvStorageDevice} ->
+                EnvStorageDevice;
+            _ ->
+                []
         end).
 
 -define(env_num_of_replicators(),
