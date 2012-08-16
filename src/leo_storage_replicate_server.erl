@@ -231,7 +231,7 @@ loop(From, W, {Ref, NumOfNodes, Errors} = Args) ->
         {error, Node, Cause} ->
             loop(From, W, {Ref, NumOfNodes, [{Node, Cause}|Errors]})
     after
-        ?DEF_TIMEOUT ->
+        ?TIMEOUT ->
             case (W >= 0) of
                 true ->
                     gen_server:reply(From, {error, Ref, timeout});

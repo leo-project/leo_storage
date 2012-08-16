@@ -62,7 +62,7 @@ find_by_parent_dir(ParentDir, _Delimiter, Marker, MaxKeys) ->
                         end, [], Members),
 
     {ResL0, _BadNodes} = rpc:multicall(Nodes, leo_storage_handler_object, prefix_search,
-                                       [ParentDir, NewMarker, NewMaxKeys]),
+                                       [ParentDir, NewMarker, NewMaxKeys], ?DEF_REQ_TIMEOUT),
 
     case lists:foldl(fun({ok, List}, Acc) ->
                              Acc ++ List

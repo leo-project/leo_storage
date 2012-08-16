@@ -244,7 +244,7 @@ notify_message_to_manager([],_VNodeId,_Node) ->
     {error, 'fail_notification'};
 notify_message_to_manager([Manager|T], VNodeId, Node) ->
     Res = case rpc:call(list_to_atom(Manager), leo_manager_api, notify,
-                        [synchronized, VNodeId, Node]) of
+                        [synchronized, VNodeId, Node], ?DEF_REQ_TIMEOUT) of
               ok ->
                   ok;
               {_, Cause} ->
@@ -373,15 +373,18 @@ notify_rebalance_message_to_manager(VNodeId) ->
                                            end,
 
                                 case catch rpc:call(Manager1, leo_manager_api, notify,
-                                                    [rebalance, VNodeId, erlang:node(), NumOfMessages], ?DEF_TIMEOUT) of
+                                                    [rebalance, VNodeId, erlang:node(), NumOfMessages],
+                                                    ?DEF_REQ_TIMEOUT) of
                                     ok ->
                                         true;
                                     {_, Cause} ->
-                                        ?error("notify_rebalance_message_to_manager/1","manager:~p, vnode_id:~w, ~ncause:~p",
+                                        ?error("notify_rebalance_message_to_manager/1",
+                                               "manager:~p, vnode_id:~w, ~ncause:~p",
                                                [Manager1, VNodeId, Cause]),
                                         Res;
                                     timeout = Cause ->
-                                        ?error("notify_rebalance_message_to_manager/1","manager:~p, vnode_id:~w, ~ncause:~p",
+                                        ?error("notify_rebalance_message_to_manager/1",
+                                               "manager:~p, vnode_id:~w, ~ncause:~p",
                                                [Manager1, VNodeId, Cause]),
                                         Res
                                 end

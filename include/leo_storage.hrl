@@ -31,11 +31,11 @@
 -define(MAX_TIME,                60).
 
 -ifdef(TEST).
--define(DEF_TIMEOUT,     1000).
+-define(TIMEOUT,         1000).
 -define(DEF_REQ_TIMEOUT, 1000).
 -else.
--define(DEF_TIMEOUT,      3000). %%  3 sec
--define(DEF_REQ_TIMEOUT, 30000). %% 30 sec
+-define(TIMEOUT,         5000).
+-define(DEF_REQ_TIMEOUT, infinity).
 -endif.
 
 %% @doc operationg-methods.

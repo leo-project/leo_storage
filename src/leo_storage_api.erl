@@ -59,7 +59,8 @@ register_in_monitor(RequestedTimes) ->
                           case leo_utils:node_existence(Node1) of
                               true ->
                                   case rpc:call(Node1, leo_manager_api, register,
-                                                [RequestedTimes, Pid, erlang:node(), storage], ?DEF_TIMEOUT) of
+                                                [RequestedTimes, Pid, erlang:node(), storage],
+                                                ?DEF_REQ_TIMEOUT) of
                                       ok ->
                                           true;
                                       Error ->
@@ -110,9 +111,7 @@ stop() ->
                      erlang:node()
              end,
 
-    rpc:call(Target, leo_storage, stop, [], ?DEF_TIMEOUT),
-    ?info("stop/0", "target:~p", [Target]),
-
+    _ = rpc:call(Target, leo_storage, stop, [], ?DEF_REQ_TIMEOUT),
     init:stop().
 
 
