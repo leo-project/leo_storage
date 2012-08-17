@@ -68,19 +68,19 @@ start(RootPath0) ->
     ?TBL_REBALANCE_COUNTER = ets:new(?TBL_REBALANCE_COUNTER,
                                      [named_table, public, {read_concurrency, true}]),
     lists:foreach(
-      fun({Id, Path}) ->
+      fun({Id, Path, MaxInterval, MinInterval}) ->
               leo_mq_api:new(Id, [{?MQ_PROP_MOD,          ?MODULE},
                                   {?MQ_PROP_FUN,          ?MQ_SUBSCRIBE_FUN},
                                   {?MQ_PROP_ROOT_PATH,    RootPath1 ++ Path},
                                   {?MQ_PROP_DB_PROCS,     ?env_num_of_mq_procs()},
-                                  {?MQ_PROP_MAX_INTERVAL, 1000}, %% 1000 ms
-                                  {?MQ_PROP_MIN_INTERVAL,  200}  %%  200 ms
+                                  {?MQ_PROP_MAX_INTERVAL, MaxInterval},
+                                  {?MQ_PROP_MIN_INTERVAL, MinInterval}
                                  ])
 
-      end, [{?QUEUE_ID_REPLICATE_MISS,    ?MSG_PATH_REPLICATION_MISS},
-            {?QUEUE_ID_INCONSISTENT_DATA, ?MSG_PATH_INCONSISTENT_DATA},
-            {?QUEUE_ID_SYNC_BY_VNODE_ID,  ?MSG_PATH_SYNC_VNODE_ID},
-            {?QUEUE_ID_REBALANCE,         ?MSG_PATH_REBALANCE}
+      end, [{?QUEUE_ID_REPLICATE_MISS,    ?MSG_PATH_REPLICATION_MISS,  64, 16},
+            {?QUEUE_ID_INCONSISTENT_DATA, ?MSG_PATH_INCONSISTENT_DATA, 64, 16},
+            {?QUEUE_ID_SYNC_BY_VNODE_ID,  ?MSG_PATH_SYNC_VNODE_ID,     32,  8},
+            {?QUEUE_ID_REBALANCE,         ?MSG_PATH_REBALANCE,         32,  8}
            ]),
     ok.
 
@@ -145,6 +145,7 @@ publish(?QUEUE_TYPE_REBALANCE, Node, VNodeId, AddrId, Key) ->
 
 publish(_,_,_,_,_) ->
     {error, badarg}.
+
 
 %% -------------------------------------------------------------------
 %% Subscribe.
@@ -226,20 +227,29 @@ sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
                   {AddrId, Key} = binary_to_term(K),
                   Metadata      = binary_to_term(V),
 
+                  %% Note: An object of copy is NOT equal current ring-hash.
+                  %%       Then a message in the rebalance-queue.
                   case (AddrId >= FromAddrId andalso
                         AddrId =< ToAddrId) of
                       true when Metadata#metadata.ring_hash =/= RingHash ->
-                          %% ToAddrId => VNodeId
-                          ?MODULE:publish(?QUEUE_TYPE_REBALANCE, Node, ToAddrId, AddrId, Key),
+                          VNodeId = ToAddrId,
+                          ?MODULE:publish(?QUEUE_TYPE_REBALANCE, Node, VNodeId, AddrId, Key),
                           {ok, Acc};
+
                       true  -> {ok, Acc};
                       false -> {ok, Acc}
                   end
           end,
-    leo_object_storage_api:fetch_by_addr_id(FromAddrId, Fun),
-    notify_message_to_manager(?env_manager_nodes(leo_storage), ToAddrId, erlang:node()),
+
+    _ = leo_object_storage_api:fetch_by_addr_id(FromAddrId, Fun),
+    _ = notify_message_to_manager(?env_manager_nodes(leo_storage), ToAddrId, erlang:node()),
     sync_vnodes(Node, RingHash, T).
 
+
+%% @doc Notify a message to manager node(s)
+%%
+-spec(notify_message_to_manager(list(), integer(), atom()) ->
+             ok | {error, any()}).
 notify_message_to_manager([],_VNodeId,_Node) ->
     {error, 'fail_notification'};
 notify_message_to_manager([Manager|T], VNodeId, Node) ->
@@ -270,8 +280,8 @@ notify_message_to_manager([Manager|T], VNodeId, Node) ->
 -spec(correct_redundancies(string()) ->
              ok | {error, any()}).
 correct_redundancies(Key) ->
-    {ok, #redundancies{nodes = Redundancies, id = AddrId}} =
-        leo_redundant_manager_api:get_redundancies_by_key(Key),
+    {ok, #redundancies{nodes = Redundancies,
+                       id    = AddrId}} = leo_redundant_manager_api:get_redundancies_by_key(Key),
     correct_redundancies1(Key, AddrId, Redundancies, [], []).
 
 %% correct_redundancies1/5 - next.

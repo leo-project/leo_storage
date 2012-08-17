@@ -138,7 +138,8 @@ attach(#system_conf{n = NumOfReplicas,
 %%
 -spec(synchronize(object | sync_by_vnode_id, list() | string(), #metadata{} | atom()) ->
              ok | {error, any()}).
-synchronize(?TYPE_OBJ, InconsistentNodes, #metadata{addr_id = AddrId, key = Key}) ->
+synchronize(?TYPE_OBJ, InconsistentNodes, #metadata{addr_id = AddrId,
+                                                    key     = Key}) ->
     leo_storage_handler_object:copy(InconsistentNodes, AddrId, Key);
 
 synchronize(?TYPE_OBJ, Key, ErrorType) ->

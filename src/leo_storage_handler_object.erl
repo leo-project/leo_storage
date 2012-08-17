@@ -226,20 +226,18 @@ head(AddrId, Key) ->
              ok | not_found | {error, any()}).
 copy(InconsistentNodes, AddrId, Key) ->
     Ref = make_ref(),
+
     case ?MODULE:head(AddrId, Key) of
-        {ok, #metadata{del = DelFlag} = Metadata} ->
-            case (DelFlag == 0) of
-                true ->
-                    case ?MODULE:get({Ref, Key}) of
-                        {ok, Metadata, Bin} ->
-                            copy(?CMD_PUT, InconsistentNodes, Metadata, #object{data  = Bin,
-                                                                                dsize = byte_size(Bin)});
-                        {error, Ref, Cause} ->
-                            {error, Cause}
-                    end;
-                false ->
-                    copy(?CMD_DELETE, InconsistentNodes, Metadata, #object{})
+        {ok, #metadata{del = 0} = Metadata} ->
+            case ?MODULE:get({Ref, Key}) of
+                {ok, Metadata, Bin} ->
+                    copy(?CMD_PUT, InconsistentNodes, Metadata, #object{data  = Bin,
+                                                                        dsize = byte_size(Bin)});
+                {error, Ref, Cause} ->
+                    {error, Cause}
             end;
+        {ok, #metadata{del = 1} = Metadata} ->
+            copy(?CMD_DELETE, InconsistentNodes, Metadata, #object{});
         Error ->
             Error
     end.
@@ -249,6 +247,7 @@ copy(Method, InconsistentNodes, #metadata{key       = Key,
                                           clock     = Clock,
                                           timestamp = Timestamp,
                                           del       = DelFlag}, DataObj) ->
+    %% @TODO > ordning&reda
     ObjectPool = leo_object_storage_pool:new(DataObj#object{method    = Method,
                                                             addr_id   = AddrId,
                                                             key       = Key,
