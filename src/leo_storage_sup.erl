@@ -30,8 +30,6 @@
 -behaviour(supervisor).
 
 -include("leo_storage.hrl").
--include_lib("leo_commons/include/leo_commons.hrl").
--include_lib("leo_logger/include/leo_logger.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 -export([start_link/0,
@@ -46,62 +44,7 @@
 %% @doc start link...
 %% @end
 start_link() ->
-    case (Ret = supervisor:start_link({local, ?MODULE}, ?MODULE, [])) of
-        {ok, _} ->
-            %% Launch Logger
-            App = leo_storage,
-            DefLogDir = "./log/",
-            LogDir    = case application:get_env(App, log_appender) of
-                            {ok, [{file, Options}|_]} ->
-                                proplists:get_value(path, Options, DefLogDir);
-                            _ ->
-                                DefLogDir
-                        end,
-            ok = leo_logger_client_message:new(
-                   LogDir, ?env_log_level(App), log_file_appender()),
-
-            %% Launch Object-Storage
-            Device     = ?env_storage_device(),
-            Containers = proplists:get_value(num_of_containers, Device),
-            Path       = proplists:get_value(path,              Device),
-            ?debugVal({Device, Containers, Path}),
-            ok = leo_object_storage_api:start(Containers, Path),
-
-            %% Launch Replicator
-            lists:foreach(fun(N) ->
-                                  supervisor:start_child(leo_storage_replicator_sup,
-                                                         [list_to_atom(?PFIX_REPLICATOR ++ integer_to_list(N))])
-                          end, lists:seq(0, ?env_num_of_replicators() - 1)),
-
-            %% Launch Read-Repairer
-            lists:foreach(fun(N) ->
-                                  supervisor:start_child(leo_storage_read_repairer_sup,
-                                                         [list_to_atom(?PFIX_REPAIRER   ++ integer_to_list(N))])
-                          end, lists:seq(0, ?env_num_of_repairers() - 1)),
-
-            %% Launch MQ
-            QDBRootPath = ?env_queue_dir(App),
-            ok = leo_storage_mq_client:start(QDBRootPath),
-
-            %% Launch Statistics
-            ok = leo_statistics_api:start(?MODULE, App,
-                                          [{snmp, [leo_statistics_metrics_vm,
-                                                   leo_statistics_metrics_req,
-                                                   leo_storage_mq_statistics
-                                                  ]},
-                                           {stat, [leo_statistics_metrics_vm]}]),
-
-            %% Launch Redundant-Manager
-            Managers = ?env_manager_nodes(App),
-            ok = leo_redundant_manager_api:start(storage, Managers, QDBRootPath),
-
-            %% Register in THIS-Process
-            ok = leo_storage_api:register_in_monitor(first),
-            Ret;
-        Error ->
-            Error
-    end.
-
+    supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 %% @spec () -> ok |
 %%             not_started
@@ -140,28 +83,4 @@ init([]) ->
                    [leo_storage_read_repairer_sup]}
                  ],
     {ok, {_SupFlags = {one_for_one, ?MAX_RESTART, ?MAX_TIME}, ChildProcs}}.
-
-%% ---------------------------------------------------------------------
-%% Inner Function(s)
-%% ---------------------------------------------------------------------
-%% @doc Retrieve log-appneder(s)
-%% @private
--spec(log_file_appender() ->
-             list()).
-log_file_appender() ->
-    case application:get_env(leo_storage, log_appender) of
-        undefined   -> log_file_appender([], []);
-        {ok, Value} -> log_file_appender(Value, [])
-    end.
-
-log_file_appender([], []) ->
-    [{?LOG_ID_FILE_INFO,  ?LOG_APPENDER_FILE},
-     {?LOG_ID_FILE_ERROR, ?LOG_APPENDER_FILE}];
-log_file_appender([], Acc) ->
-    lists:reverse(Acc);
-log_file_appender([{Type, _}|T], Acc) when Type == file ->
-    log_file_appender(T, [{?LOG_ID_FILE_ERROR, ?LOG_APPENDER_FILE}|[{?LOG_ID_FILE_INFO, ?LOG_APPENDER_FILE}|Acc]]);
-%% @TODO
-log_file_appender([{Type, _}|T], Acc) when Type == zmq ->
-    log_file_appender(T, [{?LOG_ID_ZMQ, ?LOG_APPENDER_ZMQ}|Acc]).
 
