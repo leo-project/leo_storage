@@ -31,13 +31,15 @@
 -include_lib("leo_commons/include/leo_commons.hrl").
 -include_lib("leo_logger/include/leo_logger.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
+-include_lib("leo_ordning_reda/include/leo_ordning_reda.hrl").
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("leo_statistics/include/leo_statistics.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 -export([get/1, get/3, get/4, get/5,
-         put/1, put/2, put/6, delete/1, delete/4,
-         head/2, copy/3, prefix_search/3]).
+         put/1, put/2, put/6, delete/1, delete/4, head/2,
+         copy/3, stack_and_send/4, stack_and_send/5, receive_and_store/1,
+         prefix_search/3]).
 
 -define(PROC_TYPE_REPLICATE,   'replicate').
 -define(PROC_TYPE_READ_REPAIR, 'read_repair').
@@ -218,56 +220,100 @@ head(AddrId, Key) ->
 
 
 %%--------------------------------------------------------------------
-%% API - COPY
+%% API - COPY/STACK-SEND/RECEIVE-STORE
 %%--------------------------------------------------------------------
 %% @doc copy an object.
 %%
 -spec(copy(list(), integer(), string()) ->
              ok | not_found | {error, any()}).
-copy(InconsistentNodes, AddrId, Key) ->
+copy(DestNodes, AddrId, Key) ->
     Ref = make_ref(),
-
     case ?MODULE:head(AddrId, Key) of
         {ok, #metadata{del = 0} = Metadata} ->
             case ?MODULE:get({Ref, Key}) of
                 {ok, Metadata, Bin} ->
-                    copy(?CMD_PUT, InconsistentNodes, Metadata, #object{data  = Bin,
-                                                                        dsize = byte_size(Bin)});
+                    stack_and_send(DestNodes, AddrId, Key, {Metadata, Bin});
                 {error, Ref, Cause} ->
                     {error, Cause}
             end;
         {ok, #metadata{del = 1} = Metadata} ->
-            copy(?CMD_DELETE, InconsistentNodes, Metadata, #object{});
+            stack_and_send(DestNodes, AddrId, Key, {Metadata, <<>>});
         Error ->
             Error
     end.
 
-copy(Method, InconsistentNodes, #metadata{key       = Key,
-                                          addr_id   = AddrId,
-                                          clock     = Clock,
-                                          timestamp = Timestamp,
-                                          del       = DelFlag}, DataObj) ->
-    %% @TODO > ordning&reda
-    ObjectPool = leo_object_storage_pool:new(DataObj#object{method    = Method,
-                                                            addr_id   = AddrId,
-                                                            key       = Key,
-                                                            clock     = Clock,
-                                                            timestamp = Timestamp,
-                                                            del       = DelFlag}),
-    Ref = make_ref(),
-    Nodes = lists:map(fun(Item) ->
-                              {Item, true}
-                      end, InconsistentNodes),
 
-    ProcId = get_proc_id(?PROC_TYPE_REPLICATE),
-    case leo_storage_replicate_server:replicate(
-           ProcId, Ref, length(InconsistentNodes), Nodes, ObjectPool) of
-        {ok, Ref}->
-            ok = leo_object_storage_pool:destroy(ObjectPool),
-            ok;
-        {error, Ref, Reason} ->
-            {error, Reason}
+%% @doc Stack an object and send stacked object to remote-node(s)
+%%
+-define(REDA_SEND_FUN,
+        fun(N, S) ->
+                RPCKey = rpc:async_call(N, ?MODULE, receive_and_store, [S]),
+                case rpc:nb_yield(RPCKey, infinity) of
+                    {value, ok} ->
+                        ok;
+                    {value, {error, Cause}} ->
+                        {error, Cause};
+                    {value, {badrpc, Cause}} ->
+                        {error, Cause};
+                    timeout = Cause ->
+                        {error, Cause}
+                end
+        end).
+-define(REDA_RECOVER_FUN,
+        fun(_E) ->
+                ok
+        end).
+
+-spec(stack_and_send(list(atom()), integer(), string(), tuple({#metadata{}, binary()})) ->
+             ok | {error, any()}).
+stack_and_send(Nodes, AddrId, Key, Data) ->
+    stack_and_send(Nodes, AddrId, Key, Data, []).
+
+-spec(stack_and_send(list(atom()), integer(), string(), tuple({#metadata{}, binary()}), list()) ->
+             ok | {error, any()}).
+stack_and_send([],_AddrId,_Key,_Data, []) ->
+    ok;
+stack_and_send([],_AddrId,_Key,_Data, Error) ->
+    {error, lists:reverse(Error)};
+
+stack_and_send([Node|Rest] = NodeList, AddrId, Key, Data, Error) ->
+    case leo_redundant_manager_api:get_member_by_node(Node) of
+        {ok, #member{state = ?STATE_RUNNING}} ->
+            case leo_ordning_reda_api:stack(Node, AddrId, Key, term_to_binary(Data)) of
+                ok ->
+                    stack_and_send(Rest, AddrId, Key, Data, Error);
+                {error, undefined} ->
+                    leo_ordning_reda_api:add_container(
+                      stack, Node, [{buffer_size, ?env_size_of_stacked_objs()},
+                                    {timeout,     ?env_stacking_timeout()},
+                                    {sender,      ?REDA_SEND_FUN},
+                                    {recover,     ?REDA_RECOVER_FUN}]),
+                    stack_and_send(NodeList, AddrId, Key, Data, Error);
+                {error, Cause} ->
+                    stack_and_send(Rest, AddrId, Key, Data, [{Node, Cause}|Error])
+            end;
+        _ ->
+            stack_and_send(Rest, AddrId, Key, Data, [{Node, inactive}|Error])
     end.
+
+
+%% @doc Receive stacked objects and store objects into the obj-storage
+%%
+-spec(receive_and_store(list(binary())) ->
+             ok | {error, any()}).
+receive_and_store([]) ->
+    ok;
+receive_and_store([#straw{addr_id = AddrId,
+                          key     = Key,
+                          object  = Object} | Rest]) ->
+    {Metadata, Bin} = binary_to_term(Object),
+    case leo_object_storage_api:store(Metadata, Bin) of
+        ok ->
+            void;
+        {error, Cause} ->
+            ?warn("receive_and_store/1","cause:~p",[Cause])
+    end,
+    receive_and_store(Rest).
 
 
 %%--------------------------------------------------------------------
@@ -302,8 +348,8 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
                                   end;
                               Length1 when Metadata#metadata.del == 0 ->
                                   {Token2, _} = lists:split(Length1, Token1),
-                                  Dir = lists:foldl(fun(Str0, []  ) -> Str0 ++ Delimiter;
-                                                       (Str0, Str1) -> Str1 ++ Str0 ++ Delimiter
+                                  Dir = lists:foldl(fun(Str0, []  ) -> lists:append([Str0, Delimiter]);
+                                                       (Str0, Str1) -> lists:append([Str1, Str0, Delimiter])
                                                     end, [], Token2),
                                   ordsets:add_element(#metadata{key   = Dir,
                                                                 dsize = -1}, Acc);
@@ -512,9 +558,9 @@ replicate(_Method, _DataObject) ->
              atom()).
 get_proc_id(?PROC_TYPE_REPLICATE) ->
     N = (leo_utils:clock() rem ?env_num_of_replicators()),
-    list_to_atom(?PFIX_REPLICATOR ++ integer_to_list(N));
+    list_to_atom(lists:append([?PFIX_REPLICATOR, integer_to_list(N)]));
 
 get_proc_id(?PROC_TYPE_READ_REPAIR) ->
     N = (leo_utils:clock() rem ?env_num_of_repairers()),
-    list_to_atom(?PFIX_REPAIRER   ++ integer_to_list(N)).
+    list_to_atom(lists:append([?PFIX_REPAIRER, integer_to_list(N)])).
 

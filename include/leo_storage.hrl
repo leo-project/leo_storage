@@ -155,3 +155,16 @@
             _ -> 3
         end).
 
+-define(env_size_of_stacked_objs(),
+        case application:get_env(leo_storage, size_of_stacked_objs) of
+            {ok, SizeOfStackedObjs} -> SizeOfStackedObjs;
+            _ -> (1024 * 1024) %% 1MB
+        end).
+
+-define(env_stacking_timeout(),
+        case application:get_env(leo_storage, stacking_timeout) of
+            {ok, StackingTimeout} -> StackingTimeout;
+            _ -> 1000 %% 1sec
+        end).
+
+

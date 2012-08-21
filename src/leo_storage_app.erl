@@ -119,7 +119,6 @@ launch_repairer() ->
     ok.
 
 
-
 %% @doc Retrieve log-appneder(s)
 %% @private
 -spec(log_file_appender() ->
