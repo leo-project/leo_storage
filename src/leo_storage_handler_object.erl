@@ -38,7 +38,7 @@
 
 -export([get/1, get/3, get/4, get/5,
          put/1, put/2, put/6, delete/1, delete/4, head/2,
-         copy/3, stack_and_send/4, stack_and_send/5, receive_and_store/1,
+         copy/3, receive_and_store/1,
          prefix_search/3]).
 
 -define(PROC_TYPE_REPLICATE,   'replicate').
@@ -232,68 +232,16 @@ copy(DestNodes, AddrId, Key) ->
         {ok, #metadata{del = 0} = Metadata} ->
             case ?MODULE:get({Ref, Key}) of
                 {ok, Metadata, Bin} ->
-                    stack_and_send(DestNodes, AddrId, Key, {Metadata, Bin});
+                    leo_storage_ordning_reda_client:stack(
+                      DestNodes, AddrId, Key, term_to_binary({Metadata, Bin}));
                 {error, Ref, Cause} ->
                     {error, Cause}
             end;
         {ok, #metadata{del = 1} = Metadata} ->
-            stack_and_send(DestNodes, AddrId, Key, {Metadata, <<>>});
+            leo_storage_ordning_reda_client:stack(
+              DestNodes, AddrId, Key, term_to_binary({Metadata, <<>>}));
         Error ->
             Error
-    end.
-
-
-%% @doc Stack an object and send stacked object to remote-node(s)
-%%
--define(REDA_SEND_FUN,
-        fun(N, S) ->
-                RPCKey = rpc:async_call(N, ?MODULE, receive_and_store, [S]),
-                case rpc:nb_yield(RPCKey, infinity) of
-                    {value, ok} ->
-                        ok;
-                    {value, {error, Cause}} ->
-                        {error, Cause};
-                    {value, {badrpc, Cause}} ->
-                        {error, Cause};
-                    timeout = Cause ->
-                        {error, Cause}
-                end
-        end).
--define(REDA_RECOVER_FUN,
-        fun(_E) ->
-                ok
-        end).
-
--spec(stack_and_send(list(atom()), integer(), string(), tuple({#metadata{}, binary()})) ->
-             ok | {error, any()}).
-stack_and_send(Nodes, AddrId, Key, Data) ->
-    stack_and_send(Nodes, AddrId, Key, Data, []).
-
--spec(stack_and_send(list(atom()), integer(), string(), tuple({#metadata{}, binary()}), list()) ->
-             ok | {error, any()}).
-stack_and_send([],_AddrId,_Key,_Data, []) ->
-    ok;
-stack_and_send([],_AddrId,_Key,_Data, Error) ->
-    {error, lists:reverse(Error)};
-
-stack_and_send([Node|Rest] = NodeList, AddrId, Key, Data, Error) ->
-    case leo_redundant_manager_api:get_member_by_node(Node) of
-        {ok, #member{state = ?STATE_RUNNING}} ->
-            case leo_ordning_reda_api:stack(Node, AddrId, Key, term_to_binary(Data)) of
-                ok ->
-                    stack_and_send(Rest, AddrId, Key, Data, Error);
-                {error, undefined} ->
-                    leo_ordning_reda_api:add_container(
-                      stack, Node, [{buffer_size, ?env_size_of_stacked_objs()},
-                                    {timeout,     ?env_stacking_timeout()},
-                                    {sender,      ?REDA_SEND_FUN},
-                                    {recover,     ?REDA_RECOVER_FUN}]),
-                    stack_and_send(NodeList, AddrId, Key, Data, Error);
-                {error, Cause} ->
-                    stack_and_send(Rest, AddrId, Key, Data, [{Node, Cause}|Error])
-            end;
-        _ ->
-            stack_and_send(Rest, AddrId, Key, Data, [{Node, inactive}|Error])
     end.
 
 
@@ -303,9 +251,7 @@ stack_and_send([Node|Rest] = NodeList, AddrId, Key, Data, Error) ->
              ok | {error, any()}).
 receive_and_store([]) ->
     ok;
-receive_and_store([#straw{addr_id = AddrId,
-                          key     = Key,
-                          object  = Object} | Rest]) ->
+receive_and_store([#straw{object = Object}|Rest]) ->
     {Metadata, Bin} = binary_to_term(Object),
     case leo_object_storage_api:store(Metadata, Bin) of
         ok ->

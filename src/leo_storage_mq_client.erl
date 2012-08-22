@@ -359,8 +359,7 @@ correct_redundancies3(InconsistentNodes, [Node|Rest], Metadata) ->
     case Ret of
         ok ->
             Ret;
-        {error, Why} ->
-            ?warn("correct_redundancies3/3","cause:~p",[Why]),
+        {error, _Why} ->
             correct_redundancies3(InconsistentNodes, Rest, Metadata)
     end.
 

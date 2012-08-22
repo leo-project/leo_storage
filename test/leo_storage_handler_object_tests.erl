@@ -509,9 +509,9 @@ delete_1_({_Node0, _Node1}) ->
                 end),
 
     Res = leo_storage_handler_object:delete(#object{key      = ?TEST_KEY_0,
-                                                      addr_id  = 0,
-                                                      checksum = Checksum,
-                                                      clock    = Clock}),
+                                                    addr_id  = 0,
+                                                    checksum = Checksum,
+                                                    clock    = Clock}),
     ?assertEqual({ok, node()}, Res),
     ok.
 
@@ -547,9 +547,9 @@ delete_2_({_Node0, _Node1}) ->
                 end),
 
     Res = leo_storage_handler_object:delete(#object{key      = ?TEST_KEY_0,
-                                                      addr_id  = 0,
-                                                      checksum = Checksum1,
-                                                      clock    = Clock1}),
+                                                    addr_id  = 0,
+                                                    checksum = Checksum1,
+                                                    clock    = Clock1}),
     ?assertEqual(ok, Res),
     ok.
 
@@ -611,7 +611,10 @@ copy_({Node0, Node1}) ->
                                            nodes = [{Node0,true}, {Node1,true}],
                                            n = 2, r = 1, w = 1, d = 1}}
                 end),
-
+    meck:expect(leo_redundant_manager_api, get_member_by_node,
+                fun(_) ->
+                        {ok, #member{state = ?STATE_RUNNING}}
+                end),
 
     %% object-pool
     meck:new(leo_object_storage_pool),
@@ -628,11 +631,15 @@ copy_({Node0, Node1}) ->
                         ok
                 end),
 
-    %% replicator
-    meck:new(leo_storage_replicate_server),
-    meck:expect(leo_storage_replicate_server, replicate,
-                fun(_PId, Ref, _Quorum, _Redundancies, _ObjectPool) ->
-                        {ok, Ref}
+    %% ording-reda
+    meck:new(leo_ordning_reda_api),
+    meck:expect(leo_ordning_reda_api, add_container,
+                fun(_,_,_) ->
+                        ok
+                end),
+    meck:expect(leo_ordning_reda_api, stack,
+                fun(_,_,_,_) ->
+                        ok
                 end),
 
     Res1 = leo_storage_handler_object:copy([Node1, Node1], 0, ?TEST_KEY_0),
