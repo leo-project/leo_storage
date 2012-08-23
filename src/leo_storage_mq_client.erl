@@ -194,7 +194,7 @@ subscribe(?QUEUE_ID_SYNC_BY_VNODE_ID, MessageBin) ->
     end;
 
 
-subscribe(?QUEUE_ID_REBALANCE = Id, MessageBin) ->
+subscribe(?QUEUE_ID_REBALANCE, MessageBin) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
             {error, Cause};
@@ -207,7 +207,8 @@ subscribe(?QUEUE_ID_REBALANCE = Id, MessageBin) ->
                 ok ->
                     ok;
                 Error ->
-                    ok = publish(Id, Node, VNodeId, AddrId, Key),
+                    ok = leo_storage_mq_client:publish(
+                           ?QUEUE_TYPE_REPLICATION_MISS, AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
                     Error
             end
     end.
