@@ -71,10 +71,10 @@ stack(DestNodes, AddrId, Key, Data) ->
 %%--------------------------------------------------------------------
 %% Callback
 %%--------------------------------------------------------------------
-%% @doc
+%% @doc Handle send object to a remote-node.
 %%
 handle_send(Node, StackedObjects) ->
-    ?info("handle_send/2","node:~w, size:~w",[Node, length(StackedObjects)]),
+    ?info("handle_send/2","node:~w, size:~w", [Node, length(StackedObjects)]),
 
     RPCKey = rpc:async_call(
                Node, leo_storage_handler_object, receive_and_store, [StackedObjects]),
@@ -90,13 +90,18 @@ handle_send(Node, StackedObjects) ->
     end.
 
 
-%% @doc
+%% @doc Handle a fail process
 %%
-%% @TODO
-handle_fail(Node, Errors) ->
-    ?info("handle_fail/2","node:~w, size:~w",[Node, length(Errors)]),
-    ?debugVal({Node, length(Errors)}),
-    ok.
+-spec(handle_fail(atom(), list({integer(), string()})) ->
+             ok | {error, any()}).
+handle_fail(_, []) ->
+    ok;
+handle_fail(Node, [{AddrId, Key}|Rest]) ->
+    ?warn("handle_fail/2","node:~w, addr-id:~w, key:~s", [Node, AddrId, Key]),
+
+    ok = leo_storage_mq_client:publish(
+           ?QUEUE_TYPE_REPLICATION_MISS, AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
+    handle_fail(Node, Rest).
 
 
 %%--------------------------------------------------------------------
