@@ -36,7 +36,7 @@
 
 %% API
 -export([register_in_monitor/1, get_routing_table_chksum/0,
-         start/1, stop/0, attach/1, synchronize/3,
+         start/1, start/2, stop/0, attach/1, synchronize/3,
          compact/0, get_cluster_node_status/0, rebalance/1]).
 
 %%--------------------------------------------------------------------
@@ -91,9 +91,25 @@ get_routing_table_chksum() ->
 -spec(start(list()) ->
              {ok, {atom(), integer()}} | {error, {atom(), any()}}).
 start(Members) ->
+    start(Members, undefined).
+start(Members, SystemConf) ->
     case leo_redundant_manager_api:create(Members) of
         {ok, _NewMembers, [{?CHECKSUM_RING,   Chksums},
                            {?CHECKSUM_MEMBER,_Chksum1}]} ->
+            case SystemConf of
+                undefined -> void;
+                _ ->
+                    #system_conf{n = NumOfReplicas,
+                                 r = ReadQuorum,
+                                 w = WriteQuorum,
+                                 d = DeleteQuorum,
+                                 bit_of_ring = BitOfRing} = SystemConf,
+                    ok = leo_redundant_manager_api:set_options([{n, NumOfReplicas},
+                                                                {r, ReadQuorum},
+                                                                {w, WriteQuorum},
+                                                                {d, DeleteQuorum},
+                                                                {bit_of_ring, BitOfRing}])
+            end,
             {ok, {node(), Chksums}};
         {error, Cause} ->
             {error, {node(), Cause}}

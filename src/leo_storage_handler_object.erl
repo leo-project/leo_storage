@@ -460,8 +460,8 @@ replicate({Method, AddrId, _Key, ObjectPool}) ->
                 {error, Ref, _Cause} ->
                     {error, ?ERROR_REPLICATE_FAILURE}
             end;
-
-        undefined ->
+        _Error ->
+            ?debugVal(_Error),
             {error, ?ERROR_META_NOT_FOUND}
     end.
 
