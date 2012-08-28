@@ -65,12 +65,13 @@ get({Ref, Key}) ->
     _ = leo_statistics_req_counter:increment(?STAT_REQ_GET),
 
     case leo_redundant_manager_api:get_redundancies_by_key(get, Key) of
-        {ok, #redundancies{id = Id}} ->
-            case get_fun(Ref, Id, Key) of
+        {ok, #redundancies{id = AddrId}} ->
+            case get_fun(Ref, AddrId, Key) of
                 {ok, Ref, Metadata, ObjectPool} ->
                     case leo_object_storage_pool:get(ObjectPool) of
                         not_found = Cause ->
                             {error, Cause};
+
                         #object{data = Bin} ->
                             ok = leo_object_storage_pool:destroy(ObjectPool),
                             {ok, Metadata, Bin}
@@ -120,7 +121,7 @@ get(AddrId, Key, ETag, ReqId) ->
 get(AddrId, Key, StartPos, EndPos, ReqId) ->
     _ = leo_statistics_req_counter:increment(?STAT_REQ_GET),
 
-    Ret = case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
+    Ret =  case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
               {ok, #redundancies{nodes = Redundancies, r = ReadQuorum}} ->
                   ReadParameter = #read_parameter{addr_id   = AddrId,
                                                   key       = Key,
@@ -233,7 +234,7 @@ copy(DestNodes, AddrId, Key) ->
             case ?MODULE:get({Ref, Key}) of
                 {ok, Metadata, Bin} ->
                     leo_storage_ordning_reda_client:stack(
-                      DestNodes, AddrId, Key, term_to_binary({Metadata, Bin}));
+                      DestNodes, AddrId, Key, {Metadata, Bin});
                 {error, Ref, Cause} ->
                     {error, Cause}
             end;
@@ -252,7 +253,8 @@ copy(DestNodes, AddrId, Key) ->
 receive_and_store([]) ->
     ok;
 receive_and_store([#straw{object = Object}|Rest]) ->
-    {Metadata, Bin} = binary_to_term(Object),
+    {Metadata, Bin} = Object,
+
     case leo_object_storage_api:store(Metadata, Bin) of
         ok ->
             void;
@@ -461,7 +463,6 @@ replicate({Method, AddrId, _Key, ObjectPool}) ->
                     {error, ?ERROR_REPLICATE_FAILURE}
             end;
         _Error ->
-            ?debugVal(_Error),
             {error, ?ERROR_META_NOT_FOUND}
     end.
 

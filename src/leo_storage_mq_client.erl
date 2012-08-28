@@ -234,9 +234,21 @@ sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
                         AddrId =< ToAddrId) of
                       true when Metadata#metadata.ring_hash =/= RingHash ->
                           VNodeId = ToAddrId,
-                          ?MODULE:publish(?QUEUE_TYPE_REBALANCE, Node, VNodeId, AddrId, Key),
-                          {ok, Acc};
 
+                          case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
+                              {ok, #redundancies{nodes = Redundancies}} ->
+                                  Nodes = [N || {N, _} <- Redundancies],
+                                  case lists:member(Node, Nodes) of
+                                      true ->
+                                          VNodeId = ToAddrId,
+                                          ?MODULE:publish(?QUEUE_TYPE_REBALANCE, Node, VNodeId, AddrId, Key);
+                                      false ->
+                                          void
+                                  end,
+                                  {ok, Acc};
+                              _ ->
+                                  {ok, Acc}
+                          end;
                       true  -> {ok, Acc};
                       false -> {ok, Acc}
                   end
