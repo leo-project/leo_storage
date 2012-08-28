@@ -203,13 +203,19 @@ subscribe(?QUEUE_ID_REBALANCE, MessageBin) ->
                            addr_id  = AddrId,
                            key      = Key} ->
             ok = decrement_counter(?TBL_REBALANCE_COUNTER, VNodeId),
-            case leo_storage_handler_object:copy([Node], AddrId, Key) of
-                ok ->
-                    ok;
-                Error ->
-                    ok = leo_storage_mq_client:publish(
+
+            case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
+                {ok, #redundancies{nodes = [{N, true}|_]}} when N == node() ->
+                    case leo_storage_handler_object:copy([Node], AddrId, Key) of
+                        ok ->
+                            ok;
+                        Error ->
+                            ok = leo_storage_mq_client:publish(
                            ?QUEUE_TYPE_REPLICATION_MISS, AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
-                    Error
+                            Error
+                        end;
+                _ ->
+                    ok
             end
     end.
 
@@ -233,14 +239,13 @@ sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
                   case (AddrId >= FromAddrId andalso
                         AddrId =< ToAddrId) of
                       true when Metadata#metadata.ring_hash =/= RingHash ->
-                          VNodeId = ToAddrId,
-
                           case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
                               {ok, #redundancies{nodes = Redundancies}} ->
                                   Nodes = [N || {N, _} <- Redundancies],
                                   case lists:member(Node, Nodes) of
                                       true ->
                                           VNodeId = ToAddrId,
+                                          %% ?debugVal({node(), Node, VNodeId, AddrId, Key}),
                                           ?MODULE:publish(?QUEUE_TYPE_REBALANCE, Node, VNodeId, AddrId, Key);
                                       false ->
                                           void

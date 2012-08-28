@@ -254,6 +254,7 @@ receive_and_store([]) ->
     ok;
 receive_and_store([#straw{object = Object}|Rest]) ->
     {Metadata, Bin} = Object,
+    %% ?debugVal(Metadata),
 
     case leo_object_storage_api:store(Metadata, Bin) of
         ok ->
