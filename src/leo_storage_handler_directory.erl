@@ -31,16 +31,28 @@
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
--export([find_by_parent_dir/1]).
+-export([find_by_parent_dir/4]).
+
+-define(DEF_DELIMITER, "/").
+-define(DEF_MAX_KEYS,  1000).
 
 %%--------------------------------------------------------------------
 %% API
 %%--------------------------------------------------------------------
 %% @doc Find by index from the backenddb.
 %%
--spec(find_by_parent_dir(string()) ->
+-spec(find_by_parent_dir(string(), string()|null, string()|null, integer()) ->
              {ok, list()} | {error, any()}).
-find_by_parent_dir(ParentDir) ->
+find_by_parent_dir(ParentDir, _Delimiter, Marker, MaxKeys) ->
+    NewMaxKeys = case is_integer(MaxKeys) of
+                     true  -> MaxKeys;
+                     false -> ?DEF_MAX_KEYS
+                 end,
+    NewMarker  = case is_list(Marker) of
+                     true  -> Marker;
+                     false -> []
+                 end,
+
     {ok, Members} = leo_redundant_manager_api:get_members(),
     Nodes = lists:foldl(fun(#member{node  = Node,
                                     state = ?STATE_RUNNING}, Acc) ->
@@ -49,13 +61,15 @@ find_by_parent_dir(ParentDir) ->
                                 Acc
                         end, [], Members),
 
-    {ResL0, _BadNodes} = rpc:multicall(
-                           Nodes, leo_storage_handler_object, prefix_search, [ParentDir]),
+    {ResL0, _BadNodes} = rpc:multicall(Nodes, leo_storage_handler_object, prefix_search,
+                                       [ParentDir, NewMarker, NewMaxKeys], ?DEF_REQ_TIMEOUT),
 
     case lists:foldl(fun({ok, List}, Acc) ->
                              Acc ++ List
                      end, [], ResL0) of
-        []   -> {ok, []};
-        List -> {ok, ordsets:from_list(lists:flatten(List))}
+        [] ->
+            {ok, []};
+        List ->
+            {ok, lists:sublist(ordsets:from_list(lists:flatten(List)), NewMaxKeys)}
     end.
 

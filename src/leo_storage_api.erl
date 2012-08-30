@@ -36,7 +36,7 @@
 
 %% API
 -export([register_in_monitor/1, get_routing_table_chksum/0,
-         start/1, stop/0, attach/1, synchronize/3,
+         start/1, start/2, stop/0, attach/1, synchronize/3,
          compact/0, get_cluster_node_status/0, rebalance/1]).
 
 %%--------------------------------------------------------------------
@@ -59,7 +59,8 @@ register_in_monitor(RequestedTimes) ->
                           case leo_utils:node_existence(Node1) of
                               true ->
                                   case rpc:call(Node1, leo_manager_api, register,
-                                                [RequestedTimes, Pid, erlang:node(), storage], ?DEF_TIMEOUT) of
+                                                [RequestedTimes, Pid, erlang:node(), storage],
+                                                ?DEF_REQ_TIMEOUT) of
                                       ok ->
                                           true;
                                       Error ->
@@ -90,9 +91,25 @@ get_routing_table_chksum() ->
 -spec(start(list()) ->
              {ok, {atom(), integer()}} | {error, {atom(), any()}}).
 start(Members) ->
+    start(Members, undefined).
+start(Members, SystemConf) ->
     case leo_redundant_manager_api:create(Members) of
         {ok, _NewMembers, [{?CHECKSUM_RING,   Chksums},
                            {?CHECKSUM_MEMBER,_Chksum1}]} ->
+            case SystemConf of
+                undefined -> void;
+                _ ->
+                    #system_conf{n = NumOfReplicas,
+                                 r = ReadQuorum,
+                                 w = WriteQuorum,
+                                 d = DeleteQuorum,
+                                 bit_of_ring = BitOfRing} = SystemConf,
+                    ok = leo_redundant_manager_api:set_options([{n, NumOfReplicas},
+                                                                {r, ReadQuorum},
+                                                                {w, WriteQuorum},
+                                                                {d, DeleteQuorum},
+                                                                {bit_of_ring, BitOfRing}])
+            end,
             {ok, {node(), Chksums}};
         {error, Cause} ->
             {error, {node(), Cause}}
@@ -110,9 +127,7 @@ stop() ->
                      erlang:node()
              end,
 
-    rpc:call(Target, leo_storage, stop, [], ?DEF_TIMEOUT),
-    ?info("stop/0", "target:~p", [Target]),
-
+    _ = rpc:call(Target, leo_storage, stop, [], ?DEF_REQ_TIMEOUT),
     init:stop().
 
 
@@ -139,7 +154,8 @@ attach(#system_conf{n = NumOfReplicas,
 %%
 -spec(synchronize(object | sync_by_vnode_id, list() | string(), #metadata{} | atom()) ->
              ok | {error, any()}).
-synchronize(?TYPE_OBJ, InconsistentNodes, #metadata{addr_id = AddrId, key = Key}) ->
+synchronize(?TYPE_OBJ, InconsistentNodes, #metadata{addr_id = AddrId,
+                                                    key     = Key}) ->
     leo_storage_handler_object:copy(InconsistentNodes, AddrId, Key);
 
 synchronize(?TYPE_OBJ, Key, ErrorType) ->
@@ -179,7 +195,7 @@ get_cluster_node_status() ->
         end,
 
     Directories = [{log,    ?env_log_dir(leo_storage)},
-                   {mnesia, mnesia:system_info(directory)}
+                   {mnesia, []}
                   ],
     RingHashes  = [{ring_cur,  RingHashCur},
                    {ring_prev, RingHashPrev }

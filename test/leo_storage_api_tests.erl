@@ -126,17 +126,27 @@ start_([Node0, _]) ->
                         {ok, Members, [{?CHECKSUM_RING,   {1234, 5678}},
                                        {?CHECKSUM_MEMBER, 1234567890}]}
                 end),
+    meck:expect(leo_redundant_manager_api, get_ring,
+                fun() ->
+                        {ok, []}
+                end),
+    meck:new(leo_object_storage_api),
+    meck:expect(leo_object_storage_api, start, fun(_,_) -> ok end),
 
     {ok, {Node, Chksums}} = leo_storage_api:start([]),
     ?assertEqual(Node, Node0),
     ?assertEqual({1234, 5678}, Chksums),
-    meck:unload(),
 
     %% 2.
+    meck:unload(leo_redundant_manager_api),
     meck:new(leo_redundant_manager_api),
     meck:expect(leo_redundant_manager_api, create,
                 fun(_Members) ->
                         {error , []}
+                end),
+    meck:expect(leo_redundant_manager_api, get_ring,
+                fun() ->
+                        {ok, []}
                 end),
 
     {error, {Node, Cause}} = leo_storage_api:start([]),

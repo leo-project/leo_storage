@@ -114,6 +114,11 @@ setup() ->
                         {ok, #redundancies{nodes = [{Test0Node, true},
                                                     {Test1Node, true}], id = ?TEST_VNODE_ID}}
                 end),
+    meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id,
+                fun(_,_) ->
+                        {ok, #redundancies{nodes = []}}
+                end),
+
     meck:expect(leo_redundant_manager_api, range_of_vnodes,
                 fun(_) ->
                         {ok,[{340121982302782409338486978520692208515,

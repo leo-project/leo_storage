@@ -39,7 +39,6 @@ start() ->
 
 
 stop() ->
-    application:stop(mnesia),
     application:stop(crypto),
     application:stop(leo_storage),
     init:stop().

@@ -31,13 +31,15 @@
 -include_lib("leo_commons/include/leo_commons.hrl").
 -include_lib("leo_logger/include/leo_logger.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
+-include_lib("leo_ordning_reda/include/leo_ordning_reda.hrl").
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("leo_statistics/include/leo_statistics.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 -export([get/1, get/3, get/4, get/5,
-         put/1, put/2, put/6, delete/1, delete/4,
-         head/2, copy/3, prefix_search/1]).
+         put/1, put/2, put/6, delete/1, delete/4, head/2,
+         copy/3, receive_and_store/1,
+         prefix_search/3]).
 
 -define(PROC_TYPE_REPLICATE,   'replicate').
 -define(PROC_TYPE_READ_REPAIR, 'read_repair').
@@ -63,12 +65,13 @@ get({Ref, Key}) ->
     _ = leo_statistics_req_counter:increment(?STAT_REQ_GET),
 
     case leo_redundant_manager_api:get_redundancies_by_key(get, Key) of
-        {ok, #redundancies{id = Id}} ->
-            case get_fun(Ref, Id, Key) of
+        {ok, #redundancies{id = AddrId}} ->
+            case get_fun(Ref, AddrId, Key) of
                 {ok, Ref, Metadata, ObjectPool} ->
                     case leo_object_storage_pool:get(ObjectPool) of
                         not_found = Cause ->
                             {error, Cause};
+
                         #object{data = Bin} ->
                             ok = leo_object_storage_pool:destroy(ObjectPool),
                             {ok, Metadata, Bin}
@@ -91,11 +94,11 @@ get(AddrId, Key, ReqId) ->
 %% @doc Retrieve an object which is requested from gateway w/etag.
 %%
 -spec(get(integer(), string(), string(), integer()) ->
-                 {ok, #metadata{}, binary()} |
-                 {ok, match} |
-                 {error, any()}).
+             {ok, #metadata{}, binary()} |
+             {ok, match} |
+             {error, any()}).
 get(AddrId, Key, ETag, ReqId) ->
-    case leo_object_storage_api:head(term_to_binary({AddrId, Key})) of
+    case leo_object_storage_api:head({AddrId, Key}) of
         {ok, MetaBin} ->
             Metadata = binary_to_term(MetaBin),
             case (Metadata#metadata.checksum == ETag) of
@@ -118,7 +121,7 @@ get(AddrId, Key, ETag, ReqId) ->
 get(AddrId, Key, StartPos, EndPos, ReqId) ->
     _ = leo_statistics_req_counter:increment(?STAT_REQ_GET),
 
-    Ret = case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
+    Ret =  case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
               {ok, #redundancies{nodes = Redundancies, r = ReadQuorum}} ->
                   ReadParameter = #read_parameter{addr_id   = AddrId,
                                                   key       = Key,
@@ -207,7 +210,7 @@ delete(DataObject) ->
              {ok, #metadata{}} |
              {error, any}).
 head(AddrId, Key) ->
-    case leo_object_storage_api:head(term_to_binary({AddrId, Key})) of
+    case leo_object_storage_api:head({AddrId, Key}) of
         {ok, MetaBin} ->
             {ok, binary_to_term(MetaBin)};
         not_found = Cause ->
@@ -218,89 +221,84 @@ head(AddrId, Key) ->
 
 
 %%--------------------------------------------------------------------
-%% API - COPY
+%% API - COPY/STACK-SEND/RECEIVE-STORE
 %%--------------------------------------------------------------------
 %% @doc copy an object.
 %%
 -spec(copy(list(), integer(), string()) ->
              ok | not_found | {error, any()}).
-copy(InconsistentNodes, AddrId, Key) ->
+copy(DestNodes, AddrId, Key) ->
     Ref = make_ref(),
     case ?MODULE:head(AddrId, Key) of
-        {ok, #metadata{del = DelFlag} = Metadata} ->
-            case (DelFlag == 0) of
-                true ->
-                    case ?MODULE:get({Ref, Key}) of
-                        {ok, Metadata, Bin} ->
-                            copy(?CMD_PUT, InconsistentNodes, Metadata, #object{data  = Bin,
-                                                                                dsize = byte_size(Bin)});
-                        {error, Ref, Cause} ->
-                            {error, Cause}
-                    end;
-                false ->
-                    copy(?CMD_DELETE, InconsistentNodes, Metadata, #object{})
+        {ok, #metadata{del = 0} = Metadata} ->
+            case ?MODULE:get({Ref, Key}) of
+                {ok, Metadata, Bin} ->
+                    leo_storage_ordning_reda_client:stack(
+                      DestNodes, AddrId, Key, {Metadata, Bin});
+                {error, Ref, Cause} ->
+                    {error, Cause}
             end;
+        {ok, #metadata{del = 1} = Metadata} ->
+            leo_storage_ordning_reda_client:stack(
+              DestNodes, AddrId, Key, term_to_binary({Metadata, <<>>}));
         Error ->
             Error
     end.
 
-copy(Method, InconsistentNodes, #metadata{key       = Key,
-                                          addr_id   = AddrId,
-                                          clock     = Clock,
-                                          timestamp = Timestamp,
-                                          del       = DelFlag}, DataObj) ->
-    ObjectPool = leo_object_storage_pool:new(DataObj#object{method    = Method,
-                                                            addr_id   = AddrId,
-                                                            key       = Key,
-                                                            clock     = Clock,
-                                                            timestamp = Timestamp,
-                                                            del       = DelFlag}),
-    Ref = make_ref(),
-    Nodes = lists:map(fun(Item) ->
-                              {Item, true}
-                      end, InconsistentNodes),
 
-    ProcId = get_proc_id(?PROC_TYPE_REPLICATE),
-    case leo_storage_replicate_server:replicate(
-           ProcId, Ref, length(InconsistentNodes), Nodes, ObjectPool) of
-        {ok, Ref}->
-            ok = leo_object_storage_pool:destroy(ObjectPool),
-            ok;
-        {error, Ref, Reason} ->
-            {error, Reason}
-    end.
+%% @doc Receive stacked objects and store objects into the obj-storage
+%%
+-spec(receive_and_store(list(binary())) ->
+             ok | {error, any()}).
+receive_and_store([]) ->
+    ok;
+receive_and_store([#straw{object = Object}|Rest]) ->
+    {Metadata, Bin} = Object,
+    %% ?debugVal(Metadata),
+
+    case leo_object_storage_api:store(Metadata, Bin) of
+        ok ->
+            void;
+        {error, Cause} ->
+            ?warn("receive_and_store/1","cause:~p",[Cause])
+    end,
+    receive_and_store(Rest).
 
 
 %%--------------------------------------------------------------------
 %% API - Prefix Search (Fetch)
 %%--------------------------------------------------------------------
--define(SLASH,       "/").
--define(ROWS_LIMIT, 1000).
-prefix_search(ParentDir) ->
-    Fun = fun(K, V, Acc) when length(Acc) =< ?ROWS_LIMIT ->
+prefix_search(ParentDir, Marker, MaxKeys) ->
+    Delimiter = "/",
+    Fun = fun(K, V, Acc) when length(Acc) =< MaxKeys ->
                   {_AddrId, Key} = binary_to_term(K),
                   Metadata       = binary_to_term(V),
+                  InRange = case Marker of
+                                [] -> true;
+                                _  ->
+                                    (Marker == hd(lists:sort([Marker, Key])))
+                            end,
 
-                  Token0  = string:tokens(ParentDir, ?SLASH),
-                  Token1  = string:tokens(Key,       ?SLASH),
+                  Token0  = string:tokens(ParentDir, Delimiter),
+                  Token1  = string:tokens(Key,       Delimiter),
 
                   Length0 = erlang:length(Token0),
                   Length1 = Length0 + 1,
                   Length2 = erlang:length(Token1),
 
-                  case (string:str(Key, ParentDir) == 1) of
+                  case (InRange == true andalso string:str(Key, ParentDir) == 1) of
                       true ->
                           case (Length2 -1) of
                               Length0 when Metadata#metadata.del == 0 ->
-                                  case (string:rstr(Key, "/") == length(Key)) of
+                                  case (string:rstr(Key, Delimiter) == length(Key)) of
                                       true  -> ordsets:add_element(#metadata{key   = Key,
                                                                              dsize = -1}, Acc);
                                       false -> ordsets:add_element(Metadata, Acc)
                                   end;
                               Length1 when Metadata#metadata.del == 0 ->
                                   {Token2, _} = lists:split(Length1, Token1),
-                                  Dir = lists:foldl(fun(Str0, []  ) -> Str0 ++ ?SLASH;
-                                                       (Str0, Str1) -> Str1 ++ Str0 ++ ?SLASH
+                                  Dir = lists:foldl(fun(Str0, []  ) -> lists:append([Str0, Delimiter]);
+                                                       (Str0, Str1) -> lists:append([Str1, Str0, Delimiter])
                                                     end, [], Token2),
                                   ordsets:add_element(#metadata{key   = Dir,
                                                                 dsize = -1}, Acc);
@@ -330,7 +328,7 @@ put_fun(ObjectPool, Ref) ->
         not_found ->
             {error, Ref, timeout};
         #metadata{key = Key, addr_id = AddrId} ->
-            case leo_object_storage_api:put(term_to_binary({AddrId, Key}), ObjectPool) of
+            case leo_object_storage_api:put({AddrId, Key}, ObjectPool) of
                 ok ->
                     {ok, Ref};
                 {error, Cause} ->
@@ -349,7 +347,7 @@ get_fun(Ref, AddrId, Key) ->
 -spec(get_fun(reference(), integer(), string(), integer(), integer()) ->
              {ok, reference(), #metadata{}, pid()} | {error, reference(), any()}).
 get_fun(Ref, AddrId, Key, StartPos, EndPos) ->
-    case leo_object_storage_api:get(term_to_binary({AddrId, Key}), StartPos, EndPos) of
+    case leo_object_storage_api:get({AddrId, Key}, StartPos, EndPos) of
         {ok, Metadata, ObjectPool} ->
             {ok, Ref, Metadata, ObjectPool};
         not_found = Cause ->
@@ -371,14 +369,13 @@ delete_fun(ObjectPool, Ref) ->
             {error, Ref, timeout};
         #object{addr_id = AddrId,
                 key      = Key} ->
-            KeyBin = term_to_binary({AddrId, Key}),
-            case leo_object_storage_api:head(KeyBin) of
+            case leo_object_storage_api:head({AddrId, Key}) of
                 not_found = Cause ->
                     {error, Ref, Cause};
                 {ok, Metadata} when Metadata#metadata.del == 1 ->
                     {error, Ref, not_found};
                 {ok, Metadata} when Metadata#metadata.del == 0 ->
-                    case leo_object_storage_api:delete(KeyBin, ObjectPool) of
+                    case leo_object_storage_api:delete({AddrId, Key}, ObjectPool) of
                         ok ->
                             {ok, Ref};
                         {error, Why} ->
@@ -466,8 +463,7 @@ replicate({Method, AddrId, _Key, ObjectPool}) ->
                 {error, Ref, _Cause} ->
                     {error, ?ERROR_REPLICATE_FAILURE}
             end;
-
-        undefined ->
+        _Error ->
             {error, ?ERROR_META_NOT_FOUND}
     end.
 
@@ -480,8 +476,7 @@ replicate(Method, DataObject) when is_record(DataObject, object) == true ->
             addr_id  = AddrId,
             clock    = Clock,
             checksum = Checksum} = DataObject,
-
-    case leo_object_storage_api:head(term_to_binary({AddrId, Key})) of
+    case leo_object_storage_api:head({AddrId, Key}) of
         {ok, Metadata} when Metadata#metadata.clock    =:= Clock andalso
                             Metadata#metadata.checksum =:= Checksum ->
             {ok, erlang:node()};
@@ -511,9 +506,9 @@ replicate(_Method, _DataObject) ->
              atom()).
 get_proc_id(?PROC_TYPE_REPLICATE) ->
     N = (leo_utils:clock() rem ?env_num_of_replicators()),
-    list_to_atom(?PFIX_REPLICATOR ++ integer_to_list(N));
+    list_to_atom(lists:append([?PFIX_REPLICATOR, integer_to_list(N)]));
 
 get_proc_id(?PROC_TYPE_READ_REPAIR) ->
     N = (leo_utils:clock() rem ?env_num_of_repairers()),
-    list_to_atom(?PFIX_REPAIRER   ++ integer_to_list(N)).
+    list_to_atom(lists:append([?PFIX_REPAIRER, integer_to_list(N)])).
 

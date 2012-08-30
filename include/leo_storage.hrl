@@ -23,7 +23,6 @@
 %%
 %%====================================================================
 -author('yosuke hara').
--vsn('0.9.1').
 
 %% @doc default-values.
 %%
@@ -32,11 +31,11 @@
 -define(MAX_TIME,                60).
 
 -ifdef(TEST).
--define(DEF_TIMEOUT,     1000).
+-define(TIMEOUT,         1000).
 -define(DEF_REQ_TIMEOUT, 1000).
 -else.
--define(DEF_TIMEOUT,      3000). %%  3 sec
--define(DEF_REQ_TIMEOUT, 30000). %% 30 sec
+-define(TIMEOUT,         5000).
+-define(DEF_REQ_TIMEOUT, infinity).
 -endif.
 
 %% @doc operationg-methods.
@@ -132,8 +131,10 @@
 %%
 -define(env_storage_device(),
         case application:get_env(leo_storage, obj_containers) of
-            {ok, EnvStorageDevice} -> EnvStorageDevice;
-            _ -> []
+            {ok, EnvStorageDevice} ->
+                EnvStorageDevice;
+            _ ->
+                []
         end).
 
 -define(env_num_of_replicators(),
@@ -153,4 +154,17 @@
             {ok, NumOfMQProcs} -> NumOfMQProcs;
             _ -> 3
         end).
+
+-define(env_size_of_stacked_objs(),
+        case application:get_env(leo_storage, size_of_stacked_objs) of
+            {ok, SizeOfStackedObjs} -> SizeOfStackedObjs;
+            _ -> (1024 * 1024) %% 1MB
+        end).
+
+-define(env_stacking_timeout(),
+        case application:get_env(leo_storage, stacking_timeout) of
+            {ok, StackingTimeout} -> StackingTimeout;
+            _ -> 1000 %% 1sec
+        end).
+
 
