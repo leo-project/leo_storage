@@ -56,7 +56,7 @@ register_in_monitor(RequestedTimes) ->
                                       false -> list_to_atom(Node0)
                                   end,
 
-                          case leo_utils:node_existence(Node1) of
+                          case leo_misc:node_existence(Node1) of
                               true ->
                                   case rpc:call(Node1, leo_manager_api, register,
                                                 [RequestedTimes, Pid, erlang:node(), storage],

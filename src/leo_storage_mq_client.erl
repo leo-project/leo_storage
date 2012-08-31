@@ -94,10 +94,10 @@ start(RootPath0) ->
              ok).
 publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, VNodeId, Node) ->
     KeyBin     = term_to_binary(VNodeId),
-    MessageBin = term_to_binary(#sync_unit_of_vnode_message{id        = leo_utils:clock(),
+    MessageBin = term_to_binary(#sync_unit_of_vnode_message{id        = leo_date:clock(),
                                                             vnode_id  = VNodeId,
                                                             node      = Node,
-                                                            timestamp = leo_utils:now()}),
+                                                            timestamp = leo_date:now()}),
     leo_mq_api:publish(?QUEUE_ID_SYNC_BY_VNODE_ID, KeyBin, MessageBin);
 publish(_,_,_) ->
     {error, badarg}.
@@ -106,8 +106,8 @@ publish(_,_,_) ->
              ok).
 publish(?QUEUE_TYPE_REPLICATION_MISS, AddrId, Key, ErrorType) ->
     KeyBin = term_to_binary({ErrorType, Key}),
-    PublishedAt = leo_utils:now(),
-    MessageBin  = term_to_binary(#inconsistent_data_message{id        = leo_utils:clock(),
+    PublishedAt = leo_date:now(),
+    MessageBin  = term_to_binary(#inconsistent_data_message{id        = leo_date:clock(),
                                                             type      = ErrorType,
                                                             addr_id   = AddrId,
                                                             key       = Key,
@@ -116,8 +116,8 @@ publish(?QUEUE_TYPE_REPLICATION_MISS, AddrId, Key, ErrorType) ->
 
 publish(?QUEUE_TYPE_INCONSISTENT_DATA, AddrId, Key, ErrorType) ->
     KeyBin = term_to_binary({ErrorType, Key}),
-    PublishedAt = leo_utils:now(),
-    MessageBin  = term_to_binary(#inconsistent_data_message{id        = leo_utils:clock(),
+    PublishedAt = leo_date:now(),
+    MessageBin  = term_to_binary(#inconsistent_data_message{id        = leo_date:clock(),
                                                             type      = ErrorType,
                                                             addr_id   = AddrId,
                                                             key       = Key,
@@ -129,12 +129,12 @@ publish(_,_,_,_) ->
 
 publish(?QUEUE_TYPE_REBALANCE, Node, VNodeId, AddrId, Key) ->
     KeyBin     = term_to_binary({Node, AddrId, Key}),
-    MessageBin = term_to_binary(#rebalance_message{id        = leo_utils:clock(),
+    MessageBin = term_to_binary(#rebalance_message{id        = leo_date:clock(),
                                                    vnode_id  = VNodeId,
                                                    addr_id   = AddrId,
                                                    key       = Key,
                                                    node      = Node,
-                                                   timestamp = leo_utils:now()}),
+                                                   timestamp = leo_date:now()}),
     Table = ?TBL_REBALANCE_COUNTER,
     case ets_lookup(Table, VNodeId) of
         {ok, 0} -> ets:insert(Table, {VNodeId, 0});
