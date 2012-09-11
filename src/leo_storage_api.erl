@@ -37,7 +37,7 @@
 %% API
 -export([register_in_monitor/1, get_routing_table_chksum/0,
          start/1, start/2, stop/0, attach/1, synchronize/3,
-         compact/0, get_cluster_node_status/0, rebalance/1]).
+         compact/0, get_node_status/0, rebalance/1]).
 
 %%--------------------------------------------------------------------
 %% API for Admin and System#1
@@ -181,8 +181,8 @@ compact() ->
 %%--------------------------------------------------------------------
 %%
 %%
--spec(get_cluster_node_status() -> {ok, #cluster_node_status{}}).
-get_cluster_node_status() ->
+-spec(get_node_status() -> {ok, #cluster_node_status{}}).
+get_node_status() ->
     Version = case application:get_key(leo_storage, vsn) of
                   {ok, Vsn} -> Vsn;
                   undefined -> []
