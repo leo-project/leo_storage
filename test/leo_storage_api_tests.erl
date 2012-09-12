@@ -49,7 +49,7 @@ api_test_() ->
                            fun stop_/1,
                            fun attach_/1,
                            fun compact_/1,
-                           fun get_cluster_node_status_/1,
+                           fun get_node_status_/1,
                            fun rebalance_/1
                           ]]}.
 
@@ -233,7 +233,7 @@ compact_(_) ->
     meck:unload(),
     ok.
 
-get_cluster_node_status_(_) ->
+get_node_status_(_) ->
     application:start(mnesia),
 
     meck:new(leo_redundant_manager_api),
@@ -242,7 +242,7 @@ get_cluster_node_status_(_) ->
                         {ok, {1234, 5678}}
                 end),
 
-    {ok, ClusterStatus} = leo_storage_api:get_cluster_node_status(),
+    {ok, ClusterStatus} = leo_storage_api:get_node_status(),
     ?assertEqual(true, is_record(ClusterStatus, cluster_node_status)),
 
     Res = meck:history(leo_redundant_manager_api),

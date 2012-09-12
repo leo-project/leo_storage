@@ -505,10 +505,10 @@ replicate(_Method, _DataObject) ->
 -spec(get_proc_id(?PROC_TYPE_REPLICATE | ?PROC_TYPE_READ_REPAIR) ->
              atom()).
 get_proc_id(?PROC_TYPE_REPLICATE) ->
-    N = (leo_utils:clock() rem ?env_num_of_replicators()),
+    N = (leo_date:clock() rem ?env_num_of_replicators()),
     list_to_atom(lists:append([?PFIX_REPLICATOR, integer_to_list(N)]));
 
 get_proc_id(?PROC_TYPE_READ_REPAIR) ->
-    N = (leo_utils:clock() rem ?env_num_of_repairers()),
+    N = (leo_date:clock() rem ?env_num_of_repairers()),
     list_to_atom(lists:append([?PFIX_REPAIRER, integer_to_list(N)])).
 
