@@ -82,7 +82,7 @@ launch_logger() ->
     DefLogDir = "./log/",
     LogDir    = case application:get_env(leo_storage, log_appender) of
                     {ok, [{file, Options}|_]} ->
-                        proplists:get_value(path, Options, DefLogDir);
+                        leo_misc:get_value(path, Options, DefLogDir);
                     _ ->
                         DefLogDir
                 end,
@@ -94,8 +94,8 @@ launch_logger() ->
 %%
 launch_object_storage() ->
     Device     = ?env_storage_device(),
-    Containers = proplists:get_value(num_of_containers, Device),
-    Path       = proplists:get_value(path,              Device),
+    Containers = leo_misc:get_value(num_of_containers, Device),
+    Path       = leo_misc:get_value(path,              Device),
     leo_object_storage_api:start(Containers, Path).
 
 
