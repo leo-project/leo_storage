@@ -1,0 +1,24 @@
+{require_otp_vsn, "R14B04|R15B01"}.
+
+{deps, [
+    {leo_commons,           ".*", {git, "https://github.com/leo-project/leo_commons.git",           "develop" }},
+    {leo_logger,            ".*", {git, "https://github.com/leo-project/leo_logger.git",            "develop" }},
+    {leo_mq,                ".*", {git, "https://github.com/leo-project/leo_mq.git",                "develop" }},
+    {leo_object_storage,    ".*", {git, "https://github.com/leo-project/leo_object_storage.git",    "develop" }},
+    {leo_ordning_reda,      ".*", {git, "https://github.com/leo-project/leo_ordning_reda.git",      "develop" }},
+    {leo_redundant_manager, ".*", {git, "https://github.com/leo-project/leo_redundant_manager.git", "develop" }},
+    {leo_statistics,        ".*", {git, "https://github.com/leo-project/leo_statistics.git",        "develop" }},
+    {meck,                  ".*", {git, "https://github.com/eproxus/meck.git",                      {branch, "master"}}},
+    {proper,                ".*", {git, "https://github.com/manopapad/proper.git",                  {branch, "master"}}}
+]}.
+
+{erl_opts, [{d, 'NOTEST'},
+            warn_obsolete_guard,
+            warn_unused_import,
+            warnings_as_errors,
+            warn_shadow_vars,
+            warn_export_vars,
+            warn_export_all]}.
+{xref_checks, [undefined_function_calls]}.
+{cover_enabled, true}.
+{clean_files, []}.
