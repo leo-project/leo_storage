@@ -40,7 +40,8 @@
 
 ordning_reda_test_() ->
     {foreach, fun setup/0, fun teardown/1,
-     [{with, [T]} || T <- [fun suite_/1
+     [{with, [T]} || T <- [fun suite_regular_/1,
+                           fun suite_error_/1
                           ]]}.
 
 setup() ->
@@ -57,18 +58,40 @@ setup() ->
 
     %% mock
     ok = meck:new(leo_redundant_manager_api),
-    meck:expect(leo_redundant_manager_api, get_member_by_node,
-                fun(_Node) ->
-                        {ok, #member{state = ?STATE_RUNNING}}
-                end),
+    ok = meck:expect(leo_redundant_manager_api, get_member_by_node,
+                     fun(_Node) ->
+                             {ok, #member{state = ?STATE_RUNNING}}
+                     end),
     Node.
 
 teardown(Node) ->
-    leo_ordning_reda_api:remove_container(stack, Node),
+    leo_storage_ordning_reda_client:stop(Node),
+
     net_kernel:stop(),
+    meck:unload(),
     ok.
 
-suite_(Node) ->
+suite_regular_(Node) ->
+    ok = meck:new(leo_object_storage_api),
+    ok = meck:expect(leo_object_storage_api, store,
+                     fun(_Metadata, _Object) ->
+                             ?debugVal({_Metadata, byte_size(_Object)}),
+                             ok
+                     end),
+    stack(Node),
+    ok.
+
+suite_error_(Node) ->
+    ok = meck:new(leo_object_storage_api),
+    ok = meck:expect(leo_object_storage_api, store,
+                     fun(_Metadata, _Object) ->
+                             {error, "Not stored"}
+                     end),
+    stack(Node),
+    ok.
+
+
+stack(Node) ->
     AddrId = 1024,
     Size   = 512,
     Key1   = "photo/hawaii-0.jpg",
@@ -81,10 +104,10 @@ suite_(Node) ->
     Meta4  = #metadata{addr_id = AddrId, key = Key4, dsize = Size, ksize = 18},
     Object = crypto:rand_bytes(Size),
 
-    ok = leo_storage_ordning_reda_client:stack([Node], AddrId, Key1, Meta1, Object),
-    ok = leo_storage_ordning_reda_client:stack([Node], AddrId, Key2, Meta2, Object),
-    ok = leo_storage_ordning_reda_client:stack([Node], AddrId, Key3, Meta3, Object),
-    ok = leo_storage_ordning_reda_client:stack([Node], AddrId, Key4, Meta4, Object),
+    _ = leo_storage_ordning_reda_client:stack([Node], AddrId, Key1, Meta1, Object),
+    _ = leo_storage_ordning_reda_client:stack([Node], AddrId, Key2, Meta2, Object),
+    _ = leo_storage_ordning_reda_client:stack([Node], AddrId, Key3, Meta3, Object),
+    _ = leo_storage_ordning_reda_client:stack([Node], AddrId, Key4, Meta4, Object),
     ok.
 
 -endif.

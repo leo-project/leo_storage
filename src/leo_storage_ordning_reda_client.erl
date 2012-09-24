@@ -31,6 +31,7 @@
 
 -include("leo_storage.hrl").
 -include_lib("leo_logger/include/leo_logger.hrl").
+-include_lib("leo_object_storage/include/leo_object_storage.hrl").
 -include_lib("leo_ordning_reda/include/leo_ordning_reda.hrl").
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("eunit/include/eunit.hrl").
@@ -78,11 +79,14 @@ stack(DestNodes, AddrId, Key, Metadata, Object) ->
 -spec(request(binary()) ->
              ok | {error, any()}).
 request(CompressedObjs) ->
-    ?debugVal(byte_size(CompressedObjs)),
     case catch snappy:decompress(CompressedObjs) of
         {ok, Objects} ->
-            ?debugVal(byte_size(Objects)),
-            slice(Objects);
+            case slice_and_store(Objects) of
+                ok ->
+                    ok;
+                {error, _Cause} ->
+                    {error, fail_storing_files}
+            end;
         {_, Cause} ->
             {error, Cause}
     end.
@@ -171,42 +175,37 @@ node_state(Node) ->
 
 %% @doc Slicing objects.
 %%
--spec(slice(binary()) ->
+-spec(slice_and_store(binary()) ->
              ok | {error, any()}).
-slice(Objects) ->
-    slice(Objects, []).
+slice_and_store(Objects) ->
+    slice_and_store(Objects, []).
 
--spec(slice(binary(), list()) ->
+-spec(slice_and_store(binary(), list()) ->
              ok | {error, any()}).
-slice(<<>>, []) ->
+slice_and_store(<<>>, []) ->
     ok;
-slice(<<>>, Errors) ->
+slice_and_store(<<>>, Errors) ->
     {error, Errors};
-slice(Objects, Errors) ->
+slice_and_store(Objects, Errors) ->
+    %% metadata
     <<MetaSize:?BIN_META_SIZE, Rest0/binary>> = Objects,
+    MetaBin  = binary:part(Rest0, {0, MetaSize}),
+    Rest1    = binary:part(Rest0, {MetaSize, byte_size(Rest0) - MetaSize}),
+    Metadata = binary_to_term(MetaBin),
 
-    MetaBin = binary:part(Rest0, {0, MetaSize}),
-    Rest1   = binary:part(Rest0, {MetaSize, byte_size(Rest0) - MetaSize}),
-
+    %% object
     <<ObjSize:?BIN_OBJ_SIZE, Rest2/binary>> = Rest1,
+    Object = binary:part(Rest2, {0, ObjSize}),
+    Rest3  = binary:part(Rest2, {ObjSize, byte_size(Rest2) - ObjSize}),
 
-    Object  = binary:part(Rest2, {0, ObjSize}),
-    Rest3   = binary:part(Rest2, {ObjSize, byte_size(Rest2) - ObjSize}),
-
+    %% footer
     <<_Fotter:64, Rest4/binary>> = Rest3,
 
-    ?debugVal(MetaSize),
-    ?debugVal({MetaBin, binary_to_term(MetaBin)}),
-    ?debugVal(ObjSize),
-    ?debugVal(byte_size(Object)),
-    
-    slice(Rest4, Errors).
-
-    %% case leo_object_storage_api:store(Metadata, Object) of
-    %%     ok ->
-    %%         slice(Rest4, Error);
-    %%     {error, Cause} ->
-    %%         %% ?warn("receive_and_store/1","cause:~p",[Cause])
-    %%         slice(Rest4, [Cause|Error])
-    %% end.
+    case leo_object_storage_api:store(Metadata, Object) of
+        ok ->
+            slice_and_store(Rest4, Errors);
+        {error, Cause} ->
+            ?warn("slice_and_store/2","key:~s, cause:~p",[Metadata#metadata.key, Cause]),
+            slice_and_store(Rest4, [Metadata|Errors])
+    end.
 
