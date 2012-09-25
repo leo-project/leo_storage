@@ -38,7 +38,7 @@
 
 -export([get/1, get/3, get/4, get/5,
          put/1, put/2, put/6, delete/1, delete/4, head/2,
-         copy/3, receive_and_store/1,
+         copy/3,
          prefix_search/3]).
 
 -define(PROC_TYPE_REPLICATE,   'replicate').
@@ -233,36 +233,15 @@ copy(DestNodes, AddrId, Key) ->
         {ok, #metadata{del = 0} = Metadata} ->
             case ?MODULE:get({Ref, Key}) of
                 {ok, Metadata, Bin} ->
-                    leo_storage_ordning_reda_client:stack(
-                      DestNodes, AddrId, Key, {Metadata, Bin});
+                    leo_storage_ordning_reda_client:stack(DestNodes, AddrId, Key, Metadata, Bin);
                 {error, Ref, Cause} ->
                     {error, Cause}
             end;
         {ok, #metadata{del = 1} = Metadata} ->
-            leo_storage_ordning_reda_client:stack(
-              DestNodes, AddrId, Key, term_to_binary({Metadata, <<>>}));
+            leo_storage_ordning_reda_client:stack(DestNodes, AddrId, Key, Metadata, <<>>);
         Error ->
             Error
     end.
-
-
-%% @doc Receive stacked objects and store objects into the obj-storage
-%%
--spec(receive_and_store(list(binary())) ->
-             ok | {error, any()}).
-receive_and_store([]) ->
-    ok;
-receive_and_store([#straw{object = Object}|Rest]) ->
-    {Metadata, Bin} = Object,
-    %% ?debugVal(Metadata),
-
-    case leo_object_storage_api:store(Metadata, Bin) of
-        ok ->
-            void;
-        {error, Cause} ->
-            ?warn("receive_and_store/1","cause:~p",[Cause])
-    end,
-    receive_and_store(Rest).
 
 
 %%--------------------------------------------------------------------
