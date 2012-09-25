@@ -93,10 +93,16 @@ launch_logger() ->
 %% @doc Launch Object-Storage
 %%
 launch_object_storage() ->
-    Device     = ?env_storage_device(),
-    Containers = leo_misc:get_value(num_of_containers, Device),
-    Path       = leo_misc:get_value(path,              Device),
-    leo_object_storage_api:start(Containers, Path).
+    ObjStoageInfo = case ?env_storage_device() of
+                        [] -> [];
+                        Devices ->
+                            lists:map(fun(Item) ->
+                                              Containers = leo_misc:get_value(num_of_containers, Item),
+                                              Path       = leo_misc:get_value(path,              Item),
+                                              {Containers, Path}
+                                      end, Devices)
+                    end,
+    leo_object_storage_api:start(ObjStoageInfo).
 
 
 %% @doc Launch Replicator
