@@ -60,13 +60,17 @@ after_proc({ok, Pid}) ->
     ok = launch_object_storage(),
     ok = launch_replicator(),
     ok = launch_repairer(),
+
+    ok = leo_statistics_api:start_link(leo_storage),
+    ok = leo_statistics_metrics_vm:start_link(10000),
+    ok = leo_statistics_metrics_vm:start_link(60000),
+    ok = leo_statistics_metrics_vm:start_link(300000),
+    ok = leo_statistics_metrics_req:start_link(60000),
+    ok = leo_statistics_metrics_req:start_link(300000),
+    ok = leo_storage_mq_statistics:start_link(60000),
+    ok = leo_storage_mq_statistics:start_link(300000),
+
     ok = leo_storage_mq_client:start(QueueDir),
-    ok = leo_statistics_api:start(leo_storage_sup, leo_storage,
-                                  [{snmp, [leo_statistics_metrics_vm,
-                                           leo_statistics_metrics_req,
-                                           leo_storage_mq_statistics
-                                          ]},
-                                   {stat, [leo_statistics_metrics_vm]}]),
     ok = leo_redundant_manager_api:start(storage, Managers, QueueDir),
     ok = leo_ordning_reda_api:start(),
     ok = leo_storage_api:register_in_monitor(first),
