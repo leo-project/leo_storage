@@ -32,6 +32,7 @@
 -include("leo_storage.hrl").
 -include_lib("leo_commons/include/leo_commons.hrl").
 -include_lib("leo_logger/include/leo_logger.hrl").
+-include_lib("leo_statistics/include/leo_statistics.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 %% Application and Supervisor callbacks
@@ -52,10 +53,6 @@ stop(_State) ->
 %%----------------------------------------------------------------------
 %% INNER FUNCTION
 %%----------------------------------------------------------------------
--define(STAT_INTERVAL_10,   10000).
--define(STAT_INTERVAL_60,   60000).
--define(STAT_INTERVAL_300, 300000).
-
 after_proc({ok, Pid}) ->
     QueueDir = ?env_queue_dir(leo_storage),
     Managers  = ?env_manager_nodes(leo_storage),
@@ -66,13 +63,13 @@ after_proc({ok, Pid}) ->
     ok = launch_repairer(),
 
     ok = leo_statistics_api:start_link(leo_storage),
-    ok = leo_statistics_metrics_vm:start_link(?STAT_INTERVAL_10),
-    ok = leo_statistics_metrics_vm:start_link(?STAT_INTERVAL_60),
-    ok = leo_statistics_metrics_vm:start_link(?STAT_INTERVAL_300),
-    ok = leo_statistics_metrics_req:start_link(?STAT_INTERVAL_60),
-    ok = leo_statistics_metrics_req:start_link(?STAT_INTERVAL_300),
-    ok = leo_storage_mq_statistics:start_link(?STAT_INTERVAL_60),
-    ok = leo_storage_mq_statistics:start_link(?STAT_INTERVAL_300),
+    ok = leo_statistics_metrics_vm:start_link(?STATISTICS_SYNC_INTERVAL),
+    ok = leo_statistics_metrics_vm:start_link(?SNMP_SYNC_INTERVAL_S),
+    ok = leo_statistics_metrics_vm:start_link(?SNMP_SYNC_INTERVAL_L),
+    ok = leo_statistics_metrics_req:start_link(?SNMP_SYNC_INTERVAL_S),
+    ok = leo_statistics_metrics_req:start_link(?SNMP_SYNC_INTERVAL_L),
+    ok = leo_storage_mq_statistics:start_link(?SNMP_SYNC_INTERVAL_S),
+    ok = leo_storage_mq_statistics:start_link(?SNMP_SYNC_INTERVAL_L),
 
     ok = leo_storage_mq_client:start(QueueDir),
     ok = leo_redundant_manager_api:start(storage, Managers, QueueDir),
