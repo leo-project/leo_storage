@@ -189,7 +189,7 @@ subscribe_0_({Test0Node, Test1Node}) ->
                                                     {ok, ?TEST_META_1}
                                             end]),
     timer:sleep(100),
-    leo_storage_mq_client:subscribe(?QUEUE_ID_REPLICATE_MISS, ?TEST_MSG_1),
+    leo_storage_mq_client:handle_call({consume, ?QUEUE_ID_REPLICATE_MISS, ?TEST_MSG_1}),
 
     true = ets:delete(?TBL_REBALANCE_COUNTER),
     ok.
@@ -216,7 +216,7 @@ subscribe_1_({Test0Node, Test1Node}) ->
                                                     ok
                                             end]),
     timer:sleep(100),
-    leo_storage_mq_client:subscribe(?QUEUE_ID_REPLICATE_MISS, ?TEST_MSG_1),
+    leo_storage_mq_client:handle_call({consume, ?QUEUE_ID_REPLICATE_MISS, ?TEST_MSG_1}),
 
     History1 = rpc:call(Test0Node, meck, history, [leo_storage_api]),
     ?assertEqual(1, length(History1)),
@@ -235,7 +235,7 @@ subscribe_2_(_) ->
                 end),
 
     timer:sleep(100),
-    leo_storage_mq_client:subscribe(?QUEUE_ID_REBALANCE, ?TEST_MSG_3),
+    leo_storage_mq_client:handle_call({consume, ?QUEUE_ID_REBALANCE, ?TEST_MSG_3}),
 
     true = ets:delete(?TBL_REBALANCE_COUNTER),
     ok.
@@ -253,7 +253,7 @@ subscribe_3_({_Test0Node, _Test1Node}) ->
                 end),
 
     timer:sleep(100),
-    leo_storage_mq_client:subscribe(?QUEUE_ID_SYNC_BY_VNODE_ID, ?TEST_MSG_2),
+    leo_storage_mq_client:handle_call({consume, ?QUEUE_ID_SYNC_BY_VNODE_ID, ?TEST_MSG_2}),
 
     [{_, {leo_object_storage_api,fetch_by_addr_id,
           [340121982302782409338486978520692208515,_]}, ok},

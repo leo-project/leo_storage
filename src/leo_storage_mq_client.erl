@@ -27,6 +27,8 @@
 
 -author('Yosuke Hara').
 
+-behaviour(leo_mq_behaviour).
+
 -include("leo_storage.hrl").
 -include_lib("leo_commons/include/leo_commons.hrl").
 -include_lib("leo_logger/include/leo_logger.hrl").
@@ -34,7 +36,8 @@
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 
--export([start/1, publish/3, publish/4, publish/5, subscribe/2]).
+-export([start/1, publish/3, publish/4, publish/5]).
+-export([init/0, handle_call/1]).
 
 -define(SLASH, "/").
 -define(MSG_PATH_REPLICATION_MISS,  "0").
@@ -84,10 +87,6 @@ start(RootPath0) ->
            ]),
     ok.
 
-
-%% -------------------------------------------------------------------
-%% Publish
-%% -------------------------------------------------------------------
 %% @doc Input a message into the queue.
 %%
 -spec(publish(queue_type(), integer(), atom()) ->
@@ -148,14 +147,24 @@ publish(_,_,_,_,_) ->
 
 
 %% -------------------------------------------------------------------
-%% Subscribe.
+%% Callbacks
 %% -------------------------------------------------------------------
+%% @doc Initializer
+%%
+-spec(init() ->
+             ok | {error, any()}).
+init() ->
+    ok.
+
 %% @doc Subscribe a message from the queue.
 %%
--spec(subscribe(queue_id() , binary()) ->
+-spec(handle_call({publish | consume, any() | queue_id() , any() | binary()}) ->
              ok | {error, any()}).
-subscribe(Id, MessageBin) when Id == ?QUEUE_ID_REPLICATE_MISS;
-                               Id == ?QUEUE_ID_INCONSISTENT_DATA ->
+handle_call({publish, _Id, _Reply}) ->
+    ok;
+
+handle_call({consume, Id, MessageBin}) when Id == ?QUEUE_ID_REPLICATE_MISS;
+                                            Id == ?QUEUE_ID_INCONSISTENT_DATA ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
             {error, Cause};
@@ -175,8 +184,7 @@ subscribe(Id, MessageBin) when Id == ?QUEUE_ID_REPLICATE_MISS;
             end
     end;
 
-
-subscribe(?QUEUE_ID_SYNC_BY_VNODE_ID, MessageBin) ->
+handle_call({consume, ?QUEUE_ID_SYNC_BY_VNODE_ID, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
             {error, Cause};
@@ -193,8 +201,7 @@ subscribe(?QUEUE_ID_SYNC_BY_VNODE_ID, MessageBin) ->
             end
     end;
 
-
-subscribe(?QUEUE_ID_REBALANCE, MessageBin) ->
+handle_call({consume, ?QUEUE_ID_REBALANCE, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
             {error, Cause};
