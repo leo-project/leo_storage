@@ -25,7 +25,6 @@
 %%====================================================================
 -module(leo_storage_mq_client_tests).
 -author('yosuke hara').
--vsn('0.9.1').
 
 -include("leo_storage.hrl").
 -include_lib("leo_mq/include/leo_mq.hrl").
@@ -188,6 +187,11 @@ subscribe_0_({Test0Node, Test1Node}) ->
                                             fun(_Key, _VNodeId) ->
                                                     {ok, ?TEST_META_1}
                                             end]),
+    meck:expect(leo_redundant_manager_api, get_member_by_node,
+                fun(_Node) ->
+                        {ok, #member{state = ?STATE_RUNNING}}
+                end),
+
     timer:sleep(100),
     leo_storage_mq_client:handle_call({consume, ?QUEUE_ID_REPLICATE_MISS, ?TEST_MSG_1}),
 
@@ -215,6 +219,10 @@ subscribe_1_({Test0Node, Test1Node}) ->
                                             fun(_Type, _InconsistentNodes, _CorrectMetadata) ->
                                                     ok
                                             end]),
+    meck:expect(leo_redundant_manager_api, get_member_by_node,
+                fun(_Node) ->
+                        {ok, #member{state = ?STATE_RUNNING}}
+                end),
     timer:sleep(100),
     leo_storage_mq_client:handle_call({consume, ?QUEUE_ID_REPLICATE_MISS, ?TEST_MSG_1}),
 
@@ -225,13 +233,22 @@ subscribe_1_({Test0Node, Test1Node}) ->
     ok.
 
 
-subscribe_2_(_) ->
+subscribe_2_({Test0Node, _Test1Node}) ->
     ?TBL_REBALANCE_COUNTER = ets:new(?TBL_REBALANCE_COUNTER, [named_table, public]),
 
     meck:new(leo_storage_handler_object),
     meck:expect(leo_storage_handler_object, copy,
                 fun(_,_,_) ->
                         ok
+                end),
+
+    meck:expect(leo_redundant_manager_api, get_member_by_node,
+                fun(_Node) ->
+                        {ok, #member{state = ?STATE_RUNNING}}
+                end),
+    meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id,
+                fun(_,_) ->
+                        {ok, #redundancies{nodes = [{Test0Node, true}]}}
                 end),
 
     timer:sleep(100),
@@ -250,6 +267,10 @@ subscribe_3_({_Test0Node, _Test1Node}) ->
                 fun(_FromVNodeId, Fun) ->
                         Fun(term_to_binary({1, "key"}), term_to_binary(#metadata{ring_hash = 0}), []),
                         ok
+                end),
+    meck:expect(leo_redundant_manager_api, get_member_by_node,
+                fun(_Node) ->
+                        {ok, #member{state = ?STATE_RUNNING}}
                 end),
 
     timer:sleep(100),

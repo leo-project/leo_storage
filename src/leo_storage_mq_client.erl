@@ -35,6 +35,7 @@
 -include_lib("leo_mq/include/leo_mq.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
+-include_lib("eunit/include/eunit.hrl").
 
 -export([start/1, publish/3, publish/4, publish/5]).
 -export([init/0, handle_call/1]).
@@ -209,20 +210,29 @@ handle_call({consume, ?QUEUE_ID_REBALANCE, MessageBin}) ->
                            vnode_id = VNodeId,
                            addr_id  = AddrId,
                            key      = Key} ->
-            ok = decrement_counter(?TBL_REBALANCE_COUNTER, VNodeId),
+            %% NOTE:
+            %% If remote-node status is NOT 'running',
+            %%     this function cannot operate 'copy'.
+            case leo_redundant_manager_api:get_member_by_node(Node) of
+                {ok, #member{state = ?STATE_RUNNING}} ->
+                    %% Copy objects to a remote-node
+                    ok = decrement_counter(?TBL_REBALANCE_COUNTER, VNodeId),
 
-            case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
-                {ok, #redundancies{nodes = [{N, true}|_]}} when N == node() ->
-                    case leo_storage_handler_object:copy([Node], AddrId, Key) of
-                        ok ->
-                            ok;
-                        Error ->
-                            ok = leo_storage_mq_client:publish(
-                           ?QUEUE_TYPE_REPLICATION_MISS, AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
-                            Error
-                        end;
+                    case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
+                        {ok, #redundancies{nodes = [{N, true}|_]}} when N == node() ->
+                            case leo_storage_handler_object:copy([Node], AddrId, Key) of
+                                ok ->
+                                    ok;
+                                Error ->
+                                    ok = leo_storage_mq_client:publish(
+                                           ?QUEUE_TYPE_REPLICATION_MISS, AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
+                                    Error
+                            end;
+                        _ ->
+                            ok
+                    end;
                 _ ->
-                    ok
+                    {error, inactive}
             end
     end.
 
@@ -320,13 +330,22 @@ correct_redundancies1(_Key,_AddrId, [], Metadatas, ErrorNodes) ->
     correct_redundancies2(Metadatas, ErrorNodes);
 
 correct_redundancies1(Key, AddrId, [{Node, _}|T], Metadatas, ErrorNodes) ->
-    RPCKey = rpc:async_call(Node, leo_storage_handler_object, head, [AddrId, Key]),
+    %% NOTE:
+    %% If remote-node status is NOT 'running',
+    %%     this function cannot operate 'rpc-call'.
+    case leo_redundant_manager_api:get_member_by_node(Node) of
+        {ok, #member{state = ?STATE_RUNNING}} ->
+            %% Retrieve a metadata from remote-node
+            RPCKey = rpc:async_call(Node, leo_storage_handler_object, head, [AddrId, Key]),
 
-    case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
-        {value, {ok, Metadata}} ->
-            correct_redundancies1(Key, AddrId, T, [{Node, Metadata}|Metadatas], ErrorNodes);
-        _Error ->
-            correct_redundancies1(Key, AddrId, T, Metadatas, [Node|ErrorNodes])
+            case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
+                {value, {ok, Metadata}} ->
+                    correct_redundancies1(Key, AddrId, T, [{Node, Metadata}|Metadatas], ErrorNodes);
+                _Error ->
+                    correct_redundancies1(Key, AddrId, T, Metadatas, [Node|ErrorNodes])
+            end;
+        _ ->
+            {error, inactive}
     end.
 
 
