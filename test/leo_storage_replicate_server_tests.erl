@@ -25,7 +25,6 @@
 %%====================================================================
 -module(leo_storage_replicate_server_tests).
 -author('yosuke hara').
--vsn('0.9.1').
 
 -include("leo_storage.hrl").
 -include_lib("leo_mq/include/leo_mq.hrl").
