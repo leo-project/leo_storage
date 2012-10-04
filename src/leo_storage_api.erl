@@ -173,7 +173,8 @@ synchronize(sync_by_vnode_id, VNodeId, Node) ->
 %%
 -spec(compact() -> ok | {error, any()}).
 compact() ->
-    leo_object_storage_api:compact().
+    leo_object_storage_api:compact(
+      fun leo_redundant_manager_api:has_charge_of_node/1).
 
 
 %%--------------------------------------------------------------------

@@ -222,7 +222,7 @@ synchronize_([Node0, _]) ->
 compact_(_) ->
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, compact,
-                fun() ->
+                fun(_) ->
                         ok
                 end),
     ok = leo_storage_api:compact(),
