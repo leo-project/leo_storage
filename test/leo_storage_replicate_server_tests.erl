@@ -155,7 +155,7 @@ gen_mock_2(object, {_Test0Node, _Test1Node}, Case) ->
 
     meck:new(leo_storage_handler_object),
     meck:expect(leo_storage_handler_object, put,
-                fun(PoolPid, Ref) ->
+                fun(local, PoolPid, Ref) ->
                         ?assertEqual(true, erlang:is_pid(PoolPid)),
                         ?assertEqual(true, erlang:is_reference(Ref)),
 

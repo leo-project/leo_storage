@@ -174,7 +174,7 @@ replicate1(local, #req_params{pid      = Pid,
                               req_id   = ReqId}) ->
     Ref  = make_ref(),
     Node = erlang:node(),
-    Ret  = case leo_storage_handler_object:put(ObjPool, Ref) of
+    Ret  = case leo_storage_handler_object:put(local, ObjPool, Ref) of
                {ok, Ref} ->
                    {ok, Node};
                {error, Ref, Cause} ->
