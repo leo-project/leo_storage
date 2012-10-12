@@ -166,8 +166,8 @@ put(Object) when erlang:is_record(Object, object) ->
 put(Object, ReqId) ->
     _ = leo_statistics_req_counter:increment(?STAT_REQ_PUT),
     AddrId     = Object#object.addr_id,
-    ObjectPool = leo_object_storage_pool:new(Object#object{method    = ?CMD_PUT,
-                                                           req_id    = ReqId}),
+    ObjectPool = leo_object_storage_pool:new(Object#object{method = ?CMD_PUT,
+                                                           req_id = ReqId}),
     replicate(?CMD_PUT, AddrId, ObjectPool).
 
 %% @doc Insert an object (request from local.replicator).
@@ -196,8 +196,11 @@ delete(Object) ->
 delete(Object, ReqId) ->
     _ = leo_statistics_req_counter:increment(?STAT_REQ_DEL),
     AddrId     = Object#object.addr_id,
-    ObjectPool = leo_object_storage_pool:new(Object#object{method    = ?CMD_DELETE,
-                                                           req_id    = ReqId}),
+    ObjectPool = leo_object_storage_pool:new(Object#object{method = ?CMD_DELETE,
+                                                           data   = <<>>,
+                                                           dsize  = 0,
+                                                           req_id = ReqId,
+                                                           del    = 1}),
     replicate(?CMD_DELETE, AddrId, ObjectPool).
 
 
