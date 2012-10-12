@@ -101,7 +101,7 @@ handle_send(Node, CompressedObjs) ->
     ?info("handle_send/2","node:~w, size:~w", [Node, byte_size(CompressedObjs)]),
 
     RPCKey = rpc:async_call(Node, ?MODULE, request, [CompressedObjs]),
-    case rpc:nb_yield(RPCKey, infinity) of
+    case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
         {value, ok} ->
             ok;
         {value, {error, Cause}} ->
