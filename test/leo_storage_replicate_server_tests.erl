@@ -101,8 +101,8 @@ replicate_obj_0_({Test0Node, Test1Node}) ->
     PoolPid = leo_object_storage_pool:new(Object),
     Ref     = make_ref(),
 
-    {ok, _} = leo_storage_replicate_server:replicate(
-                ?TEST_SERVER_ID, Ref, 1, ?TEST_REDUNDANCIES_1, PoolPid),
+    {ok, _, {etag, _}} = leo_storage_replicate_server:replicate(
+                           ?TEST_SERVER_ID, Ref, 1, ?TEST_REDUNDANCIES_1, PoolPid),
     timer:sleep(100),
     ok.
 
@@ -110,15 +110,17 @@ replicate_obj_0_({Test0Node, Test1Node}) ->
 replicate_obj_1_({Test0Node, Test1Node}) ->
     gen_mock_2(object, {Test0Node, Test1Node}, fail),
     gen_mock_3(object, Test1Node, ok),
+    ?debugVal(ok),
 
     Object = #object{key     = ?TEST_KEY_1,
                      addr_id = ?TEST_RING_ID_1,
                      dsize   = erlang:byte_size(?TEST_BODY_1),
                      data    = ?TEST_BODY_1},
     PoolPid = leo_object_storage_pool:new(Object),
-    Ref     = make_ref(),
-    {ok, Ref} = leo_storage_replicate_server:replicate(
-                  ?TEST_SERVER_ID, Ref, 1, ?TEST_REDUNDANCIES_1, PoolPid),
+
+    Ref = make_ref(),
+    {ok, _, {etag, _}} = leo_storage_replicate_server:replicate(
+                           ?TEST_SERVER_ID, Ref, 1, ?TEST_REDUNDANCIES_1, PoolPid),
     timer:sleep(100),
     ok.
 
@@ -132,9 +134,9 @@ replicate_obj_2_({Test0Node, Test1Node}) ->
                      dsize   = erlang:byte_size(?TEST_BODY_1),
                      data    = ?TEST_BODY_1},
     PoolPid = leo_object_storage_pool:new(Object),
-    Ref     = make_ref(),
-    {ok, Ref} = leo_storage_replicate_server:replicate(
-                  ?TEST_SERVER_ID, Ref, 1, ?TEST_REDUNDANCIES_1, PoolPid),
+    Ref = make_ref(),
+    {ok, _, {etag, _}} = leo_storage_replicate_server:replicate(
+                             ?TEST_SERVER_ID, Ref, 1, ?TEST_REDUNDANCIES_1, PoolPid),
     timer:sleep(100),
     ok.
 
@@ -160,7 +162,7 @@ gen_mock_2(object, {_Test0Node, _Test1Node}, Case) ->
                         ?assertEqual(true, erlang:is_reference(Ref)),
 
                         case Case of
-                            ok   -> {ok, Ref};
+                            ok   -> {ok, Ref, {etag, 1}};
                             fail -> {error, Ref, []}
                         end
                 end),
@@ -179,7 +181,7 @@ gen_mock_3(object, Test1Node, Case) ->
                                                     ?assertEqual(?TEST_BODY_1,    Body),
                                                     ?assertEqual(0,               DelFlag),
                                                     case Case of
-                                                        ok   -> ok;
+                                                        ok   -> {ok, {etag, 1}};
                                                         fail -> {error, []}
                                                     end
                                             end]),

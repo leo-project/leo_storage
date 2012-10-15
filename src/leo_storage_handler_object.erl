@@ -311,8 +311,8 @@ put_fun(ObjectPool, Ref) ->
             {error, Ref, timeout};
         #metadata{key = Key, addr_id = AddrId} ->
             case leo_object_storage_api:put({AddrId, Key}, ObjectPool) of
-                ok ->
-                    {ok, Ref};
+                {ok, ETag} ->
+                    {ok, Ref, {etag, ETag}};
                 {error, Cause} ->
                     {error, Ref, Cause}
             end
@@ -429,7 +429,10 @@ replicate(Method, AddrId, ObjectPool) ->
 
             case leo_storage_replicate_server:replicate(
                    ProcId0, Ref, Quorum, Redundancies, ObjectPool) of
-                {ok, Ref} ->
+                {ok, Ref, ETag} when Method == ?CMD_PUT ->
+                    ok = leo_object_storage_pool:destroy(ObjectPool),
+                    {ok, ETag};
+                {ok, Ref,_ETag} when Method == ?CMD_DELETE ->
                     ok = leo_object_storage_pool:destroy(ObjectPool),
                     ok;
                 {error, Ref, _Cause} ->
@@ -459,12 +462,20 @@ replicate(Method, Object) when is_record(Object, object) == true ->
             ObjectPool = leo_object_storage_pool:new(Object),
             Ref  = make_ref(),
             Ret0 = case Method of
-                       ?CMD_PUT    -> put_fun(ObjectPool, Ref);
-                       ?CMD_DELETE -> delete_fun(ObjectPool, Ref)
+                       ?CMD_PUT ->
+                           put_fun(ObjectPool, Ref);
+                       ?CMD_DELETE ->
+                           delete_fun(ObjectPool, Ref)
                    end,
             Ret1 = case Ret0 of
-                       {ok, Ref}           -> ok;
-                       {error, Ref, Cause} -> {error, Cause}
+                       %% Put
+                       {ok, Ref, ETag} ->
+                           {ok, ETag};
+                       %% Delete
+                       {ok, Ref} ->
+                           ok;
+                       {error, Ref, Cause} ->
+                           {error, Cause}
                    end,
 
             ok = leo_object_storage_pool:destroy(ObjectPool),
