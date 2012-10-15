@@ -200,7 +200,7 @@ delete(Object, ReqId) ->
                                                            data   = <<>>,
                                                            dsize  = 0,
                                                            req_id = ReqId,
-                                                           del    = 1}),
+                                                           del    = ?DEL_TRUE}),
     replicate(?CMD_DELETE, AddrId, ObjectPool).
 
 
@@ -233,14 +233,14 @@ head(AddrId, Key) ->
 copy(DestNodes, AddrId, Key) ->
     Ref = make_ref(),
     case ?MODULE:head(AddrId, Key) of
-        {ok, #metadata{del = 0} = Metadata} ->
+        {ok, #metadata{del = ?DEL_FALSE} = Metadata} ->
             case ?MODULE:get({Ref, Key}) of
                 {ok, Metadata, Bin} ->
                     leo_storage_ordning_reda_client:stack(DestNodes, AddrId, Key, Metadata, Bin);
                 {error, Ref, Cause} ->
                     {error, Cause}
             end;
-        {ok, #metadata{del = 1} = Metadata} ->
+        {ok, #metadata{del = ?DEL_TRUE} = Metadata} ->
             leo_storage_ordning_reda_client:stack(DestNodes, AddrId, Key, Metadata, <<>>);
         Error ->
             Error
@@ -271,13 +271,13 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
                   case (InRange == true andalso string:str(Key, ParentDir) == 1) of
                       true ->
                           case (Length2 -1) of
-                              Length0 when Metadata#metadata.del == 0 ->
+                              Length0 when Metadata#metadata.del == ?DEL_FALSE ->
                                   case (string:rstr(Key, Delimiter) == length(Key)) of
                                       true  -> ordsets:add_element(#metadata{key   = Key,
                                                                              dsize = -1}, Acc);
                                       false -> ordsets:add_element(Metadata, Acc)
                                   end;
-                              Length1 when Metadata#metadata.del == 0 ->
+                              Length1 when Metadata#metadata.del == ?DEL_FALSE ->
                                   {Token2, _} = lists:split(Length1, Token1),
                                   Dir = lists:foldl(fun(Str0, []  ) -> lists:append([Str0, Delimiter]);
                                                        (Str0, Str1) -> lists:append([Str1, Str0, Delimiter])
@@ -354,9 +354,9 @@ delete_fun(ObjectPool, Ref) ->
             case leo_object_storage_api:head({AddrId, Key}) of
                 not_found = Cause ->
                     {error, Ref, Cause};
-                {ok, Metadata} when Metadata#metadata.del == 1 ->
+                {ok, Metadata} when Metadata#metadata.del == ?DEL_TRUE ->
                     {error, Ref, not_found};
-                {ok, Metadata} when Metadata#metadata.del == 0 ->
+                {ok, Metadata} when Metadata#metadata.del == ?DEL_FALSE ->
                     case leo_object_storage_api:delete({AddrId, Key}, ObjectPool) of
                         ok ->
                             {ok, Ref};
