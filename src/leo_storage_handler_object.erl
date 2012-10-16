@@ -268,16 +268,23 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
                   Length1 = Length0 + 1,
                   Length2 = erlang:length(Token1),
 
+                  IsChunkedObj = case is_list(Key) of
+                                     true  -> string:str(Key, "\n") > 0;
+                                     false -> false
+                                 end,
+
                   case (InRange == true andalso string:str(Key, ParentDir) == 1) of
                       true ->
                           case (Length2 -1) of
-                              Length0 when Metadata#metadata.del == ?DEL_FALSE ->
+                              Length0 when Metadata#metadata.del == ?DEL_FALSE andalso
+                                           IsChunkedObj == false ->
                                   case (string:rstr(Key, Delimiter) == length(Key)) of
                                       true  -> ordsets:add_element(#metadata{key   = Key,
                                                                              dsize = -1}, Acc);
                                       false -> ordsets:add_element(Metadata, Acc)
                                   end;
-                              Length1 when Metadata#metadata.del == ?DEL_FALSE ->
+                              Length1 when Metadata#metadata.del == ?DEL_FALSE andalso
+                                           IsChunkedObj == false ->
                                   {Token2, _} = lists:split(Length1, Token1),
                                   Dir = lists:foldl(fun(Str0, []  ) -> lists:append([Str0, Delimiter]);
                                                        (Str0, Str1) -> lists:append([Str1, Str0, Delimiter])
