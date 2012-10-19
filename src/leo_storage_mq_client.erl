@@ -27,14 +27,18 @@
 
 -author('Yosuke Hara').
 
+-behaviour(leo_mq_behaviour).
+
 -include("leo_storage.hrl").
 -include_lib("leo_commons/include/leo_commons.hrl").
 -include_lib("leo_logger/include/leo_logger.hrl").
 -include_lib("leo_mq/include/leo_mq.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
+-include_lib("eunit/include/eunit.hrl").
 
--export([start/1, publish/3, publish/4, publish/5, subscribe/2]).
+-export([start/1, publish/3, publish/4, publish/5]).
+-export([init/0, handle_call/1]).
 
 -define(SLASH, "/").
 -define(MSG_PATH_REPLICATION_MISS,  "0").
@@ -84,10 +88,6 @@ start(RootPath0) ->
            ]),
     ok.
 
-
-%% -------------------------------------------------------------------
-%% Publish
-%% -------------------------------------------------------------------
 %% @doc Input a message into the queue.
 %%
 -spec(publish(queue_type(), integer(), atom()) ->
@@ -148,14 +148,24 @@ publish(_,_,_,_,_) ->
 
 
 %% -------------------------------------------------------------------
-%% Subscribe.
+%% Callbacks
 %% -------------------------------------------------------------------
+%% @doc Initializer
+%%
+-spec(init() ->
+             ok | {error, any()}).
+init() ->
+    ok.
+
 %% @doc Subscribe a message from the queue.
 %%
--spec(subscribe(queue_id() , binary()) ->
+-spec(handle_call({publish | consume, any() | queue_id() , any() | binary()}) ->
              ok | {error, any()}).
-subscribe(Id, MessageBin) when Id == ?QUEUE_ID_REPLICATE_MISS;
-                               Id == ?QUEUE_ID_INCONSISTENT_DATA ->
+handle_call({publish, _Id, _Reply}) ->
+    ok;
+
+handle_call({consume, Id, MessageBin}) when Id == ?QUEUE_ID_REPLICATE_MISS;
+                                            Id == ?QUEUE_ID_INCONSISTENT_DATA ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
             {error, Cause};
@@ -175,8 +185,7 @@ subscribe(Id, MessageBin) when Id == ?QUEUE_ID_REPLICATE_MISS;
             end
     end;
 
-
-subscribe(?QUEUE_ID_SYNC_BY_VNODE_ID, MessageBin) ->
+handle_call({consume, ?QUEUE_ID_SYNC_BY_VNODE_ID, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
             {error, Cause};
@@ -193,8 +202,7 @@ subscribe(?QUEUE_ID_SYNC_BY_VNODE_ID, MessageBin) ->
             end
     end;
 
-
-subscribe(?QUEUE_ID_REBALANCE, MessageBin) ->
+handle_call({consume, ?QUEUE_ID_REBALANCE, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
             {error, Cause};
@@ -202,20 +210,29 @@ subscribe(?QUEUE_ID_REBALANCE, MessageBin) ->
                            vnode_id = VNodeId,
                            addr_id  = AddrId,
                            key      = Key} ->
-            ok = decrement_counter(?TBL_REBALANCE_COUNTER, VNodeId),
+            %% NOTE:
+            %% If remote-node status is NOT 'running',
+            %%     this function cannot operate 'copy'.
+            case leo_redundant_manager_api:get_member_by_node(Node) of
+                {ok, #member{state = ?STATE_RUNNING}} ->
+                    %% Copy objects to a remote-node
+                    ok = decrement_counter(?TBL_REBALANCE_COUNTER, VNodeId),
 
-            case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
-                {ok, #redundancies{nodes = [{N, true}|_]}} when N == node() ->
-                    case leo_storage_handler_object:copy([Node], AddrId, Key) of
-                        ok ->
-                            ok;
-                        Error ->
-                            ok = leo_storage_mq_client:publish(
-                           ?QUEUE_TYPE_REPLICATION_MISS, AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
-                            Error
-                        end;
+                    case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
+                        {ok, #redundancies{nodes = [{N, true}|_]}} when N == node() ->
+                            case leo_storage_handler_object:copy([Node], AddrId, Key) of
+                                ok ->
+                                    ok;
+                                Error ->
+                                    ok = leo_storage_mq_client:publish(
+                                           ?QUEUE_TYPE_REPLICATION_MISS, AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
+                                    Error
+                            end;
+                        _ ->
+                            ok
+                    end;
                 _ ->
-                    ok
+                    {error, inactive}
             end
     end.
 
@@ -313,13 +330,22 @@ correct_redundancies1(_Key,_AddrId, [], Metadatas, ErrorNodes) ->
     correct_redundancies2(Metadatas, ErrorNodes);
 
 correct_redundancies1(Key, AddrId, [{Node, _}|T], Metadatas, ErrorNodes) ->
-    RPCKey = rpc:async_call(Node, leo_storage_handler_object, head, [AddrId, Key]),
+    %% NOTE:
+    %% If remote-node status is NOT 'running',
+    %%     this function cannot operate 'rpc-call'.
+    case leo_redundant_manager_api:get_member_by_node(Node) of
+        {ok, #member{state = ?STATE_RUNNING}} ->
+            %% Retrieve a metadata from remote-node
+            RPCKey = rpc:async_call(Node, leo_storage_handler_object, head, [AddrId, Key]),
 
-    case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
-        {value, {ok, Metadata}} ->
-            correct_redundancies1(Key, AddrId, T, [{Node, Metadata}|Metadatas], ErrorNodes);
-        _Error ->
-            correct_redundancies1(Key, AddrId, T, Metadatas, [Node|ErrorNodes])
+            case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
+                {value, {ok, Metadata}} ->
+                    correct_redundancies1(Key, AddrId, T, [{Node, Metadata}|Metadatas], ErrorNodes);
+                _Error ->
+                    correct_redundancies1(Key, AddrId, T, Metadatas, [Node|ErrorNodes])
+            end;
+        _ ->
+            {error, inactive}
     end.
 
 

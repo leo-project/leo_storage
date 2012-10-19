@@ -25,7 +25,6 @@
 %%====================================================================
 -module(leo_storage_mq_client_tests).
 -author('yosuke hara').
--vsn('0.9.1').
 
 -include("leo_storage.hrl").
 -include_lib("leo_mq/include/leo_mq.hrl").
@@ -188,8 +187,13 @@ subscribe_0_({Test0Node, Test1Node}) ->
                                             fun(_Key, _VNodeId) ->
                                                     {ok, ?TEST_META_1}
                                             end]),
+    meck:expect(leo_redundant_manager_api, get_member_by_node,
+                fun(_Node) ->
+                        {ok, #member{state = ?STATE_RUNNING}}
+                end),
+
     timer:sleep(100),
-    leo_storage_mq_client:subscribe(?QUEUE_ID_REPLICATE_MISS, ?TEST_MSG_1),
+    leo_storage_mq_client:handle_call({consume, ?QUEUE_ID_REPLICATE_MISS, ?TEST_MSG_1}),
 
     true = ets:delete(?TBL_REBALANCE_COUNTER),
     ok.
@@ -215,8 +219,12 @@ subscribe_1_({Test0Node, Test1Node}) ->
                                             fun(_Type, _InconsistentNodes, _CorrectMetadata) ->
                                                     ok
                                             end]),
+    meck:expect(leo_redundant_manager_api, get_member_by_node,
+                fun(_Node) ->
+                        {ok, #member{state = ?STATE_RUNNING}}
+                end),
     timer:sleep(100),
-    leo_storage_mq_client:subscribe(?QUEUE_ID_REPLICATE_MISS, ?TEST_MSG_1),
+    leo_storage_mq_client:handle_call({consume, ?QUEUE_ID_REPLICATE_MISS, ?TEST_MSG_1}),
 
     History1 = rpc:call(Test0Node, meck, history, [leo_storage_api]),
     ?assertEqual(1, length(History1)),
@@ -225,7 +233,7 @@ subscribe_1_({Test0Node, Test1Node}) ->
     ok.
 
 
-subscribe_2_(_) ->
+subscribe_2_({Test0Node, _Test1Node}) ->
     ?TBL_REBALANCE_COUNTER = ets:new(?TBL_REBALANCE_COUNTER, [named_table, public]),
 
     meck:new(leo_storage_handler_object),
@@ -234,8 +242,17 @@ subscribe_2_(_) ->
                         ok
                 end),
 
+    meck:expect(leo_redundant_manager_api, get_member_by_node,
+                fun(_Node) ->
+                        {ok, #member{state = ?STATE_RUNNING}}
+                end),
+    meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id,
+                fun(_,_) ->
+                        {ok, #redundancies{nodes = [{Test0Node, true}]}}
+                end),
+
     timer:sleep(100),
-    leo_storage_mq_client:subscribe(?QUEUE_ID_REBALANCE, ?TEST_MSG_3),
+    leo_storage_mq_client:handle_call({consume, ?QUEUE_ID_REBALANCE, ?TEST_MSG_3}),
 
     true = ets:delete(?TBL_REBALANCE_COUNTER),
     ok.
@@ -251,9 +268,13 @@ subscribe_3_({_Test0Node, _Test1Node}) ->
                         Fun(term_to_binary({1, "key"}), term_to_binary(#metadata{ring_hash = 0}), []),
                         ok
                 end),
+    meck:expect(leo_redundant_manager_api, get_member_by_node,
+                fun(_Node) ->
+                        {ok, #member{state = ?STATE_RUNNING}}
+                end),
 
     timer:sleep(100),
-    leo_storage_mq_client:subscribe(?QUEUE_ID_SYNC_BY_VNODE_ID, ?TEST_MSG_2),
+    leo_storage_mq_client:handle_call({consume, ?QUEUE_ID_SYNC_BY_VNODE_ID, ?TEST_MSG_2}),
 
     [{_, {leo_object_storage_api,fetch_by_addr_id,
           [340121982302782409338486978520692208515,_]}, ok},

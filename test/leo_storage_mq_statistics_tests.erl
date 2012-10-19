@@ -25,7 +25,6 @@
 %%====================================================================
 -module(leo_storage_mq_statistics_tests).
 -author('yosuke hara').
--vsn('0.9.1').
 
 -include("leo_storage.hrl").
 -include_lib("leo_statistics/include/leo_statistics.hrl").
@@ -65,8 +64,8 @@ teardown(_) ->
 %% sync vnode-id queue.
 sync_(_) ->
     ok = leo_storage_mq_statistics:init(),
-    ok = leo_storage_mq_statistics:sync(?STAT_INTERVAL_1M),
-    ok = leo_storage_mq_statistics:sync(?STAT_INTERVAL_5M),
+    ok = leo_storage_mq_statistics:handle_call({sync, ?STAT_INTERVAL_1M}),
+    ok = leo_storage_mq_statistics:handle_call({sync, ?STAT_INTERVAL_5M}),
 
     Res = meck:history(leo_mq_api),
     ?assertEqual(4, length(Res)),

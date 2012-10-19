@@ -140,7 +140,7 @@ replicate1(From, Ref, Quorum, Nodes, ObjPoolPid) ->
             gen_server:reply(From, {error, Ref, timeout});
 
         #object{addr_id = AddrId, key = Key, req_id = ReqId} = Object ->
-            Pid = spawn(?MODULE, loop, [From, Quorum, {Ref, length(Nodes), []}]),
+            Pid = spawn(?MODULE, loop, [From, Quorum, {Ref, length(Nodes), [], []}]),
             ReqParams = #req_params{pid     = Pid,
                                     addr_id = AddrId,
                                     key     = Key,
@@ -174,9 +174,11 @@ replicate1(local, #req_params{pid      = Pid,
                               req_id   = ReqId}) ->
     Ref  = make_ref(),
     Node = erlang:node(),
-    Ret  = case leo_storage_handler_object:put(ObjPool, Ref) of
+    Ret  = case leo_storage_handler_object:put(local, ObjPool, Ref) of
                {ok, Ref} ->
-                   {ok, Node};
+                   ok;
+               {ok, Ref, Checksum} ->
+                   {ok, Checksum};
                {error, Ref, Cause} ->
                    ?warn("replicate1/2", "key:~s, node:~w, reqid:~w, cause:~p",
                          [Key, local, ReqId, Cause]),
@@ -189,20 +191,22 @@ replicate1(local, #req_params{pid      = Pid,
 
 %% @doc Request a replication-message for remote-node.
 %%
-replicate1(Node, #req_params{pid     = Pid,
-                             rpc_key = RPCKey,
-                             addr_id = AddrId,
-                             key     = Key}) ->
+replicate1(_Node, #req_params{pid     = Pid,
+                              rpc_key = RPCKey,
+                              addr_id = AddrId,
+                              key     = Key}) ->
     Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
-        {value, ok} ->
-            {ok, Node};
-        {value, {error, Cause}} ->
-            {error, Cause};
-        {value, {badrpc, Cause}} ->
-            {error, Cause};
-        timeout = Cause ->
-            {error, Cause}
-    end,
+              {value, ok} ->
+                  ok;
+              {value, {ok, Checksum}} ->
+                  {ok, Checksum};
+              {value, {error, Cause}} ->
+                  {error, Cause};
+              {value, {badrpc, Cause}} ->
+                  {error, Cause};
+              timeout = Cause ->
+                  {error, Cause}
+          end,
 
     case Ret of
         {error, _Reason} ->
@@ -217,19 +221,21 @@ replicate1(Node, #req_params{pid     = Pid,
 %%
 -spec(loop(pid(), integer(), {reference(), integer(), string(), integer(), list()}) ->
              ok).
-loop(From, 0, {Ref,_NumOfNodes,_Errors}) ->
-    gen_server:reply(From, {ok, Ref}),
+loop(From, 0, {Ref,_NumOfNodes,_ResL,_Errors}) ->
+    gen_server:reply(From, {ok, Ref, hd(_ResL)}),
     ok;
 
-loop(From, W, {Ref, NumOfNodes, Errors}) when (NumOfNodes - W) < length(Errors) ->
+loop(From, W, {Ref, NumOfNodes,_ResL, Errors}) when (NumOfNodes - W) < length(Errors) ->
     gen_server:reply(From, {error, Ref, Errors});
 
-loop(From, W, {Ref, NumOfNodes, Errors} = Args) ->
+loop(From, W, {Ref, NumOfNodes, ResL, Errors} = Args) ->
     receive
-        {ok, _Node} ->
+        ok ->
             loop(From, W-1, Args);
+        {ok, Checksum} ->
+            loop(From, W-1, {Ref, NumOfNodes, [Checksum|ResL], Errors});
         {error, Node, Cause} ->
-            loop(From, W, {Ref, NumOfNodes, [{Node, Cause}|Errors]})
+            loop(From, W,   {Ref, NumOfNodes, ResL, [{Node, Cause}|Errors]})
     after
         ?TIMEOUT ->
             case (W >= 0) of

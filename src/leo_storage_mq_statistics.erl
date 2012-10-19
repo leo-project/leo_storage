@@ -33,7 +33,8 @@
 -include_lib("leo_statistics/include/leo_statistics.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
--export([init/0, sync/1]).
+-export([start_link/1]).
+-export([init/0, handle_call/1]).
 
 -define(SNMP_MSG_REPLICATE,  'num-of-msg-replicate').
 -define(SNMP_MSG_SYNC_VNODE, 'num-of-msg-sync-vnode').
@@ -41,6 +42,13 @@
 
 %%--------------------------------------------------------------------
 %% API
+%%--------------------------------------------------------------------
+start_link(Interval) ->
+    ok = leo_statistics_api:start_link(?MODULE, Interval),
+    ok.
+
+%%--------------------------------------------------------------------
+%% Callbacks
 %%--------------------------------------------------------------------
 %% @doc Initialize metrics.
 %%
@@ -51,9 +59,9 @@ init() ->
 
 %% @doc Synchronize values.
 %%
--spec(sync(?STAT_INTERVAL_1M | ?STAT_INTERVAL_5M) ->
+-spec(handle_call({sync, ?STAT_INTERVAL_1M | ?STAT_INTERVAL_5M}) ->
              ok).
-sync(?STAT_INTERVAL_1M) ->
+handle_call({sync, ?STAT_INTERVAL_1M}) ->
     {ok, {Res0, _}} = leo_mq_api:status(?QUEUE_ID_REPLICATE_MISS),
     {ok, {Res1, _}} = leo_mq_api:status(?QUEUE_ID_INCONSISTENT_DATA),
     {ok, {Res2, _}} = leo_mq_api:status(?QUEUE_ID_SYNC_BY_VNODE_ID),
@@ -64,6 +72,6 @@ sync(?STAT_INTERVAL_1M) ->
     catch snmp_generic:variable_set(?SNMP_MSG_REBALANCE,  Res3),
     ok;
 
-sync(?STAT_INTERVAL_5M) ->
+handle_call({sync, ?STAT_INTERVAL_5M}) ->
     ok.
 

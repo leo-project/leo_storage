@@ -26,7 +26,6 @@
 -module(leo_storage_handler_object_tests).
 
 -author('Yosuke Hara').
--vsn('0.9.1').
 
 -include("leo_storage.hrl").
 -include_lib("leo_commons/include/leo_commons.hrl").
@@ -387,11 +386,18 @@ put_0_({Node0, Node1}) ->
     meck:new(leo_storage_replicate_server),
     meck:expect(leo_storage_replicate_server, replicate,
                 fun(_PId, Ref, _Quorum, _Redundancies, _ObjectPool) ->
-                        {ok, Ref}
+                        {ok, Ref, {etag, 1}}
                 end),
 
-    Res = leo_storage_handler_object:put(AddrId, Key, Bin, Size, ReqId, Timestamp),
-    ?assertEqual(ok, Res),
+    Object = #object{method    = ?CMD_PUT,
+                     addr_id   = AddrId,
+                     key       = Key,
+                     data      = Bin,
+                     dsize     = Size,
+                     req_id    = ReqId,
+                     timestamp = Timestamp,
+                     del       = 0},
+    {ok, _Checksum} = leo_storage_handler_object:put(Object, 0),
     ok.
 
 %% put/2
@@ -403,7 +409,7 @@ put_1_({_Node0, _Node1}) ->
                 end),
 
     Ref = make_ref(),
-    Res = leo_storage_handler_object:put([], Ref),
+    Res = leo_storage_handler_object:put(local, [], Ref),
     ?assertEqual({error, Ref, timeout}, Res),
     ok.
 
@@ -418,12 +424,11 @@ put_2_({_Node0, _Node1}) ->
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, put,
                 fun(_Key, _ObjPool) ->
-                        ok
+                        {ok, 1}
                 end),
 
     Ref = make_ref(),
-    Res = leo_storage_handler_object:put([], Ref),
-    ?assertEqual({ok, Ref}, Res),
+    {ok, Ref, _Etag} = leo_storage_handler_object:put(local, [], Ref),
     ok.
 
 %% put/1
@@ -489,10 +494,18 @@ delete_0_({Node0, Node1}) ->
     meck:new(leo_storage_replicate_server),
     meck:expect(leo_storage_replicate_server, replicate,
                 fun(_PId, Ref, _Quorum, _Redundancies, _ObjectPool) ->
-                        {ok, Ref}
+                        {ok, Ref, {etag, 1}}
                 end),
 
-    Res = leo_storage_handler_object:delete(AddrId, Key, ReqId, Timestamp),
+    Object = #object{method    = ?CMD_DELETE,
+                     addr_id   = AddrId,
+                     key       = Key,
+                     data      = <<>>,
+                     dsize     = 0,
+                     req_id    = ReqId,
+                     timestamp = Timestamp,
+                     del       = 1},
+    Res = leo_storage_handler_object:delete(Object, 0),
     ?assertEqual(ok, Res),
     ok.
 

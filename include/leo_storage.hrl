@@ -34,8 +34,8 @@
 -define(TIMEOUT,         1000).
 -define(DEF_REQ_TIMEOUT, 1000).
 -else.
--define(TIMEOUT,         5000).
--define(DEF_REQ_TIMEOUT, infinity).
+-define(TIMEOUT,          5000). %%  5sec
+-define(DEF_REQ_TIMEOUT, 30000). %% 30sec
 -endif.
 
 %% @doc operationg-methods.
