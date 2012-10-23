@@ -59,7 +59,6 @@ after_proc({ok, Pid}) ->
 
     ok = launch_logger(),
     ok = launch_object_storage(),
-    ok = launch_replicator(),
     ok = launch_repairer(),
 
     ok = leo_statistics_api:start_link(leo_storage),
@@ -108,16 +107,6 @@ launch_object_storage() ->
                                       end, Devices)
                     end,
     leo_object_storage_api:start(ObjStoageInfo).
-
-
-%% @doc Launch Replicator
-%%
-launch_replicator() ->
-    lists:foreach(fun(N) ->
-                          supervisor:start_child(leo_storage_replicator_sup,
-                                                 [list_to_atom(?PFIX_REPLICATOR ++ integer_to_list(N))])
-                  end, lists:seq(0, ?env_num_of_replicators() - 1)),
-    ok.
 
 
 %% @doc Launch Repairer

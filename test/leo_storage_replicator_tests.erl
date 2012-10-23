@@ -23,7 +23,7 @@
 %% @doc
 %% @end
 %%====================================================================
--module(leo_storage_replicate_server_tests).
+-module(leo_storage_replicator_tests).
 -author('yosuke hara').
 
 -include("leo_storage.hrl").
@@ -74,15 +74,13 @@ setup() ->
     true = rpc:call(Test1Node, code, add_path, ["../deps/meck/ebin"]),
 
     timer:sleep(100),
-    {ok, _Pid} = leo_storage_replicate_server:start_link(?TEST_SERVER_ID),
+    %% {ok, _Pid} = leo_storage_replicate_server:start_link(?TEST_SERVER_ID),
     {Test0Node, Test1Node}.
 
 teardown({_Test0Node, Test1Node}) ->
     meck:unload(),
     net_kernel:stop(),
     slave:stop(Test1Node),
-
-    leo_storage_replicate_server:stop(?TEST_SERVER_ID),
     ok.
 
 
@@ -99,10 +97,13 @@ replicate_obj_0_({Test0Node, Test1Node}) ->
                      dsize   = erlang:byte_size(?TEST_BODY_1),
                      data    = ?TEST_BODY_1},
     PoolPid = leo_object_storage_pool:new(Object),
-    Ref     = make_ref(),
 
-    {ok, _, {etag, _}} = leo_storage_replicate_server:replicate(
-                           ?TEST_SERVER_ID, Ref, 1, ?TEST_REDUNDANCIES_1, PoolPid),
+    F = fun({ok, ETag}) ->
+                {ok, ETag};
+           ({error, Cause}) ->
+                {error, Cause}
+        end,
+    {ok, {etag, _}} = leo_storage_replicator:replicate(1, ?TEST_REDUNDANCIES_1, PoolPid, F),
     timer:sleep(100),
     ok.
 
@@ -118,9 +119,12 @@ replicate_obj_1_({Test0Node, Test1Node}) ->
                      data    = ?TEST_BODY_1},
     PoolPid = leo_object_storage_pool:new(Object),
 
-    Ref = make_ref(),
-    {ok, _, {etag, _}} = leo_storage_replicate_server:replicate(
-                           ?TEST_SERVER_ID, Ref, 1, ?TEST_REDUNDANCIES_1, PoolPid),
+    F = fun({ok, ETag}) ->
+                {ok, ETag};
+           ({error, Cause}) ->
+                {error, Cause}
+        end,
+    {ok, {etag, _}} = leo_storage_replicator:replicate(1, ?TEST_REDUNDANCIES_1, PoolPid, F),
     timer:sleep(100),
     ok.
 
@@ -134,9 +138,13 @@ replicate_obj_2_({Test0Node, Test1Node}) ->
                      dsize   = erlang:byte_size(?TEST_BODY_1),
                      data    = ?TEST_BODY_1},
     PoolPid = leo_object_storage_pool:new(Object),
-    Ref = make_ref(),
-    {ok, _, {etag, _}} = leo_storage_replicate_server:replicate(
-                             ?TEST_SERVER_ID, Ref, 1, ?TEST_REDUNDANCIES_1, PoolPid),
+
+    F = fun({ok, ETag}) ->
+                {ok, ETag};
+           ({error, Cause}) ->
+                {error, Cause}
+        end,
+    {ok, {etag, _}} = leo_storage_replicator:replicate(1, ?TEST_REDUNDANCIES_1, PoolPid, F),
     timer:sleep(100),
     ok.
 

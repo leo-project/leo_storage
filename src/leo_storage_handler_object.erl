@@ -427,24 +427,19 @@ replicate(Method, AddrId, ObjectPool) ->
                            ring_hash = RingHash}} ->
             leo_object_storage_pool:set_ring_hash(ObjectPool, RingHash),
 
-            Ref = make_ref(),
-            ProcId0 = get_proc_id(?PROC_TYPE_REPLICATE),
             Quorum  = case Method of
                           ?CMD_PUT    -> WriteQuorum;
                           ?CMD_DELETE -> DeleteQuorum
                       end,
 
-            case leo_storage_replicate_server:replicate(
-                   ProcId0, Ref, Quorum, Redundancies, ObjectPool) of
-                {ok, Ref, ETag} when Method == ?CMD_PUT ->
-                    ok = leo_object_storage_pool:destroy(ObjectPool),
-                    {ok, ETag};
-                {ok, Ref,_ETag} when Method == ?CMD_DELETE ->
-                    ok = leo_object_storage_pool:destroy(ObjectPool),
-                    ok;
-                {error, Ref, _Cause} ->
-                    {error, ?ERROR_REPLICATE_FAILURE}
-            end;
+            F = fun({ok, ETag}) when Method == ?CMD_PUT ->
+                        {ok, ETag};
+                   ({ok,_ETag}) when Method == ?CMD_DELETE ->
+                        ok;
+                   ({error,_Cause}) ->
+                        {error, ?ERROR_REPLICATE_FAILURE}
+                end,
+            leo_storage_replicator:replicate(Quorum, Redundancies, ObjectPool, F);
         _Error ->
             {error, ?ERROR_META_NOT_FOUND}
     end.
@@ -496,10 +491,6 @@ replicate(_Method, _Object) ->
 %%
 -spec(get_proc_id(?PROC_TYPE_REPLICATE | ?PROC_TYPE_READ_REPAIR) ->
              atom()).
-get_proc_id(?PROC_TYPE_REPLICATE) ->
-    N = (leo_date:clock() rem ?env_num_of_replicators()),
-    list_to_atom(lists:append([?PFIX_REPLICATOR, integer_to_list(N)]));
-
 get_proc_id(?PROC_TYPE_READ_REPAIR) ->
     N = (leo_date:clock() rem ?env_num_of_repairers()),
     list_to_atom(lists:append([?PFIX_REPAIRER, integer_to_list(N)])).

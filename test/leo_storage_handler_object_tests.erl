@@ -383,10 +383,10 @@ put_0_({Node0, Node1}) ->
                                            n = 2, r = 1, w = 1, d = 1}}
                 end),
 
-    meck:new(leo_storage_replicate_server),
-    meck:expect(leo_storage_replicate_server, replicate,
-                fun(_PId, Ref, _Quorum, _Redundancies, _ObjectPool) ->
-                        {ok, Ref, {etag, 1}}
+    meck:new(leo_storage_replicator),
+    meck:expect(leo_storage_replicator, replicate,
+                fun(_Quorum,_Redundancies,_ObjectPool,_Callback) ->
+                        {ok, {etag, 1}}
                 end),
 
     Object = #object{method    = ?CMD_PUT,
@@ -491,10 +491,10 @@ delete_0_({Node0, Node1}) ->
                                            n = 2, r = 1, w = 1, d = 1}}
                 end),
 
-    meck:new(leo_storage_replicate_server),
-    meck:expect(leo_storage_replicate_server, replicate,
-                fun(_PId, Ref, _Quorum, _Redundancies, _ObjectPool) ->
-                        {ok, Ref, {etag, 1}}
+    meck:new(leo_storage_replicator),
+    meck:expect(leo_storage_replicator, replicate,
+                fun(_Quorum,_Redundancies,_ObjectPool,_Callback) ->
+                        ok
                 end),
 
     Object = #object{method    = ?CMD_DELETE,
