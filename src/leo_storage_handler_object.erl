@@ -396,13 +396,13 @@ read_and_repair(#read_parameter{addr_id   = AddrId,
         {ok, Ref, Metadata, ObjectPool} when T =:= [] ->
             {ok, Metadata, ObjectPool};
         {ok, Ref, Metadata, ObjectPool} when T =/= [] ->
-            ProcId = get_proc_id(?PROC_TYPE_READ_REPAIR),
-            case leo_storage_read_repair_server:repair(ProcId, Ref, ReadQuorum -1, T, Metadata, ReqId) of
-                {ok, Ref} ->
-                    {ok, Metadata, ObjectPool};
-                {error, Ref} ->
-                    {error, ?ERROR_RECOVER_FAILURE}
-            end;
+            F = fun(ok) ->
+                        {ok, Metadata, ObjectPool};
+                   ({error,_Cause}) ->
+                        {error, ?ERROR_RECOVER_FAILURE}
+                end,
+            leo_storage_read_repairer:repair(ReadQuorum -1, T, Metadata, ReqId, F);
+
         {error, Ref, not_found = Cause} ->
             {error, Cause};
         {error, Ref, _Cause} ->
@@ -485,13 +485,4 @@ replicate(Method, Object) when is_record(Object, object) == true ->
     end;
 replicate(_Method, _Object) ->
     {error, badarg}.
-
-
-%% @doc
-%%
--spec(get_proc_id(?PROC_TYPE_REPLICATE | ?PROC_TYPE_READ_REPAIR) ->
-             atom()).
-get_proc_id(?PROC_TYPE_READ_REPAIR) ->
-    N = (leo_date:clock() rem ?env_num_of_repairers()),
-    list_to_atom(lists:append([?PFIX_REPAIRER, integer_to_list(N)])).
 

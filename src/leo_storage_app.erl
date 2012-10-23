@@ -59,7 +59,6 @@ after_proc({ok, Pid}) ->
 
     ok = launch_logger(),
     ok = launch_object_storage(),
-    ok = launch_repairer(),
 
     ok = leo_statistics_api:start_link(leo_storage),
     ok = leo_statistics_metrics_vm:start_link(?STATISTICS_SYNC_INTERVAL),
@@ -107,16 +106,6 @@ launch_object_storage() ->
                                       end, Devices)
                     end,
     leo_object_storage_api:start(ObjStoageInfo).
-
-
-%% @doc Launch Repairer
-%%
-launch_repairer() ->
-    lists:foreach(fun(N) ->
-                          supervisor:start_child(leo_storage_read_repairer_sup,
-                                                 [list_to_atom(?PFIX_REPAIRER   ++ integer_to_list(N))])
-                  end, lists:seq(0, ?env_num_of_repairers() - 1)),
-    ok.
 
 
 %% @doc Retrieve log-appneder(s)

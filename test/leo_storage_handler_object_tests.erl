@@ -217,16 +217,16 @@ get_b1_({Node0, Node1}) ->
                         not_found
                 end),
 
-    meck:new(leo_storage_read_repair_server),
-    meck:expect(leo_storage_read_repair_server, repair,
-                fun(_Pid, Ref, _R, _Node, _Metadata, _ReqId) ->
-                        {ok, Ref}
+    meck:new(leo_storage_read_repairer),
+    meck:expect(leo_storage_read_repairer, repair,
+                fun(_R, _Node,_Metadata,_ReqId,_Callback) ->
+                        {error,not_found}
                 end),
 
     Res = leo_storage_handler_object:get(0, ?TEST_KEY_0, 0),
     ?assertEqual({error,not_found}, Res),
 
-    His = meck:history(leo_storage_read_repair_server),
+    His = meck:history(leo_storage_read_repairer),
     ?assertEqual(1, length(His)),
     ok.
 
@@ -253,16 +253,16 @@ get_b2_({Node0, _Node1}) ->
                         not_found
                 end),
 
-    meck:new(leo_storage_read_repair_server),
-    meck:expect(leo_storage_read_repair_server, repair,
-                fun(_Pid, Ref, _R, _Node, _Metadata, _ReqId) ->
-                        {ok, Ref}
+    meck:new(leo_storage_read_repairer),
+    meck:expect(leo_storage_read_repairer, repair,
+                fun(_R, _Node,_Metadata,_ReqId,_Callback) ->
+                        ok
                 end),
 
     Res = leo_storage_handler_object:get(0, ?TEST_KEY_0, 0),
     ?assertEqual({error,not_found}, Res),
 
-    His = meck:history(leo_storage_read_repair_server),
+    His = meck:history(leo_storage_read_repairer),
     ?assertEqual(0, length(His)),
     ok.
 
@@ -293,16 +293,17 @@ get_b3_({Node0, Node1}) ->
                         ok
                 end),
 
-    meck:new(leo_storage_read_repair_server),
-    meck:expect(leo_storage_read_repair_server, repair,
-                fun(_Pid, Ref, _R, _Node, _Metadata, _ReqId) ->
-                        {ok, Ref}
+    meck:new(leo_storage_read_repairer),
+    meck:expect(leo_storage_read_repairer, repair,
+                fun(_R, _Node, _Metadata, _ReqId,_Callback) ->
+                        {ok, ?TEST_META_0, ?TEST_BIN}
                 end),
+
 
     Res = leo_storage_handler_object:get(0, ?TEST_KEY_0, 0),
     ?assertEqual({ok, ?TEST_META_0, ?TEST_BIN}, Res),
 
-    His = meck:history(leo_storage_read_repair_server),
+    His = meck:history(leo_storage_read_repairer),
     ?assertEqual(1, length(His)),
     ok.
 

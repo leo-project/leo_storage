@@ -23,13 +23,12 @@
 %% @doc
 %% @end
 %%====================================================================
--module(leo_storage_read_repair_server_tests).
+-module(leo_storage_read_repairer_tests).
 -author('yosuke hara').
 
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
 
--define(TEST_SERVER_ID, 'repairer_0').
 -define(TEST_KEY_1,     "air/on/g/string/music.png").
 -define(TEST_META_1, #metadata{key       = ?TEST_KEY_1,
                                addr_id   = 1,
@@ -57,8 +56,8 @@ read_repair_test_() ->
 setup() ->
     meck:new(leo_logger),
     meck:expect(leo_logger, append, fun(_,_,_) ->
-                                              ok
-                                      end),
+                                            ok
+                                    end),
 
     [] = os:cmd("epmd -daemon"),
     {ok, Hostname} = inet:gethostname(),
@@ -71,7 +70,6 @@ setup() ->
     true = rpc:call(Test1Node, code, add_path, ["../deps/meck/ebin"]),
 
     timer:sleep(100),
-    {ok, _Pid} = leo_storage_read_repair_server:start_link(?TEST_SERVER_ID),
     {Test0Node, Test1Node}.
 
 
@@ -79,69 +77,67 @@ teardown({_Test0Node, Test1Node}) ->
     meck:unload(),
     net_kernel:stop(),
     slave:stop(Test1Node),
-
-    leo_storage_read_repair_server:stop(?TEST_SERVER_ID),
     ok.
 
 
 regular_({Test0Node, Test1Node}) ->
     meck:new(leo_storage_handler_object),
     meck:expect(leo_storage_handler_object, head, fun(_,_) ->
-                                                            {ok, ?TEST_META_1}
-                                                    end),
+                                                          {ok, ?TEST_META_1}
+                                                  end),
     ok = rpc:call(Test1Node, meck, new,    [leo_storage_handler_object, [no_link]]),
     ok = rpc:call(Test1Node, meck, expect, [leo_storage_handler_object, head, fun(_, _) ->
-                                                                                        {ok, ?TEST_META_1}
-                                                                                end]),
+                                                                                      {ok, ?TEST_META_1}
+                                                                              end]),
     meck:new(leo_storage_mq_client),
     meck:expect(leo_storage_mq_client, publish,
                 fun(_,_,_,_) ->
                         ok
                 end),
 
-    Ref = make_ref(),
     Nodes = [{Test0Node, true},{Test1Node, true}],
-    {ok, Ref} = leo_storage_read_repair_server:repair(?TEST_SERVER_ID, Ref, 1, Nodes, ?TEST_META_1, 0),
+    F = fun(_) -> ok end,
+    ok = leo_storage_read_repairer:repair(1, Nodes, ?TEST_META_1, 0, F),
     ok.
 
 fail_1_({Test0Node, Test1Node}) ->
     meck:new(leo_storage_handler_object),
     meck:expect(leo_storage_handler_object, head, fun(_,_) ->
-                                                            {ok, ?TEST_META_1}
-                                                    end),
+                                                          {ok, ?TEST_META_1}
+                                                  end),
     ok = rpc:call(Test1Node, meck, new,    [leo_storage_handler_object, [no_link]]),
     ok = rpc:call(Test1Node, meck, expect, [leo_storage_handler_object, head, fun(_, _) ->
-                                                                                        {ok, ?TEST_META_2}
-                                                                                end]),
+                                                                                      {ok, ?TEST_META_2}
+                                                                              end]),
     meck:new(leo_storage_mq_client),
     meck:expect(leo_storage_mq_client, publish,
                 fun(_,_,_,_) ->
                         ok
                 end),
 
-    Ref = make_ref(),
     Nodes = [{Test0Node, true},{Test1Node, true}],
-    {ok, Ref} = leo_storage_read_repair_server:repair(?TEST_SERVER_ID, Ref, 1, Nodes, ?TEST_META_1, 0),
+    F = fun(_) -> ok end,
+    ok = leo_storage_read_repairer:repair(1, Nodes, ?TEST_META_1, 0, F),
     ok.
 
 fail_2_({Test0Node, Test1Node}) ->
     meck:new(leo_storage_handler_object),
     meck:expect(leo_storage_handler_object, head, fun(_,_) ->
-                                                            {ok, ?TEST_META_2}
-                                                    end),
+                                                          {ok, ?TEST_META_2}
+                                                  end),
     ok = rpc:call(Test1Node, meck, new,    [leo_storage_handler_object, [no_link]]),
     ok = rpc:call(Test1Node, meck, expect, [leo_storage_handler_object, head, fun(_, _) ->
-                                                                                        {ok, ?TEST_META_1}
-                                                                                end]),
+                                                                                      {ok, ?TEST_META_1}
+                                                                              end]),
     meck:new(leo_storage_mq_client),
     meck:expect(leo_storage_mq_client, publish,
                 fun(_,_,_,_) ->
                         ok
                 end),
 
-    Ref = make_ref(),
     Nodes = [{Test0Node, true},{Test1Node, true}],
-    {ok, Ref} = leo_storage_read_repair_server:repair(?TEST_SERVER_ID, Ref, 1, Nodes, ?TEST_META_2, 0),
+    F = fun(_) -> ok end,
+    ok = leo_storage_read_repairer:repair(1, Nodes, ?TEST_META_2, 0, F),
     ok.
 
 -endif.
