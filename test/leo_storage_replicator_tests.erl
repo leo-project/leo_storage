@@ -96,14 +96,13 @@ replicate_obj_0_({Test0Node, Test1Node}) ->
                      addr_id = ?TEST_RING_ID_1,
                      dsize   = erlang:byte_size(?TEST_BODY_1),
                      data    = ?TEST_BODY_1},
-    PoolPid = leo_object_storage_pool:new(Object),
 
     F = fun({ok, ETag}) ->
                 {ok, ETag};
            ({error, Cause}) ->
                 {error, Cause}
         end,
-    {ok, {etag, _}} = leo_storage_replicator:replicate(1, ?TEST_REDUNDANCIES_1, PoolPid, F),
+    {ok, {etag, _}} = leo_storage_replicator:replicate(1, ?TEST_REDUNDANCIES_1, Object, F),
     timer:sleep(100),
     ok.
 
@@ -117,14 +116,13 @@ replicate_obj_1_({Test0Node, Test1Node}) ->
                      addr_id = ?TEST_RING_ID_1,
                      dsize   = erlang:byte_size(?TEST_BODY_1),
                      data    = ?TEST_BODY_1},
-    PoolPid = leo_object_storage_pool:new(Object),
 
     F = fun({ok, ETag}) ->
                 {ok, ETag};
            ({error, Cause}) ->
                 {error, Cause}
         end,
-    {ok, {etag, _}} = leo_storage_replicator:replicate(1, ?TEST_REDUNDANCIES_1, PoolPid, F),
+    {ok, {etag, _}} = leo_storage_replicator:replicate(1, ?TEST_REDUNDANCIES_1, Object, F),
     timer:sleep(100),
     ok.
 
@@ -137,14 +135,13 @@ replicate_obj_2_({Test0Node, Test1Node}) ->
                      addr_id = ?TEST_RING_ID_1,
                      dsize   = erlang:byte_size(?TEST_BODY_1),
                      data    = ?TEST_BODY_1},
-    PoolPid = leo_object_storage_pool:new(Object),
 
     F = fun({ok, ETag}) ->
                 {ok, ETag};
            ({error, Cause}) ->
                 {error, Cause}
         end,
-    {ok, {etag, _}} = leo_storage_replicator:replicate(1, ?TEST_REDUNDANCIES_1, PoolPid, F),
+    {ok, {etag, _}} = leo_storage_replicator:replicate(1, ?TEST_REDUNDANCIES_1, Object, F),
     timer:sleep(100),
     ok.
 
@@ -165,8 +162,7 @@ gen_mock_2(object, {_Test0Node, _Test1Node}, Case) ->
 
     meck:new(leo_storage_handler_object),
     meck:expect(leo_storage_handler_object, put,
-                fun(local, PoolPid, Ref) ->
-                        ?assertEqual(true, erlang:is_pid(PoolPid)),
+                fun(local, _Object, Ref) ->
                         ?assertEqual(true, erlang:is_reference(Ref)),
 
                         case Case of
