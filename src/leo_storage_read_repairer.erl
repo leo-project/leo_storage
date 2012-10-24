@@ -52,7 +52,7 @@
 %% @end
 -spec(repair(pos_integer(), list(), #metadata{}, integer(), function()) ->
              {ok, reference()} | {error, reference(),  any()}).
-repair(ReadQuorum, Nodes, Metadata, ReqId, Callback) ->    
+repair(ReadQuorum, Nodes, Metadata, ReqId, Callback) ->
     From   = self(),
     AddrId = Metadata#metadata.addr_id,
     Key    = Metadata#metadata.key,

@@ -389,7 +389,7 @@ read_and_repair(#read_parameter{addr_id   = AddrId,
                                 start_pos = StartPos,
                                 end_pos   = EndPos,
                                 quorum    = ReadQuorum,
-                                req_id    = ReqId} = ReadParameter, [_|T]) ->
+                                req_id    = ReqId} = ReadParameter, [_|T] = Redundancies) ->
     Ref   = make_ref(),
 
     case get_fun(Ref, AddrId, Key, StartPos, EndPos) of
@@ -401,7 +401,8 @@ read_and_repair(#read_parameter{addr_id   = AddrId,
                    ({error,_Cause}) ->
                         {error, ?ERROR_RECOVER_FAILURE}
                 end,
-            leo_storage_read_repairer:repair(ReadQuorum -1, T, Metadata, ReqId, F);
+            leo_storage_read_repairer:repair(
+              ReadQuorum -1, Redundancies, Metadata, ReqId, F);
 
         {error, Ref, not_found = Cause} ->
             {error, Cause};
