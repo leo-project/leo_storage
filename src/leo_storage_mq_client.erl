@@ -219,14 +219,20 @@ handle_call({consume, ?QUEUE_ID_REBALANCE, MessageBin}) ->
                     ok = decrement_counter(?TBL_REBALANCE_COUNTER, VNodeId),
 
                     case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
-                        {ok, #redundancies{nodes = [{N, true}|_]}} when N == node() ->
-                            case leo_storage_handler_object:copy([Node], AddrId, Key) of
-                                ok ->
-                                    ok;
-                                Error ->
-                                    ok = leo_storage_mq_client:publish(
-                                           ?QUEUE_TYPE_REPLICATION_MISS, AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
-                                    Error
+                        {ok, #redundancies{nodes = Redundancies}} ->
+                            case lists:delete({Node, true}, Redundancies) of
+                                [{N, true}|_] when N == node() ->
+                                    case leo_storage_handler_object:copy([Node], AddrId, Key) of
+                                        ok ->
+                                            ok;
+                                        Error ->
+                                            ok = leo_storage_mq_client:publish(
+                                                   ?QUEUE_TYPE_REPLICATION_MISS, AddrId, Key,
+                                                   ?ERR_TYPE_REPLICATE_DATA),
+                                            Error
+                                    end;
+                                _ ->
+                                    ok
                             end;
                         _ ->
                             ok
@@ -262,7 +268,6 @@ sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
                                   case lists:member(Node, Nodes) of
                                       true ->
                                           VNodeId = ToAddrId,
-                                          %% ?debugVal({node(), Node, VNodeId, AddrId, Key}),
                                           ?MODULE:publish(?QUEUE_TYPE_REBALANCE, Node, VNodeId, AddrId, Key);
                                       false ->
                                           void
