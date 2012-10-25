@@ -67,20 +67,5 @@ stop() ->
 %% @end
 %% @private
 init([]) ->
-    ChildProcs = [
-                  {leo_storage_replicator_sup,
-                   {leo_storage_replicator_sup, start_link, []},
-                   permanent,
-                   ?SHUTDOWN_WAITING_TIME,
-                   supervisor,
-                   [leo_storage_replicator_sup]},
-
-                  {leo_storage_read_repairer_sup,
-                   {leo_storage_read_repairer_sup, start_link, []},
-                   permanent,
-                   ?SHUTDOWN_WAITING_TIME,
-                   supervisor,
-                   [leo_storage_read_repairer_sup]}
-                 ],
-    {ok, {_SupFlags = {one_for_one, ?MAX_RESTART, ?MAX_TIME}, ChildProcs}}.
+    {ok, {_SupFlags = {one_for_one, ?MAX_RESTART, ?MAX_TIME}, []}}.
 

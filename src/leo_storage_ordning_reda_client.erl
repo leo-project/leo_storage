@@ -79,9 +79,9 @@ stack(DestNodes, AddrId, Key, Metadata, Object) ->
 -spec(request(binary()) ->
              ok | {error, any()}).
 request(CompressedObjs) ->
-    case catch snappy:decompress(CompressedObjs) of
-        {ok, Objects} ->
-            case slice_and_store(Objects) of
+    case catch lz4:unpack(CompressedObjs) of
+        {ok, OriginalObjects} ->
+            case slice_and_store(OriginalObjects) of
                 ok ->
                     ok;
                 {error, _Cause} ->

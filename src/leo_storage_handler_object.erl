@@ -67,16 +67,9 @@ get({Ref, Key}) ->
     case leo_redundant_manager_api:get_redundancies_by_key(get, Key) of
         {ok, #redundancies{id = AddrId}} ->
             case get_fun(Ref, AddrId, Key) of
-                {ok, Ref, Metadata, ObjectPool} ->
-                    case leo_object_storage_pool:get(ObjectPool) of
-                        not_found = Cause ->
-                            {error, Cause};
-
-                        #object{data = Bin} ->
-                            ok = leo_object_storage_pool:destroy(ObjectPool),
-                            {ok, Metadata, Bin}
-                    end;
-                {error, Cause} ->
+                {ok, Ref, Metadata, #object{data = Bin}} ->
+                    {ok, Metadata, Bin};
+                {error, Ref, Cause} ->
                     {error, Ref, Cause}
             end;
         _ ->
@@ -135,14 +128,8 @@ get(AddrId, Key, StartPos, EndPos, ReqId) ->
            end,
 
     case Ret of
-        {ok, NewMeta, ObjectPool} ->
-            case leo_object_storage_pool:get(ObjectPool) of
-                not_found = Cause ->
-                    {error, Cause};
-                #object{data = Bin} ->
-                    ok = leo_object_storage_pool:destroy(ObjectPool),
-                    {ok, NewMeta, Bin}
-            end;
+        {ok, NewMeta, #object{data = Bin}} ->
+            {ok, NewMeta, Bin};
         Error ->
             Error
     end.
@@ -165,17 +152,17 @@ put(Object) when erlang:is_record(Object, object) ->
              ok | {error, any()}).
 put(Object, ReqId) ->
     _ = leo_statistics_req_counter:increment(?STAT_REQ_PUT),
-    AddrId     = Object#object.addr_id,
-    ObjectPool = leo_object_storage_pool:new(Object#object{method = ?CMD_PUT,
-                                                           req_id = ReqId}),
-    replicate(?CMD_PUT, AddrId, ObjectPool).
+    AddrId = Object#object.addr_id,
+
+    replicate(?CMD_PUT, AddrId, Object#object{method = ?CMD_PUT,
+                                              req_id = ReqId}).
 
 %% @doc Insert an object (request from local.replicator).
 %%
--spec(put(local, pid(), reference()) ->
+-spec(put(local, #object{}, reference()) ->
              ok | {error, any()}).
-put(local, ObjectPool, Ref) ->
-    put_fun(ObjectPool, Ref).
+put(local, Object, Ref) ->
+    put_fun(Object, Ref).
 
 
 %%--------------------------------------------------------------------
@@ -195,13 +182,13 @@ delete(Object) ->
              ok | {error, any()}).
 delete(Object, ReqId) ->
     _ = leo_statistics_req_counter:increment(?STAT_REQ_DEL),
-    AddrId     = Object#object.addr_id,
-    ObjectPool = leo_object_storage_pool:new(Object#object{method = ?CMD_DELETE,
-                                                           data   = <<>>,
-                                                           dsize  = 0,
-                                                           req_id = ReqId,
-                                                           del    = ?DEL_TRUE}),
-    replicate(?CMD_DELETE, AddrId, ObjectPool).
+    AddrId = Object#object.addr_id,
+
+    replicate(?CMD_DELETE, AddrId, Object#object{method = ?CMD_DELETE,
+                                                 data   = <<>>,
+                                                 dsize  = 0,
+                                                 req_id = ReqId,
+                                                 del    = ?DEL_TRUE}).
 
 
 %%--------------------------------------------------------------------
@@ -308,21 +295,15 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
 %%--------------------------------------------------------------------
 %% @doc put object.
 %%
--spec(put_fun(pid(), reference()) ->
+-spec(put_fun(#object{}, reference()) ->
              ok | {error, any()}).
-put_fun(ObjectPool, Ref) ->
-    case catch leo_object_storage_pool:head(ObjectPool) of
-        {'EXIT', Cause} ->
-            {error, Ref, Cause};
-        not_found ->
-            {error, Ref, timeout};
-        #metadata{key = Key, addr_id = AddrId} ->
-            case leo_object_storage_api:put({AddrId, Key}, ObjectPool) of
-                {ok, ETag} ->
-                    {ok, Ref, {etag, ETag}};
-                {error, Cause} ->
-                    {error, Ref, Cause}
-            end
+put_fun(#object{addr_id = AddrId,
+                key     = Key} = Object, Ref) ->
+    case leo_object_storage_api:put({AddrId, Key}, Object) of
+        {ok, ETag} ->
+            {ok, Ref, {etag, ETag}};
+        {error, Cause} ->
+            {error, Ref, Cause}
     end.
 
 
@@ -337,8 +318,8 @@ get_fun(Ref, AddrId, Key) ->
              {ok, reference(), #metadata{}, pid()} | {error, reference(), any()}).
 get_fun(Ref, AddrId, Key, StartPos, EndPos) ->
     case leo_object_storage_api:get({AddrId, Key}, StartPos, EndPos) of
-        {ok, Metadata, ObjectPool} ->
-            {ok, Ref, Metadata, ObjectPool};
+        {ok, Metadata, Object} ->
+            {ok, Ref, Metadata, Object};
         not_found = Cause ->
             {error, Ref, Cause};
         {error, Cause} ->
@@ -348,32 +329,26 @@ get_fun(Ref, AddrId, Key, StartPos, EndPos) ->
 
 %% @doc delete object.
 %%
--spec(delete_fun(pid(), reference()) ->
+-spec(delete_fun(#object{}, reference()) ->
              ok | {error, any()}).
-delete_fun(ObjectPool, Ref) ->
-    case catch leo_object_storage_pool:get(ObjectPool) of
-        {'EXIT', Cause} ->
+delete_fun(#object{addr_id = AddrId,
+                   key     = Key} = Object, Ref) ->
+    case leo_object_storage_api:head({AddrId, Key}) of
+        not_found = Cause ->
             {error, Ref, Cause};
-        not_found ->
-            {error, Ref, timeout};
-        #object{addr_id = AddrId,
-                key      = Key} ->
-            case leo_object_storage_api:head({AddrId, Key}) of
-                not_found = Cause ->
-                    {error, Ref, Cause};
-                {ok, Metadata} when Metadata#metadata.del == ?DEL_TRUE ->
-                    {error, Ref, not_found};
-                {ok, Metadata} when Metadata#metadata.del == ?DEL_FALSE ->
-                    case leo_object_storage_api:delete({AddrId, Key}, ObjectPool) of
-                        ok ->
-                            {ok, Ref};
-                        {error, Why} ->
-                            {error, Ref, Why}
-                    end;
-                {error, _Cause} ->
-                    {error, Ref, ?ERROR_COULD_NOT_GET_META}
-            end
+        {ok, Metadata} when Metadata#metadata.del == ?DEL_TRUE ->
+            {error, Ref, not_found};
+        {ok, Metadata} when Metadata#metadata.del == ?DEL_FALSE ->
+            case leo_object_storage_api:delete({AddrId, Key}, Object) of
+                ok ->
+                    {ok, Ref};
+                {error, Why} ->
+                    {error, Ref, Why}
+            end;
+        {error, _Cause} ->
+            {error, Ref, ?ERROR_COULD_NOT_GET_META}
     end.
+
 
 
 %% @doc read reapir - compare with remote-node's meta-data.
@@ -389,20 +364,21 @@ read_and_repair(#read_parameter{addr_id   = AddrId,
                                 start_pos = StartPos,
                                 end_pos   = EndPos,
                                 quorum    = ReadQuorum,
-                                req_id    = ReqId} = ReadParameter, [_|T]) ->
+                                req_id    = ReqId} = ReadParameter, [_|T] = Redundancies) ->
     Ref   = make_ref(),
 
     case get_fun(Ref, AddrId, Key, StartPos, EndPos) of
         {ok, Ref, Metadata, ObjectPool} when T =:= [] ->
             {ok, Metadata, ObjectPool};
         {ok, Ref, Metadata, ObjectPool} when T =/= [] ->
-            ProcId = get_proc_id(?PROC_TYPE_READ_REPAIR),
-            case leo_storage_read_repair_server:repair(ProcId, Ref, ReadQuorum -1, T, Metadata, ReqId) of
-                {ok, Ref} ->
-                    {ok, Metadata, ObjectPool};
-                {error, Ref} ->
-                    {error, ?ERROR_RECOVER_FAILURE}
-            end;
+            F = fun(ok) ->
+                        {ok, Metadata, ObjectPool};
+                   ({error,_Cause}) ->
+                        {error, ?ERROR_RECOVER_FAILURE}
+                end,
+            leo_storage_read_repairer:repair(
+              ReadQuorum -1, Redundancies, Metadata, ReqId, F);
+
         {error, Ref, not_found = Cause} ->
             {error, Cause};
         {error, Ref, _Cause} ->
@@ -417,34 +393,28 @@ read_and_repair(#read_parameter{addr_id   = AddrId,
 
 %% @doc Replicate an object from local-node to remote node
 %% @private
--spec(replicate(put | delete, integer(), pid()) ->
+-spec(replicate(put | delete, integer(), #object{}) ->
              ok | {error, any()}).
-replicate(Method, AddrId, ObjectPool) ->
+replicate(Method, AddrId, Object) ->
     case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
-        {ok, #redundancies{nodes = Redundancies,
-                           w = WriteQuorum,
-                           d = DeleteQuorum,
+        {ok, #redundancies{nodes     = Redundancies,
+                           w         = WriteQuorum,
+                           d         = DeleteQuorum,
                            ring_hash = RingHash}} ->
-            leo_object_storage_pool:set_ring_hash(ObjectPool, RingHash),
-
-            Ref = make_ref(),
-            ProcId0 = get_proc_id(?PROC_TYPE_REPLICATE),
             Quorum  = case Method of
                           ?CMD_PUT    -> WriteQuorum;
                           ?CMD_DELETE -> DeleteQuorum
                       end,
 
-            case leo_storage_replicate_server:replicate(
-                   ProcId0, Ref, Quorum, Redundancies, ObjectPool) of
-                {ok, Ref, ETag} when Method == ?CMD_PUT ->
-                    ok = leo_object_storage_pool:destroy(ObjectPool),
-                    {ok, ETag};
-                {ok, Ref,_ETag} when Method == ?CMD_DELETE ->
-                    ok = leo_object_storage_pool:destroy(ObjectPool),
-                    ok;
-                {error, Ref, _Cause} ->
-                    {error, ?ERROR_REPLICATE_FAILURE}
-            end;
+            F = fun({ok, ETag}) when Method == ?CMD_PUT ->
+                        {ok, ETag};
+                   ({ok,_ETag}) when Method == ?CMD_DELETE ->
+                        ok;
+                   ({error,_Cause}) ->
+                        {error, ?ERROR_REPLICATE_FAILURE}
+                end,
+            leo_storage_replicator:replicate(Quorum, Redundancies,
+                                             Object#object{ring_hash = RingHash}, F);
         _Error ->
             {error, ?ERROR_META_NOT_FOUND}
     end.
@@ -464,43 +434,23 @@ replicate(Method, Object) when is_record(Object, object) == true ->
         {ok, Metadata} when Metadata#metadata.clock    =:= Clock andalso
                             Metadata#metadata.checksum =:= Checksum ->
             {ok, erlang:node()};
-
-        _Other ->
-            ObjectPool = leo_object_storage_pool:new(Object),
+        _ ->
             Ref  = make_ref(),
             Ret0 = case Method of
-                       ?CMD_PUT ->
-                           put_fun(ObjectPool, Ref);
-                       ?CMD_DELETE ->
-                           delete_fun(ObjectPool, Ref)
+                       ?CMD_PUT    -> put_fun(Object, Ref);
+                       ?CMD_DELETE -> delete_fun(Object, Ref)
                    end,
-            Ret1 = case Ret0 of
-                       %% Put
-                       {ok, Ref, ETag} ->
-                           {ok, ETag};
-                       %% Delete
-                       {ok, Ref} ->
-                           ok;
-                       {error, Ref, Cause} ->
-                           {error, Cause}
-                   end,
-
-            ok = leo_object_storage_pool:destroy(ObjectPool),
-            Ret1
+            case Ret0 of
+                %% Put
+                {ok, Ref, ETag} ->
+                    {ok, ETag};
+                %% Delete
+                {ok, Ref} ->
+                    ok;
+                {error, Ref, Cause} ->
+                    {error, Cause}
+            end
     end;
-replicate(_Method, _Object) ->
+replicate(_,_) ->
     {error, badarg}.
-
-
-%% @doc
-%%
--spec(get_proc_id(?PROC_TYPE_REPLICATE | ?PROC_TYPE_READ_REPAIR) ->
-             atom()).
-get_proc_id(?PROC_TYPE_REPLICATE) ->
-    N = (leo_date:clock() rem ?env_num_of_replicators()),
-    list_to_atom(lists:append([?PFIX_REPLICATOR, integer_to_list(N)]));
-
-get_proc_id(?PROC_TYPE_READ_REPAIR) ->
-    N = (leo_date:clock() rem ?env_num_of_repairers()),
-    list_to_atom(lists:append([?PFIX_REPAIRER, integer_to_list(N)])).
 
