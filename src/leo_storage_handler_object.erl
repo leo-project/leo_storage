@@ -67,16 +67,9 @@ get({Ref, Key}) ->
     case leo_redundant_manager_api:get_redundancies_by_key(get, Key) of
         {ok, #redundancies{id = AddrId}} ->
             case get_fun(Ref, AddrId, Key) of
-                {ok, Ref, Metadata, ObjectPool} ->
-                    case leo_object_storage_pool:get(ObjectPool) of
-                        not_found = Cause ->
-                            {error, Cause};
-
-                        #object{data = Bin} ->
-                            ok = leo_object_storage_pool:destroy(ObjectPool),
-                            {ok, Metadata, Bin}
-                    end;
-                {error, Cause} ->
+                {ok, Ref, Metadata, #object{data = Bin}} ->
+                    {ok, Metadata, Bin};
+                {error, Ref, Cause} ->
                     {error, Ref, Cause}
             end;
         _ ->
@@ -135,14 +128,8 @@ get(AddrId, Key, StartPos, EndPos, ReqId) ->
            end,
 
     case Ret of
-        {ok, NewMeta, ObjectPool} ->
-            case leo_object_storage_pool:get(ObjectPool) of
-                not_found = Cause ->
-                    {error, Cause};
-                #object{data = Bin} ->
-                    ok = leo_object_storage_pool:destroy(ObjectPool),
-                    {ok, NewMeta, Bin}
-            end;
+        {ok, NewMeta, #object{data = Bin}} ->
+            {ok, NewMeta, Bin};
         Error ->
             Error
     end.
@@ -331,8 +318,8 @@ get_fun(Ref, AddrId, Key) ->
              {ok, reference(), #metadata{}, pid()} | {error, reference(), any()}).
 get_fun(Ref, AddrId, Key, StartPos, EndPos) ->
     case leo_object_storage_api:get({AddrId, Key}, StartPos, EndPos) of
-        {ok, Metadata, ObjectPool} ->
-            {ok, Ref, Metadata, ObjectPool};
+        {ok, Metadata, Object} ->
+            {ok, Ref, Metadata, Object};
         not_found = Cause ->
             {error, Ref, Cause};
         {error, Cause} ->

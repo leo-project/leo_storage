@@ -118,12 +118,6 @@ get_a0_({Node0, Node1}) ->
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, get,
                 fun(_Key, _StartPos, _EndPos) ->
-                        {ok, ?TEST_META_0, []}
-                end),
-
-    meck:new(leo_object_storage_pool),
-    meck:expect(leo_object_storage_pool, get,
-                fun(_) ->
                         not_found
                 end),
 
@@ -131,8 +125,9 @@ get_a0_({Node0, Node1}) ->
     meck:expect(leo_statistics_req_counter, increment,
                 fun(_) -> ok end),
 
-    Res = leo_storage_handler_object:get({make_ref(), ?TEST_KEY_0}),
-    ?assertEqual({error,not_found}, Res),
+    Ref = make_ref(),
+    Res = leo_storage_handler_object:get({Ref, ?TEST_KEY_0}),
+    ?assertEqual({error, Ref, not_found}, Res),
     ok.
 
 %% @doc  get/1
@@ -149,21 +144,12 @@ get_a1_({Node0, Node1}) ->
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, get,
                 fun(_Key, _StartPos, _EndPos) ->
-                        {ok, ?TEST_META_0, []}
+                        {ok, ?TEST_META_0, #object{}}
                 end),
 
-    meck:new(leo_object_storage_pool),
-    meck:expect(leo_object_storage_pool, get,
-                fun(_) ->
-                        #object{data = ?TEST_BIN}
-                end),
-    meck:expect(leo_object_storage_pool, destroy,
-                fun(_) ->
-                        ok
-                end),
-
-    Res = leo_storage_handler_object:get({make_ref(), ?TEST_KEY_0}),
-    ?assertEqual({ok, ?TEST_META_0, ?TEST_BIN}, Res),
+    Ref = make_ref(),
+    Res = leo_storage_handler_object:get({Ref, ?TEST_KEY_0}),
+    ?assertEqual({ok, ?TEST_META_0, <<>>}, Res),
     ok.
 
 
@@ -181,12 +167,6 @@ get_b0_({Node0, Node1}) ->
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, get,
                 fun(_Key, _StartPos, _EndPos) ->
-                        not_found
-                end),
-
-    meck:new(leo_object_storage_pool),
-    meck:expect(leo_object_storage_pool, get,
-                fun(_) ->
                         not_found
                 end),
 
@@ -210,12 +190,6 @@ get_b1_({Node0, Node1}) ->
     meck:expect(leo_object_storage_api, get,
                 fun(_Key, _StartPos, _EndPos) ->
                         {ok, ?TEST_META_0, []}
-                end),
-
-    meck:new(leo_object_storage_pool),
-    meck:expect(leo_object_storage_pool, get,
-                fun(_) ->
-                        not_found
                 end),
 
     meck:new(leo_storage_read_repairer),
@@ -248,12 +222,6 @@ get_b2_({Node0, _Node1}) ->
                         {ok, ?TEST_META_0, []}
                 end),
 
-    meck:new(leo_object_storage_pool),
-    meck:expect(leo_object_storage_pool, get,
-                fun(_) ->
-                        not_found
-                end),
-
     meck:new(leo_storage_read_repairer),
     meck:expect(leo_storage_read_repairer, repair,
                 fun(_R, _Node,_Metadata,_ReqId,_Callback) ->
@@ -261,7 +229,7 @@ get_b2_({Node0, _Node1}) ->
                 end),
 
     Res = leo_storage_handler_object:get(0, ?TEST_KEY_0, 0),
-    ?assertEqual({error,not_found}, Res),
+    ?assertEqual({ok, ?TEST_META_0, []}, Res),
 
     His = meck:history(leo_storage_read_repairer),
     ?assertEqual(0, length(His)),
@@ -282,16 +250,6 @@ get_b3_({Node0, Node1}) ->
     meck:expect(leo_object_storage_api, get,
                 fun(_Key, _StartPos, _EndPos) ->
                         {ok, ?TEST_META_0, []}
-                end),
-
-    meck:new(leo_object_storage_pool),
-    meck:expect(leo_object_storage_pool, get,
-                fun(_) ->
-                        #object{data = ?TEST_BIN}
-                end),
-    meck:expect(leo_object_storage_pool, destroy,
-                fun(_) ->
-                        ok
                 end),
 
     meck:new(leo_storage_read_repairer),
@@ -331,12 +289,6 @@ get_c0_({Node0, Node1}) ->
     meck:expect(leo_object_storage_api, head,
                 fun(_Key) ->
                         {ok, term_to_binary(#metadata{checksum = Checksum0})}
-                end),
-
-    meck:new(leo_object_storage_pool),
-    meck:expect(leo_object_storage_pool, get,
-                fun(_) ->
-                        not_found
                 end),
 
     Res0 = leo_storage_handler_object:get(0, ?TEST_KEY_0, Checksum0, 0),
