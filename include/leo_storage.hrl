@@ -59,11 +59,11 @@
 
 %% @doc queue-related.
 %%
--define(QUEUE_ID_REPLICATE_MISS,      'replicate_miss_queue').
--define(QUEUE_ID_INCONSISTENT_DATA,   'inconsistent_data_queue').
--define(QUEUE_ID_SYNC_BY_VNODE_ID,    'sync_by_vnode_id_queue').
--define(QUEUE_ID_DIRECTORY,           'directory_queue').
--define(QUEUE_ID_REBALANCE,           'rebalance_queue').
+-define(QUEUE_ID_REPLICATE_MISS,      'leo_replicate_miss_queue').
+-define(QUEUE_ID_INCONSISTENT_DATA,   'leo_inconsistent_data_queue').
+-define(QUEUE_ID_SYNC_BY_VNODE_ID,    'leo_sync_by_vnode_id_queue').
+-define(QUEUE_ID_DIRECTORY,           'leo_directory_queue').
+-define(QUEUE_ID_REBALANCE,           'leo_rebalance_queue').
 
 -define(QUEUE_TYPE_REPLICATION_MISS,  'replication_miss').
 -define(QUEUE_TYPE_INCONSISTENT_DATA, 'inconsistent_data').
