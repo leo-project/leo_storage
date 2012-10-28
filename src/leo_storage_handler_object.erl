@@ -41,8 +41,9 @@
          copy/3,
          prefix_search/3]).
 
--define(PROC_TYPE_REPLICATE,   'replicate').
--define(PROC_TYPE_READ_REPAIR, 'read_repair').
+-define(REP_LOCAL,  'local').
+-define(REP_REMOTE, 'remote').
+-type(replication() :: ?REP_LOCAL | ?REP_REMOTE).
 
 -record(read_parameter, {
           addr_id       :: integer(),
@@ -144,7 +145,7 @@ get(AddrId, Key, StartPos, EndPos, ReqId) ->
              {ok, atom()} | {error, any()}).
 put(Object) when erlang:is_record(Object, object) ->
     _ = leo_statistics_req_counter:increment(?STAT_REQ_PUT),
-    replicate(?CMD_PUT, Object).
+    replicate(?REP_REMOTE, ?CMD_PUT, Object).
 
 %% @doc Insert an object (request from gateway).
 %%
@@ -152,10 +153,8 @@ put(Object) when erlang:is_record(Object, object) ->
              ok | {error, any()}).
 put(Object, ReqId) ->
     _ = leo_statistics_req_counter:increment(?STAT_REQ_PUT),
-    AddrId = Object#object.addr_id,
-
-    replicate(?CMD_PUT, AddrId, Object#object{method = ?CMD_PUT,
-                                              req_id = ReqId}).
+    replicate(?REP_LOCAL, ?CMD_PUT, Object#object{method = ?CMD_PUT,
+                                                  req_id = ReqId}).
 
 %% @doc Insert an object (request from local.replicator).
 %%
@@ -174,7 +173,7 @@ put(local, Object, Ref) ->
              ok | {error, any()}).
 delete(Object) ->
     _ = leo_statistics_req_counter:increment(?STAT_REQ_DEL),
-    replicate(?CMD_DELETE, Object).
+    replicate(?REP_REMOTE, ?CMD_DELETE, Object).
 
 %% @doc Remova an object (request from gateway)
 %%
@@ -182,13 +181,11 @@ delete(Object) ->
              ok | {error, any()}).
 delete(Object, ReqId) ->
     _ = leo_statistics_req_counter:increment(?STAT_REQ_DEL),
-    AddrId = Object#object.addr_id,
-
-    replicate(?CMD_DELETE, AddrId, Object#object{method = ?CMD_DELETE,
-                                                 data   = <<>>,
-                                                 dsize  = 0,
-                                                 req_id = ReqId,
-                                                 del    = ?DEL_TRUE}).
+    replicate(?REP_LOCAL, ?CMD_DELETE, Object#object{method = ?CMD_DELETE,
+                                                     data   = <<>>,
+                                                     dsize  = 0,
+                                                     req_id = ReqId,
+                                                     del    = ?DEL_TRUE}).
 
 
 %%--------------------------------------------------------------------
@@ -393,10 +390,10 @@ read_and_repair(#read_parameter{addr_id   = AddrId,
 
 %% @doc Replicate an object from local-node to remote node
 %% @private
--spec(replicate(put | delete, integer(), #object{}) ->
+-spec(replicate(replication(), put | delete, #object{}) ->
              ok | {error, any()}).
-replicate(Method, AddrId, Object) ->
-    case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
+replicate(?REP_LOCAL, Method, Object) ->
+    case leo_redundant_manager_api:get_redundancies_by_addr_id(put, Object#object.addr_id) of
         {ok, #redundancies{nodes     = Redundancies,
                            w         = WriteQuorum,
                            d         = DeleteQuorum,
@@ -417,14 +414,11 @@ replicate(Method, AddrId, Object) ->
                                              Object#object{ring_hash = RingHash}, F);
         _Error ->
             {error, ?ERROR_META_NOT_FOUND}
-    end.
-
+    end;
 
 %% @doc obj-replication request from remote node.
 %%
--spec(replicate(atom(), #object{}) ->
-             ok | {error, any()}).
-replicate(Method, Object) when is_record(Object, object) == true ->
+replicate(?REP_REMOTE, Method, Object) ->
     Key      = Object#object.key,
     AddrId   = Object#object.addr_id,
     Clock    = Object#object.clock,
@@ -451,6 +445,6 @@ replicate(Method, Object) when is_record(Object, object) == true ->
                     {error, Cause}
             end
     end;
-replicate(_,_) ->
+replicate(_,_,_) ->
     {error, badarg}.
 
