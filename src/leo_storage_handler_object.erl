@@ -334,7 +334,7 @@ delete_fun(#object{addr_id = AddrId,
         not_found = Cause ->
             {error, Ref, Cause};
         {ok, Metadata} when Metadata#metadata.del == ?DEL_TRUE ->
-            {error, Ref, not_found};
+            {ok, Ref};
         {ok, Metadata} when Metadata#metadata.del == ?DEL_FALSE ->
             case leo_object_storage_api:delete({AddrId, Key}, Object) of
                 ok ->
