@@ -37,7 +37,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -export([get/1, get/3, get/4, get/5,
-         put/1, put/2, put/3, delete/1, delete/2, head/2,
+         put/1, put/2, delete/1, delete/2, head/2,
          copy/3,
          prefix_search/3]).
 
@@ -143,25 +143,33 @@ get(AddrId, Key, StartPos, EndPos, ReqId) ->
 %%
 -spec(put(#object{}) ->
              {ok, atom()} | {error, any()}).
-put(Object) when erlang:is_record(Object, object) ->
+put(Object) ->
     _ = leo_statistics_req_counter:increment(?STAT_REQ_PUT),
     replicate(?REP_REMOTE, ?CMD_PUT, Object).
 
 %% @doc Insert an object (request from gateway).
 %%
--spec(put(#object{}, integer()) ->
+-spec(put(#object{}, integer()|reference()) ->
              ok | {error, any()}).
-put(Object, ReqId) ->
+put(Object, ReqId) when is_integer(ReqId)  ->
     _ = leo_statistics_req_counter:increment(?STAT_REQ_PUT),
     replicate(?REP_LOCAL, ?CMD_PUT, Object#object{method = ?CMD_PUT,
-                                                  req_id = ReqId}).
+                                                  req_id = ReqId});
 
-%% @doc Insert an object (request from local.replicator).
+%% @doc put object.
 %%
--spec(put(local, #object{}, reference()) ->
-             ok | {error, any()}).
-put(local, Object, Ref) ->
-    put_fun(Object, Ref).
+put(#object{addr_id = AddrId,
+                key     = Key} = Object, Ref) when is_reference(Ref) ->
+    case leo_object_storage_api:put({AddrId, Key}, Object) of
+        {ok, ETag} ->
+            {ok, Ref, {etag, ETag}};
+        {error, Cause} ->
+            {error, Ref, Cause}
+    end;
+
+put(_,_) ->
+    {error, badarg}.
+
 
 
 %%--------------------------------------------------------------------
@@ -177,15 +185,37 @@ delete(Object) ->
 
 %% @doc Remova an object (request from gateway)
 %%
--spec(delete(#object{}, integer()) ->
+-spec(delete(#object{}, integer()|reference()) ->
              ok | {error, any()}).
-delete(Object, ReqId) ->
+delete(Object, ReqId) when is_integer(ReqId) ->
     _ = leo_statistics_req_counter:increment(?STAT_REQ_DEL),
     replicate(?REP_LOCAL, ?CMD_DELETE, Object#object{method = ?CMD_DELETE,
                                                      data   = <<>>,
                                                      dsize  = 0,
                                                      req_id = ReqId,
-                                                     del    = ?DEL_TRUE}).
+                                                     del    = ?DEL_TRUE});
+
+delete(#object{addr_id = AddrId,
+               key     = Key} = Object, Ref) when is_reference(Ref) ->
+    case leo_object_storage_api:head({AddrId, Key}) of
+        not_found = Cause ->
+            {error, Ref, Cause};
+        {ok, Metadata} when Metadata#metadata.del == ?DEL_TRUE ->
+            {ok, Ref};
+        {ok, Metadata} when Metadata#metadata.del == ?DEL_FALSE ->
+            case leo_object_storage_api:delete({AddrId, Key}, Object) of
+                ok ->
+                    {ok, Ref};
+                {error, Why} ->
+                    {error, Ref, Why}
+            end;
+        {error, _Cause} ->
+            {error, Ref, ?ERROR_COULD_NOT_GET_META}
+    end;
+
+delete(_,_) ->
+    {error, badarg}.
+
 
 
 %%--------------------------------------------------------------------
@@ -290,20 +320,6 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
 %%--------------------------------------------------------------------
 %% INNNER FUNCTIONS
 %%--------------------------------------------------------------------
-%% @doc put object.
-%%
--spec(put_fun(#object{}, reference()) ->
-             ok | {error, any()}).
-put_fun(#object{addr_id = AddrId,
-                key     = Key} = Object, Ref) ->
-    case leo_object_storage_api:put({AddrId, Key}, Object) of
-        {ok, ETag} ->
-            {ok, Ref, {etag, ETag}};
-        {error, Cause} ->
-            {error, Ref, Cause}
-    end.
-
-
 %% @doc read data (common).
 %%
 -spec(get_fun(reference(), integer(), string()) ->
@@ -322,30 +338,6 @@ get_fun(Ref, AddrId, Key, StartPos, EndPos) ->
         {error, Cause} ->
             {error, Ref, Cause}
     end.
-
-
-%% @doc delete object.
-%%
--spec(delete_fun(#object{}, reference()) ->
-             ok | {error, any()}).
-delete_fun(#object{addr_id = AddrId,
-                   key     = Key} = Object, Ref) ->
-    case leo_object_storage_api:head({AddrId, Key}) of
-        not_found = Cause ->
-            {error, Ref, Cause};
-        {ok, Metadata} when Metadata#metadata.del == ?DEL_TRUE ->
-            {ok, Ref};
-        {ok, Metadata} when Metadata#metadata.del == ?DEL_FALSE ->
-            case leo_object_storage_api:delete({AddrId, Key}, Object) of
-                ok ->
-                    {ok, Ref};
-                {error, Why} ->
-                    {error, Ref, Why}
-            end;
-        {error, _Cause} ->
-            {error, Ref, ?ERROR_COULD_NOT_GET_META}
-    end.
-
 
 
 %% @doc read reapir - compare with remote-node's meta-data.
@@ -431,8 +423,8 @@ replicate(?REP_REMOTE, Method, Object) ->
         _ ->
             Ref  = make_ref(),
             Ret0 = case Method of
-                       ?CMD_PUT    -> put_fun(Object, Ref);
-                       ?CMD_DELETE -> delete_fun(Object, Ref)
+                       ?CMD_PUT    -> ?MODULE:put(Object, Ref);
+                       ?CMD_DELETE -> ?MODULE:delete(Object, Ref)
                    end,
             case Ret0 of
                 %% Put

@@ -345,7 +345,7 @@ put_1_({_Node0, _Node1}) ->
                 end),
 
     Ref = make_ref(),
-    {ok, Ref, _Etag} = leo_storage_handler_object:put(local, #object{}, Ref),
+    {ok, Ref, _Etag} = leo_storage_handler_object:put(#object{}, Ref),
     ok.
 
 %% put/1

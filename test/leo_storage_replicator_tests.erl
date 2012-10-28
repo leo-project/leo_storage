@@ -162,7 +162,7 @@ gen_mock_2(object, {_Test0Node, _Test1Node}, Case) ->
 
     meck:new(leo_storage_handler_object),
     meck:expect(leo_storage_handler_object, put,
-                fun(local, _Object, Ref) ->
+                fun(_Object, Ref) ->
                         ?assertEqual(true, erlang:is_reference(Ref)),
 
                         case Case of

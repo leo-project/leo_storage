@@ -136,7 +136,7 @@ replicate_fun(local, #req_params{pid     = Pid,
                                  req_id  = ReqId}) ->
     Ref  = make_ref(),
     Node = erlang:node(),
-    Ret  = case leo_storage_handler_object:put(local, Obj, Ref) of
+    Ret  = case leo_storage_handler_object:put(Obj, Ref) of
                {ok, Ref, Checksum} ->
                    {ok, Checksum};
                {error, Ref, Cause} ->
