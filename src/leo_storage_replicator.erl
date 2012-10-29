@@ -37,48 +37,53 @@
 -type(error_msg_type() :: ?ERR_TYPE_REPLICATE_DATA  |
                           ?ERR_TYPE_DELETE_DATA).
 
--record(req_params, {pid     :: pid(),
-                     rpc_key :: rpc:key(),
-                     addr_id :: integer(),
-                     key     :: string(),
-                     object  :: #object{},
-                     req_id  :: integer()}).
+-record(req_params, {pid         :: pid(),
+                     rpc_key     :: rpc:key(),
+                     addr_id     :: integer(),
+                     key         :: string(),
+                     object_pool :: pid(),
+                     req_id      :: integer()}).
 
 %%--------------------------------------------------------------------
 %% API
 %%--------------------------------------------------------------------
 %% @doc Replicate an object to local-node and remote-nodes.
 %%
--spec(replicate(pos_integer(), list(), #object{}, function()) ->
+-spec(replicate(pos_integer(), list(), pid(), function()) ->
              {ok, reference()} | {error, {reference(), any()}}).
-replicate(Quorum, Nodes, Obj, Callback) ->
-    From = self(),
-    Pid  = spawn(?MODULE, loop, [Quorum, From, {length(Nodes), [], []}]),
+replicate(Quorum, Nodes, ObjectPool, Callback) ->
+    case catch leo_object_storage_pool:get(ObjectPool) of
+        {'EXIT', _Cause} ->
+            Callback({error, timeout});
+        undefined ->
+            Callback({error, timeout});
 
-    AddrId = Obj#object.addr_id,
-    Key    = Obj#object.key,
-    ReqId  = Obj#object.req_id,
+        #object{addr_id = AddrId,
+                key     = Key,
+                req_id  = ReqId} = Object ->
+            From = self(),
+            Pid  = spawn(?MODULE, loop, [Quorum, From, {length(Nodes), [], []}]),
+            ReqParams = #req_params{pid     = Pid,
+                                    addr_id = AddrId,
+                                    key     = Key,
+                                    req_id  = ReqId},
+            lists:foreach(
+              fun({Node, true}) when Node == erlang:node() ->
+                      spawn(fun() ->
+                                    replicate_fun(local, ReqParams#req_params{object_pool = ObjectPool})
+                            end);
+                 ({Node, true}) ->
+                      spawn(fun() ->
+                                    RPCKey = rpc:async_call(Node, leo_storage_handler_object, put, [Object]),
+                                    replicate_fun(Node, ReqParams#req_params{rpc_key = RPCKey})
+                            end);
+                 ({Node, false}) ->
+                      enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
+                      Pid ! {error, Node, nodedown}
+              end, Nodes),
 
-    ReqParams = #req_params{pid     = Pid,
-                            addr_id = AddrId,
-                            key     = Key,
-                            req_id  = ReqId},
-    lists:foreach(
-      fun({Node, true}) when Node == erlang:node() ->
-              spawn(fun() ->
-                            replicate_fun(local, ReqParams#req_params{object = Obj})
-                    end);
-         ({Node, true}) ->
-              spawn(fun() ->
-                            RPCKey = rpc:async_call(Node, leo_storage_handler_object, put, [Obj]),
-                            replicate_fun(Node, ReqParams#req_params{rpc_key = RPCKey})
-                    end);
-         ({Node, false}) ->
-              enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
-              Pid ! {error, Node, nodedown}
-      end, Nodes),
-
-    loop(Callback).
+            loop(Callback)
+    end.
 
 
 %% @doc Waiting for messages (replication)
@@ -129,14 +134,14 @@ loop(Callback) ->
 %%
 -spec(replicate_fun(local | atom(), #req_params{}) ->
              {ok, atom()} | {error, atom(), any()}).
-replicate_fun(local, #req_params{pid     = Pid,
-                                 addr_id = AddrId,
-                                 key     = Key,
-                                 object  = Obj,
-                                 req_id  = ReqId}) ->
+replicate_fun(local, #req_params{pid         = Pid,
+                                 addr_id     = AddrId,
+                                 key         = Key,
+                                 object_pool = ObjectPool,
+                                 req_id      = ReqId}) ->
     Ref  = make_ref(),
     Node = erlang:node(),
-    Ret  = case leo_storage_handler_object:put(Obj, Ref) of
+    Ret  = case leo_storage_handler_object:put(ObjectPool, Ref) of
                {ok, Ref, Checksum} ->
                    {ok, Checksum};
                {error, Ref, Cause} ->
@@ -145,6 +150,7 @@ replicate_fun(local, #req_params{pid     = Pid,
                    enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
                    {error, Node, Cause}
            end,
+    catch leo_object_storage_pool:destroy(ObjectPool),
     Pid ! Ret;
 
 %% @doc Request a replication-message for remote-node.
