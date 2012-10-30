@@ -57,22 +57,23 @@ stop(_State) ->
 ensure_started(Id, Module, Method, Type, Timeout) ->
     case whereis(Id) of
         undefined ->
-            ChildSpec = {Id, {Module, Method, []}, 
+            ChildSpec = {Id, {Module, Method, []},
                          permanent, Timeout, Type, [Module]},
             {ok, _} = supervisor:start_child(kernel_safe_sup, ChildSpec);
         Pid -> Pid
     end.
 
 after_proc({ok, Pid}) ->
-
     ensure_started(inet_db, inet_db, start_link, worker, 2000),
     ensure_started(net_sup, erl_distribution, start_link, supervisor, infinity),
 
     QueueDir = ?env_queue_dir(leo_storage),
     Managers  = ?env_manager_nodes(leo_storage),
 
-    ok = launch_logger(),
     ok = launch_object_storage(),
+    ok = leo_storage_mq_client:start(QueueDir),
+    ok = leo_redundant_manager_api:start(storage, Managers, QueueDir),
+    ok = leo_ordning_reda_api:start(),
 
     ok = leo_statistics_api:start_link(leo_storage),
     ok = leo_statistics_metrics_vm:start_link(?STATISTICS_SYNC_INTERVAL),
@@ -83,14 +84,10 @@ after_proc({ok, Pid}) ->
     ok = leo_storage_mq_statistics:start_link(?SNMP_SYNC_INTERVAL_S),
     ok = leo_storage_mq_statistics:start_link(?SNMP_SYNC_INTERVAL_L),
 
-    ok = leo_storage_mq_client:start(QueueDir),
-    ok = leo_redundant_manager_api:start(storage, Managers, QueueDir),
-    ok = leo_ordning_reda_api:start(),
-
     ensure_started(rex, rpc, start_link, worker, 2000),
 
+    ok = launch_logger(),
     ok = leo_storage_api:register_in_monitor(first),
-
     {ok, Pid};
 
 after_proc(Error) ->
