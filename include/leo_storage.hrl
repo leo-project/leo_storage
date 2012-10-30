@@ -77,7 +77,7 @@
 -define(ERR_TYPE_RECOVER_INDEX,       'recover_index').
 -define(ERR_TYPE_DELETE_INDEX,        'delete_index').
 
--define(TBL_REBALANCE_COUNTER,        'rebalance_counter').
+-define(TBL_REBALANCE_COUNTER,        'leo_rebalance_counter').
 
 %% @doc error messages.
 %%
