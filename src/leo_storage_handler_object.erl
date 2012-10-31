@@ -136,6 +136,26 @@ get(AddrId, Key, StartPos, EndPos, ReqId) ->
     end.
 
 
+%% @doc read data (common).
+%% @private
+-spec(get_fun(reference(), integer(), string()) ->
+             {ok, reference(), #metadata{}, pid()} | {error, reference(), any()}).
+get_fun(Ref, AddrId, Key) ->
+    get_fun(Ref, AddrId, Key, 0, 0).
+
+-spec(get_fun(reference(), integer(), string(), integer(), integer()) ->
+             {ok, reference(), #metadata{}, pid()} | {error, reference(), any()}).
+get_fun(Ref, AddrId, Key, StartPos, EndPos) ->
+    case leo_object_storage_api:get({AddrId, Key}, StartPos, EndPos) of
+        {ok, Metadata, Object} ->
+            {ok, Ref, Metadata, Object};
+        not_found = Cause ->
+            {error, Ref, Cause};
+        {error, Cause} ->
+            {error, Ref, Cause}
+    end.
+
+
 %%--------------------------------------------------------------------
 %% API - PUT
 %%--------------------------------------------------------------------
@@ -165,18 +185,59 @@ put(ObjectPool, Ref) when is_reference(Ref) ->
             {error, Ref, Cause};
         not_found ->
             {error, Ref, timeout};
-        #metadata{key = Key, addr_id = AddrId} ->
-            case leo_object_storage_api:put({AddrId, Key}, ObjectPool) of
-                {ok, ETag} ->
-                    {ok, Ref, {etag, ETag}};
-                {error, Cause} ->
-                    {error, Ref, Cause}
-            end
-    end;
 
+        #metadata{addr_id = AddrId, key = Key, del = ?DEL_TRUE} ->
+            case leo_object_storage_api:head({AddrId, Key}) of
+                {ok, MetaBin} ->
+                    case binary_to_term(MetaBin) of
+                        #metadata{cnumber = 0} ->
+                            put_fun(Ref, AddrId, Key, ObjectPool);
+                        #metadata{cnumber = CNumber} ->
+                            case delete_chunked_objects(CNumber, Key) of
+                                ok ->
+                                    put_fun(Ref, AddrId, Key, ObjectPool);
+                                {error, Cause} ->
+                                    {error, Ref, Cause}
+                            end;
+                        _ ->
+                            {error, Ref, 'invalid_data'}
+                    end;
+                {error, Cause} ->
+                    {error, Ref, Cause};
+                not_found = Cause ->
+                    {error, Ref, Cause}
+            end;
+        #metadata{addr_id = AddrId, key = Key, del = ?DEL_FALSE} ->
+            put_fun(Ref, AddrId, Key, ObjectPool)
+    end;
 put(_,_) ->
     {error, badarg}.
 
+
+%% Input an object into the object-storage
+%% @private
+put_fun(Ref, AddrId, Key, ObjectPool) ->
+    case leo_object_storage_api:put({AddrId, Key}, ObjectPool) of
+        {ok, ETag} ->
+            {ok, Ref, {etag, ETag}};
+        {error, Cause} ->
+            {error, Ref, Cause}
+    end.
+
+delete_chunked_objects(0,_) ->
+    ok;
+delete_chunked_objects(CIndex, ParentKey) ->
+    Key    = lists:append([ParentKey, "\n", integer_to_list(CIndex)]),
+    AddrId = leo_redundant_manager_chash:vnode_id(Key),
+
+    case delete(#object{addr_id = AddrId,
+                        key     = Key,
+                        cindex  = CIndex}, 0) of
+        ok ->
+            delete_chunked_objects(CIndex - 1, ParentKey);
+        {error, Cause} ->
+            {error, Cause}
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -216,7 +277,7 @@ delete(ObjectPool, Ref) when is_reference(Ref) ->
                 not_found = Cause ->
                     {error, Ref, Cause};
                 {ok, Metadata} when Metadata#metadata.del == ?DEL_TRUE ->
-                    {error, Ref, not_found};
+                    {ok, Ref};
                 {ok, Metadata} when Metadata#metadata.del == ?DEL_FALSE ->
                     case leo_object_storage_api:delete({AddrId, Key}, ObjectPool) of
                         ok ->
@@ -335,26 +396,6 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
 %%--------------------------------------------------------------------
 %% INNNER FUNCTIONS
 %%--------------------------------------------------------------------
-%% @doc read data (common).
-%%
--spec(get_fun(reference(), integer(), string()) ->
-             {ok, reference(), #metadata{}, pid()} | {error, reference(), any()}).
-get_fun(Ref, AddrId, Key) ->
-    get_fun(Ref, AddrId, Key, 0, 0).
-
--spec(get_fun(reference(), integer(), string(), integer(), integer()) ->
-             {ok, reference(), #metadata{}, pid()} | {error, reference(), any()}).
-get_fun(Ref, AddrId, Key, StartPos, EndPos) ->
-    case leo_object_storage_api:get({AddrId, Key}, StartPos, EndPos) of
-        {ok, Metadata, Object} ->
-            {ok, Ref, Metadata, Object};
-        not_found = Cause ->
-            {error, Ref, Cause};
-        {error, Cause} ->
-            {error, Ref, Cause}
-    end.
-
-
 %% @doc read reapir - compare with remote-node's meta-data.
 %%
 -spec(read_and_repair(#read_parameter{}, list()) ->

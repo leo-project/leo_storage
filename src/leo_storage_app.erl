@@ -70,6 +70,7 @@ after_proc({ok, Pid}) ->
     QueueDir = ?env_queue_dir(leo_storage),
     Managers  = ?env_manager_nodes(leo_storage),
 
+    ok = launch_logger(),
     ok = launch_object_storage(),
     ok = leo_storage_mq_client:start(QueueDir),
     ok = leo_redundant_manager_api:start(storage, Managers, QueueDir),
@@ -86,7 +87,6 @@ after_proc({ok, Pid}) ->
 
     ensure_started(rex, rpc, start_link, worker, 2000),
 
-    ok = launch_logger(),
     ok = leo_storage_api:register_in_monitor(first),
     {ok, Pid};
 
