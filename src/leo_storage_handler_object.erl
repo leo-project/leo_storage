@@ -39,11 +39,13 @@
 -export([get/1, get/3, get/4, get/5,
          put/1, put/2, delete/1, delete/2, head/2,
          copy/3,
-         prefix_search/3]).
+         prefix_search/3, prefix_search_and_remove_objects/1]).
 
 -define(REP_LOCAL,  'local').
 -define(REP_REMOTE, 'remote').
 -type(replication() :: ?REP_LOCAL | ?REP_REMOTE).
+
+-define(DEF_DELIMITER, "/").
 
 -record(read_parameter, {
           addr_id       :: integer(),
@@ -341,7 +343,6 @@ copy(DestNodes, AddrId, Key) ->
 %% API - Prefix Search (Fetch)
 %%--------------------------------------------------------------------
 prefix_search(ParentDir, Marker, MaxKeys) ->
-    Delimiter = "/",
     Fun = fun(K, V, Acc) when length(Acc) =< MaxKeys ->
                   {_AddrId, Key} = binary_to_term(K),
                   Metadata       = binary_to_term(V),
@@ -351,8 +352,8 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
                                     (Marker == hd(lists:sort([Marker, Key])))
                             end,
 
-                  Token0  = string:tokens(ParentDir, Delimiter),
-                  Token1  = string:tokens(Key,       Delimiter),
+                  Token0  = string:tokens(ParentDir, ?DEF_DELIMITER),
+                  Token1  = string:tokens(Key,       ?DEF_DELIMITER),
 
                   Length0 = erlang:length(Token0),
                   Length1 = Length0 + 1,
@@ -368,7 +369,7 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
                           case (Length2 -1) of
                               Length0 when Metadata#metadata.del == ?DEL_FALSE andalso
                                            IsChunkedObj == false ->
-                                  case (string:rstr(Key, Delimiter) == length(Key)) of
+                                  case (string:rstr(Key, ?DEF_DELIMITER) == length(Key)) of
                                       true  -> ordsets:add_element(#metadata{key   = Key,
                                                                              dsize = -1}, Acc);
                                       false -> ordsets:add_element(Metadata, Acc)
@@ -376,8 +377,8 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
                               Length1 when Metadata#metadata.del == ?DEL_FALSE andalso
                                            IsChunkedObj == false ->
                                   {Token2, _} = lists:split(Length1, Token1),
-                                  Dir = lists:foldl(fun(Str0, []  ) -> lists:append([Str0, Delimiter]);
-                                                       (Str0, Str1) -> lists:append([Str1, Str0, Delimiter])
+                                  Dir = lists:foldl(fun(Str0, []  ) -> lists:append([Str0, ?DEF_DELIMITER]);
+                                                       (Str0, Str1) -> lists:append([Str1, Str0, ?DEF_DELIMITER])
                                                     end, [], Token2),
                                   ordsets:add_element(#metadata{key   = Dir,
                                                                 dsize = -1}, Acc);
@@ -389,6 +390,24 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
                   end;
              (_, _, Acc) ->
                   Acc
+          end,
+    leo_object_storage_api:fetch_by_key(ParentDir, Fun).
+
+
+prefix_search_and_remove_objects(ParentDir) ->
+    Fun = fun(K, V,_Acc) ->
+                  {AddrId, Key} = binary_to_term(K),
+                  Metadata       = binary_to_term(V),
+
+                  case (string:str(Key, ParentDir) == 1) of
+                      true when Metadata#metadata.del == ?DEL_FALSE ->
+                          ?debugVal({AddrId, Key}),
+                          leo_storage_mq_client:publish(
+                            ?QUEUE_TYPE_ASYNC_DELETION, AddrId, Key);
+                      _ ->
+                          void
+                  end,
+                  []
           end,
     leo_object_storage_api:fetch_by_key(ParentDir, Fun).
 
