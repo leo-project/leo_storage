@@ -142,7 +142,7 @@ teardown({_Test0Node, Test1Node}) ->
 start_(_) ->
     ok = leo_storage_mq_client:start("queue"),
     Res = meck:history(leo_mq_api),
-    ?assertEqual(4, length(Res)),
+    ?assertEqual(5, length(Res)),
     ok.
 
 %% sync vnode-id queue.

@@ -64,11 +64,13 @@
 -define(QUEUE_ID_SYNC_BY_VNODE_ID,    'leo_sync_by_vnode_id_queue').
 -define(QUEUE_ID_DIRECTORY,           'leo_directory_queue').
 -define(QUEUE_ID_REBALANCE,           'leo_rebalance_queue').
+-define(QUEUE_ID_ASYNC_DELETION,      'leo_async_deletion_queue').
 
 -define(QUEUE_TYPE_REPLICATION_MISS,  'replication_miss').
 -define(QUEUE_TYPE_INCONSISTENT_DATA, 'inconsistent_data').
 -define(QUEUE_TYPE_SYNC_BY_VNODE_ID,  'sync_by_vnode_id').
 -define(QUEUE_TYPE_REBALANCE,         'rebalance').
+-define(QUEUE_TYPE_ASYNC_DELETION,    'async_deletion').
 
 -define(ERR_TYPE_REPLICATE_DATA,      'replicate_data').
 -define(ERR_TYPE_RECOVER_DATA,        'recover_data').
@@ -95,37 +97,45 @@
 -record(inconsistent_data_message, {
           id = 0                :: integer(),
           type                  :: atom(),
-          addr_id               :: integer(),
+          addr_id = 0           :: integer(),
           key                   :: any(),
           meta                  :: tuple(),
-          timestamp             :: integer(),
+          timestamp = 0         :: integer(),
           times = 0             :: integer()}).
 
 -record(inconsistent_index_message, {
           id = 0                :: integer(),
           type                  :: atom(),
-          addr_id               :: integer(),
+          addr_id = 0           :: integer(),
           key                   :: any(),
-          timestamp             :: integer(),
+          timestamp = 0         :: integer(),
           times = 0             :: integer()}).
 
 -record(sync_unit_of_vnode_message, {
           id = 0                :: integer(),
-          vnode_id              :: integer(),
+          vnode_id = 0          :: integer(),
           node                  :: atom(),
-          timestamp             :: integer(),
+          timestamp = 0         :: integer(),
           times = 0             :: integer()
          }).
 
 -record(rebalance_message, {
           id = 0                :: integer(),
-          vnode_id              :: integer(),
-          addr_id               :: integer(),
+          vnode_id = 0          :: integer(),
+          addr_id = 0           :: integer(),
           key                   :: string(),
           node                  :: atom(),
-          timestamp             :: integer(),
+          timestamp = 0         :: integer(),
           times = 0             :: integer()
          }).
+
+-record(async_deletion_message, {
+          id = 0                :: integer(),
+          addr_id = 0           :: integer(),
+          key                   :: any(),
+          timestamp = 0         :: integer(),
+          times = 0             :: integer()}).
+
 
 %% @doc macros.
 %%

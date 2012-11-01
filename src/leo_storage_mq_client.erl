@@ -45,15 +45,18 @@
 -define(MSG_PATH_INCONSISTENT_DATA, "1").
 -define(MSG_PATH_SYNC_VNODE_ID,     "2").
 -define(MSG_PATH_REBALANCE,         "3").
+-define(MSG_PATH_ASYNC_DELETION,    "4").
 
 -type(queue_type() :: ?QUEUE_TYPE_REPLICATION_MISS  |
                       ?QUEUE_TYPE_INCONSISTENT_DATA |
-                      ?QUEUE_TYPE_SYNC_BY_VNODE_ID).
+                      ?QUEUE_TYPE_SYNC_BY_VNODE_ID  |
+                      ?QUEUE_TYPE_ASYNC_DELETION).
 
 -type(queue_id()   :: ?QUEUE_ID_REPLICATE_MISS |
                       ?QUEUE_ID_INCONSISTENT_DATA |
                       ?QUEUE_ID_SYNC_BY_VNODE_ID |
-                      ?QUEUE_ID_REBALANCE).
+                      ?QUEUE_ID_REBALANCE |
+                      ?QUEUE_ID_ASYNC_DELETION).
 
 %%--------------------------------------------------------------------
 %% API
@@ -84,7 +87,8 @@ start(RootPath0) ->
       end, [{?QUEUE_ID_REPLICATE_MISS,    ?MSG_PATH_REPLICATION_MISS,  64, 16},
             {?QUEUE_ID_INCONSISTENT_DATA, ?MSG_PATH_INCONSISTENT_DATA, 64, 16},
             {?QUEUE_ID_SYNC_BY_VNODE_ID,  ?MSG_PATH_SYNC_VNODE_ID,     32,  8},
-            {?QUEUE_ID_REBALANCE,         ?MSG_PATH_REBALANCE,         32,  8}
+            {?QUEUE_ID_REBALANCE,         ?MSG_PATH_REBALANCE,         32,  8},
+            {?QUEUE_ID_ASYNC_DELETION,    ?MSG_PATH_ASYNC_DELETION,   128, 64}
            ]),
     ok.
 
@@ -92,19 +96,30 @@ start(RootPath0) ->
 %%
 -spec(publish(queue_type(), integer(), atom()) ->
              ok).
-publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, VNodeId, Node) ->
+publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID = Id, VNodeId, Node) ->
     KeyBin     = term_to_binary(VNodeId),
     MessageBin = term_to_binary(#sync_unit_of_vnode_message{id        = leo_date:clock(),
                                                             vnode_id  = VNodeId,
                                                             node      = Node,
                                                             timestamp = leo_date:now()}),
-    leo_mq_api:publish(?QUEUE_ID_SYNC_BY_VNODE_ID, KeyBin, MessageBin);
+    leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
+
+publish(?QUEUE_TYPE_ASYNC_DELETION = Id, AddrId, Key) ->
+    ?debugVal({?QUEUE_TYPE_ASYNC_DELETION, AddrId, Key}),
+
+    KeyBin     = term_to_binary({AddrId, Key}),
+    MessageBin = term_to_binary(#async_deletion_message{id        = leo_date:clock(),
+                                                        addr_id   = AddrId,
+                                                        key       = Key,
+                                                        timestamp = leo_date:now()}),
+    leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
+
 publish(_,_,_) ->
     {error, badarg}.
 
 -spec(publish(queue_type(), integer(), any(), any()) ->
              ok).
-publish(?QUEUE_TYPE_REPLICATION_MISS, AddrId, Key, ErrorType) ->
+publish(?QUEUE_TYPE_REPLICATION_MISS = Id, AddrId, Key, ErrorType) ->
     KeyBin = term_to_binary({ErrorType, Key}),
     PublishedAt = leo_date:now(),
     MessageBin  = term_to_binary(#inconsistent_data_message{id        = leo_date:clock(),
@@ -112,9 +127,9 @@ publish(?QUEUE_TYPE_REPLICATION_MISS, AddrId, Key, ErrorType) ->
                                                             addr_id   = AddrId,
                                                             key       = Key,
                                                             timestamp = PublishedAt}),
-    leo_mq_api:publish(?QUEUE_ID_REPLICATE_MISS, KeyBin, MessageBin);
+    leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
 
-publish(?QUEUE_TYPE_INCONSISTENT_DATA, AddrId, Key, ErrorType) ->
+publish(?QUEUE_TYPE_INCONSISTENT_DATA = Id, AddrId, Key, ErrorType) ->
     KeyBin = term_to_binary({ErrorType, Key}),
     PublishedAt = leo_date:now(),
     MessageBin  = term_to_binary(#inconsistent_data_message{id        = leo_date:clock(),
@@ -122,12 +137,12 @@ publish(?QUEUE_TYPE_INCONSISTENT_DATA, AddrId, Key, ErrorType) ->
                                                             addr_id   = AddrId,
                                                             key       = Key,
                                                             timestamp = PublishedAt}),
-    leo_mq_api:publish(?QUEUE_ID_INCONSISTENT_DATA, KeyBin, MessageBin);
+    leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
 
 publish(_,_,_,_) ->
     {error, badarg}.
 
-publish(?QUEUE_TYPE_REBALANCE, Node, VNodeId, AddrId, Key) ->
+publish(?QUEUE_TYPE_REBALANCE = Id, Node, VNodeId, AddrId, Key) ->
     KeyBin     = term_to_binary({Node, AddrId, Key}),
     MessageBin = term_to_binary(#rebalance_message{id        = leo_date:clock(),
                                                    vnode_id  = VNodeId,
@@ -141,7 +156,7 @@ publish(?QUEUE_TYPE_REBALANCE, Node, VNodeId, AddrId, Key) ->
         _Other  -> void
     end,
     ok = increment_counter(Table, VNodeId),
-    leo_mq_api:publish(?QUEUE_ID_REBALANCE, KeyBin, MessageBin);
+    leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
 
 publish(_,_,_,_,_) ->
     {error, badarg}.
@@ -156,6 +171,7 @@ publish(_,_,_,_,_) ->
              ok | {error, any()}).
 init() ->
     ok.
+
 
 %% @doc Subscribe a message from the queue.
 %%
@@ -239,6 +255,27 @@ handle_call({consume, ?QUEUE_ID_REBALANCE, MessageBin}) ->
                     end;
                 _ ->
                     {error, inactive}
+            end
+    end;
+
+handle_call({consume, ?QUEUE_ID_ASYNC_DELETION, MessageBin}) ->
+    ?debugVal(?QUEUE_ID_ASYNC_DELETION),
+
+    case catch binary_to_term(MessageBin) of
+        {'EXIT', Cause} ->
+            {error, Cause};
+        #async_deletion_message{addr_id  = AddrId,
+                                key      = Key} ->
+            ?debugVal({?QUEUE_ID_ASYNC_DELETION, AddrId, Key}),
+
+            case leo_storage_handler_object:delete(#object{addr_id = AddrId,
+                                                           key     = Key}, 0) of
+                ok ->
+                    ?debugVal(ok),
+                    ok;
+                {error, _Cause} ->
+                    ?debugVal(_Cause),
+                    publish(?QUEUE_TYPE_ASYNC_DELETION, AddrId, Key)
             end
     end.
 
@@ -453,6 +490,8 @@ notify_rebalance_message_to_manager(VNodeId) ->
     end.
 
 
+%% @doc Lookup rebalance counter
+%% @private
 -spec(ets_lookup(atom(), integer()) ->
              list() | {error, any()}).
 ets_lookup(Table, Key) ->
@@ -466,11 +505,31 @@ ets_lookup(Table, Key) ->
     end.
 
 
+%% @doc Increment rebalance counter
+%% @private
 increment_counter(Table, Key) ->
     catch ets:update_counter(Table, Key, 1),
     ok.
 
+%% @doc Decrement rebalance counter
+%% @private
 decrement_counter(Table, Key) ->
     catch ets:update_counter(Table, Key, -1),
     ok.
+
+
+%% @doc Retrieve queue's id by queue's type
+%% @private
+-spec(queue_id(queue_type()) ->
+             queue_id()).
+queue_id(?QUEUE_TYPE_SYNC_BY_VNODE_ID) ->
+    ?QUEUE_ID_SYNC_BY_VNODE_ID;
+queue_id(?QUEUE_TYPE_ASYNC_DELETION) ->
+    ?QUEUE_ID_ASYNC_DELETION;
+queue_id(?QUEUE_TYPE_REPLICATION_MISS) ->
+    ?QUEUE_ID_REPLICATE_MISS;
+queue_id(?QUEUE_TYPE_INCONSISTENT_DATA) ->
+    ?QUEUE_ID_INCONSISTENT_DATA;
+queue_id(?QUEUE_TYPE_REBALANCE) ->
+    ?QUEUE_ID_REBALANCE.
 
