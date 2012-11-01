@@ -105,8 +105,6 @@ publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID = Id, VNodeId, Node) ->
     leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
 
 publish(?QUEUE_TYPE_ASYNC_DELETION = Id, AddrId, Key) ->
-    ?debugVal({?QUEUE_TYPE_ASYNC_DELETION, AddrId, Key}),
-
     KeyBin     = term_to_binary({AddrId, Key}),
     MessageBin = term_to_binary(#async_deletion_message{id        = leo_date:clock(),
                                                         addr_id   = AddrId,
@@ -259,22 +257,19 @@ handle_call({consume, ?QUEUE_ID_REBALANCE, MessageBin}) ->
     end;
 
 handle_call({consume, ?QUEUE_ID_ASYNC_DELETION, MessageBin}) ->
-    ?debugVal(?QUEUE_ID_ASYNC_DELETION),
-
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
             {error, Cause};
         #async_deletion_message{addr_id  = AddrId,
                                 key      = Key} ->
-            ?debugVal({?QUEUE_ID_ASYNC_DELETION, AddrId, Key}),
-
-            case leo_storage_handler_object:delete(#object{addr_id = AddrId,
-                                                           key     = Key}, 0) of
+            case leo_storage_handler_object:delete(#object{addr_id   = AddrId,
+                                                           key       = Key,
+                                                           clock     = leo_date:clock(),
+                                                           timestamp = leo_date:now()
+                                                          }, 0) of
                 ok ->
-                    ?debugVal(ok),
                     ok;
                 {error, _Cause} ->
-                    ?debugVal(_Cause),
                     publish(?QUEUE_TYPE_ASYNC_DELETION, AddrId, Key)
             end
     end.

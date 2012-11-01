@@ -401,7 +401,6 @@ prefix_search_and_remove_objects(ParentDir) ->
 
                   case (string:str(Key, ParentDir) == 1) of
                       true when Metadata#metadata.del == ?DEL_FALSE ->
-                          ?debugVal({AddrId, Key}),
                           leo_storage_mq_client:publish(
                             ?QUEUE_TYPE_ASYNC_DELETION, AddrId, Key);
                       _ ->
