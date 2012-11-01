@@ -31,7 +31,9 @@
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
--export([find_by_parent_dir/4]).
+-export([find_by_parent_dir/4,
+         delete_objects_in_parent_dir/1
+        ]).
 
 -define(DEF_DELIMITER, "/").
 -define(DEF_MAX_KEYS,  1000).
@@ -72,4 +74,12 @@ find_by_parent_dir(ParentDir, _Delimiter, Marker, MaxKeys) ->
         List ->
             {ok, lists:sublist(ordsets:from_list(lists:flatten(List)), NewMaxKeys)}
     end.
+
+
+%% @doc Remove objects in the parent directory - request from Gateway
+%%
+-spec(delete_objects_in_parent_dir(string()) ->
+             ok | {error, any()}).
+delete_objects_in_parent_dir(ParentDir) ->
+    leo_storage_handler_object:prefix_search_and_remove_objects(ParentDir).
 
