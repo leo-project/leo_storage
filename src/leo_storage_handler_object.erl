@@ -45,7 +45,7 @@
 -define(REP_REMOTE, 'remote').
 -type(replication() :: ?REP_LOCAL | ?REP_REMOTE).
 
--define(DEF_DELIMITER, "/").
+-define(DEF_DELIMITER, <<"/">>).
 
 -record(read_parameter, {
           addr_id       :: integer(),
@@ -352,34 +352,44 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
                                     (Marker == hd(lists:sort([Marker, Key])))
                             end,
 
-                  Token0  = string:tokens(ParentDir, ?DEF_DELIMITER),
-                  Token1  = string:tokens(Key,       ?DEF_DELIMITER),
+                  Token0 = leo_misc:binary_tokens(ParentDir, ?DEF_DELIMITER),
+                  Token1 = leo_misc:binary_tokens(Key,       ?DEF_DELIMITER),
 
                   Length0 = erlang:length(Token0),
                   Length1 = Length0 + 1,
                   Length2 = erlang:length(Token1),
 
-                  IsChunkedObj = case is_list(Key) of
-                                     true  -> string:str(Key, "\n") > 0;
-                                     false -> false
-                                 end,
+                  IsChunkedObj = (nomatch /= binary:match(Key, <<"\n">>)),
 
-                  case (InRange == true andalso string:str(Key, ParentDir) == 1) of
+                  Pos1 = case binary:match(Key, [ParentDir]) of
+                             nomatch ->
+                                 -1;
+                             {Pos0, _} ->
+                                 Pos0
+                         end,
+
+                  case (InRange == true andalso Pos1 == 0) of
                       true ->
                           case (Length2 -1) of
                               Length0 when Metadata#metadata.del == ?DEL_FALSE andalso
                                            IsChunkedObj == false ->
-                                  case (string:rstr(Key, ?DEF_DELIMITER) == length(Key)) of
+                                  KeyLen = byte_size(Key),
+
+                                  case (binary:part(Key, KeyLen - 1, 1) == ?DEF_DELIMITER andalso KeyLen > 1) of
                                       true  -> ordsets:add_element(#metadata{key   = Key,
                                                                              dsize = -1}, Acc);
                                       false -> ordsets:add_element(Metadata, Acc)
                                   end;
+
                               Length1 when Metadata#metadata.del == ?DEL_FALSE andalso
                                            IsChunkedObj == false ->
+
                                   {Token2, _} = lists:split(Length1, Token1),
-                                  Dir = lists:foldl(fun(Str0, []  ) -> lists:append([Str0, ?DEF_DELIMITER]);
-                                                       (Str0, Str1) -> lists:append([Str1, Str0, ?DEF_DELIMITER])
-                                                    end, [], Token2),
+                                  Dir = lists:foldl(fun(Bin0, <<>>) ->
+                                                            << Bin0/binary, ?DEF_DELIMITER/binary >>;
+                                                       (Bin0, Bin1) ->
+                                                            << Bin1/binary, Bin0/binary, ?DEF_DELIMITER/binary >>
+                                                    end, <<>>, Token2),
                                   ordsets:add_element(#metadata{key   = Dir,
                                                                 dsize = -1}, Acc);
                               _ ->
@@ -394,19 +404,30 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
     leo_object_storage_api:fetch_by_key(ParentDir, Fun).
 
 
+%% @doc Retrieve object of deletion from object-storage by key
+%%
+-spec(prefix_search_and_remove_objects(binary()) ->
+             ok).
 prefix_search_and_remove_objects(ParentDir) ->
     Fun = fun(K, V,_Acc) ->
                   {AddrId, Key} = binary_to_term(K),
-                  Metadata       = binary_to_term(V),
+                  Metadata      = binary_to_term(V),
 
-                  case (string:str(Key, ParentDir) == 1) of
+                  Pos1 = case binary:match(Key, [ParentDir]) of
+                             nomatch ->
+                                 -1;
+                             {Pos0, _} ->
+                                 Pos0
+                         end,
+
+                  case (Pos1 == 0) of
                       true when Metadata#metadata.del == ?DEL_FALSE ->
                           leo_storage_mq_client:publish(
                             ?QUEUE_TYPE_ASYNC_DELETION, AddrId, Key);
                       _ ->
                           void
                   end,
-                  []
+                  ok
           end,
     leo_object_storage_api:fetch_by_key(ParentDir, Fun).
 

@@ -35,8 +35,7 @@
          delete_objects_in_parent_dir/1
         ]).
 
--define(DEF_DELIMITER, "/").
--define(DEF_MAX_KEYS,  1000).
+-define(DEF_MAX_KEYS, 1000).
 
 %%--------------------------------------------------------------------
 %% API
