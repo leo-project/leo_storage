@@ -29,7 +29,7 @@
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
 
--define(TEST_KEY_1,     "air/on/g/string/music.png").
+-define(TEST_KEY_1, <<"air/on/g/string/music.png">>).
 -define(TEST_META_1, #metadata{key       = ?TEST_KEY_1,
                                addr_id   = 1,
                                clock     = 9,
