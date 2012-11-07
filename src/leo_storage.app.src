@@ -32,7 +32,7 @@
            {num_of_repairers,    32},
            {num_of_mq_procs,      5},
            {log_level,            1},
-           {log_appender,        [file]}
+           {log_appender,        [{file, [{path, "./"}]}]}
           ]}
   ]
 }.

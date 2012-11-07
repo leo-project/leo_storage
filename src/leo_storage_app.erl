@@ -59,7 +59,7 @@ ensure_started(Id, Module, Method, Type, Timeout) ->
         undefined ->
             ChildSpec = {Id, {Module, Method, []},
                          permanent, Timeout, Type, [Module]},
-            {ok, _} = supervisor:start_child(kernel_safe_sup, ChildSpec);
+            {ok, _} = supervisor:start_child(kernel_sup, ChildSpec);
         Pid -> Pid
     end.
 
