@@ -39,7 +39,9 @@
 -export([get/1, get/3, get/4, get/5,
          put/1, put/2, delete/1, delete/2, head/2,
          copy/3,
-         prefix_search/3, prefix_search_and_remove_objects/1]).
+         prefix_search/3, prefix_search_and_remove_objects/1,
+         find_uploaded_objects_by_key/1
+        ]).
 
 -define(REP_LOCAL,  'local').
 -define(REP_REMOTE, 'remote').
@@ -430,6 +432,34 @@ prefix_search_and_remove_objects(ParentDir) ->
                   ok
           end,
     leo_object_storage_api:fetch_by_key(ParentDir, Fun).
+
+
+%% @doc Find already uploaded objects by original-filename
+%%
+-spec(find_uploaded_objects_by_key(binary()) ->
+             ok).
+find_uploaded_objects_by_key(OriginalKey) ->
+    Fun = fun(K, V, Acc) ->
+                  {_AddrId, Key} = binary_to_term(K),
+                  Metadata       = binary_to_term(V),
+
+                  case (nomatch /= binary:match(Key, <<"\n">>)) of
+                      true ->
+                          Pos1 = case binary:match(Key, [OriginalKey]) of
+                                     nomatch   -> -1;
+                                     {Pos0, _} -> Pos0
+                                 end,
+                          case (Pos1 == 0) of
+                              true ->
+                                  [Metadata|Acc];
+                              false ->
+                                  Acc
+                          end;
+                      false ->
+                          Acc
+                  end
+          end,
+    leo_object_storage_api:fetch_by_key(OriginalKey, Fun).
 
 
 %%--------------------------------------------------------------------
