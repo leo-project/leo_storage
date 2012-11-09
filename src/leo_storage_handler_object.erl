@@ -231,7 +231,8 @@ put_fun(Ref, AddrId, Key, ObjectPool) ->
 delete_chunked_objects(0,_) ->
     ok;
 delete_chunked_objects(CIndex, ParentKey) ->
-    Key    = lists:append([ParentKey, "\n", integer_to_list(CIndex)]),
+    IndexBin = list_to_binary(integer_to_list(CIndex)),
+    Key    = << ParentKey/binary, "\n", IndexBin/binary >>,
     AddrId = leo_redundant_manager_chash:vnode_id(Key),
 
     case delete(#object{addr_id = AddrId,
