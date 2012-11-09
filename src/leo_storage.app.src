@@ -22,7 +22,7 @@
 {application, leo_storage,
   [
     {description, "LEO Storage Server"},
-    {vsn, "0.12.3"},
+    {vsn, "0.12.4"},
     {id, "leo_storage"},
     {registered,   []},
     {applications, [kernel, stdlib, os_mon]},
