@@ -33,7 +33,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -define(TEST_VNODE_ID, 1024).
--define(TEST_KEY_1, "air/on/g/string/music.png").
+-define(TEST_KEY_1, <<"air/on/g/string/music.png">>).
 
 -define(TEST_MSG_1, term_to_binary(#inconsistent_data_message{id         = 12345,
                                                               type       = ?ERR_TYPE_REPLICATE_DATA,

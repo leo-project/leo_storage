@@ -23,10 +23,11 @@
 %% @doc
 %% @end
 %%====================================================================
--module(leo_storage_mq_statistics_tests).
+-module(leo_storage_statistics_tests).
 -author('yosuke hara').
 
 -include("leo_storage.hrl").
+-include_lib("leo_object_storage/include/leo_object_storage.hrl").
 -include_lib("leo_statistics/include/leo_statistics.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
@@ -35,7 +36,7 @@
 %%--------------------------------------------------------------------
 -ifdef(EUNIT).
 
-mq_statistics_test_() ->
+statistics_test_() ->
     {foreach, fun setup/0, fun teardown/1,
      [{with, [T]} || T <- [fun sync_/1
                           ]]}.
@@ -54,6 +55,13 @@ setup() ->
     meck:expect(leo_mq_api, status, fun(_Id) ->
                                             {ok, {8,8}}
                                     end),
+
+    meck:new(leo_object_storage_api),
+    meck:expect(leo_object_storage_api, stats,
+                fun() ->
+                        {ok, [{ok, #storage_stats{total_sizes = 1024,
+                                                  total_num   = 8}}]}
+                end),
     ok.
 
 teardown(_) ->
@@ -63,9 +71,9 @@ teardown(_) ->
 
 %% sync vnode-id queue.
 sync_(_) ->
-    ok = leo_storage_mq_statistics:init(),
-    ok = leo_storage_mq_statistics:handle_call({sync, ?STAT_INTERVAL_1M}),
-    ok = leo_storage_mq_statistics:handle_call({sync, ?STAT_INTERVAL_5M}),
+    ok = leo_storage_statistics:init(),
+    ok = leo_storage_statistics:handle_call({sync, ?STAT_INTERVAL_1M}),
+    ok = leo_storage_statistics:handle_call({sync, ?STAT_INTERVAL_5M}),
 
     Res = meck:history(leo_mq_api),
     ?assertEqual(4, length(Res)),

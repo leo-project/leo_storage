@@ -34,7 +34,7 @@
 
 -define(TEST_SERVER_ID,    'replicator_0').
 -define(TEST_RING_ID_1,    255).
--define(TEST_KEY_1,        "air/on/g/string/music.png").
+-define(TEST_KEY_1,        <<"air/on/g/string/music.png">>).
 -define(TEST_BODY_1,       <<"air-on-g-string">>).
 -define(TEST_META_1, #metadata{key       = ?TEST_KEY_1,
                                addr_id   = 1,

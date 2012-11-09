@@ -23,13 +23,14 @@
 %% @doc
 %% @end
 %%======================================================================
--module(leo_storage_mq_statistics).
+-module(leo_storage_statistics).
 
 -author('Yosuke Hara').
 
 -behaviour(leo_statistics_behaviour).
 
 -include("leo_storage.hrl").
+-include_lib("leo_object_storage/include/leo_object_storage.hrl").
 -include_lib("leo_statistics/include/leo_statistics.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
@@ -39,6 +40,8 @@
 -define(SNMP_MSG_REPLICATE,  'num-of-msg-replicate').
 -define(SNMP_MSG_SYNC_VNODE, 'num-of-msg-sync-vnode').
 -define(SNMP_MSG_REBALANCE,  'num-of-msg-rebalance').
+-define(SNMP_MSG_TOTAL_SIZE, 'storage-total-objects-sizes').
+-define(SNMP_MSG_TOTAL_OBJS, 'storage-total-objects').
 
 %%--------------------------------------------------------------------
 %% API
@@ -70,6 +73,15 @@ handle_call({sync, ?STAT_INTERVAL_1M}) ->
     catch snmp_generic:variable_set(?SNMP_MSG_REPLICATE,  Res0 + Res1),
     catch snmp_generic:variable_set(?SNMP_MSG_SYNC_VNODE, Res2),
     catch snmp_generic:variable_set(?SNMP_MSG_REBALANCE,  Res3),
+
+    {ok, Ret4} = leo_object_storage_api:stats(),
+    {Size2, TotalObjs2} =
+        lists:foldl(fun({ok, #storage_stats{total_sizes = Size0,
+                                            total_num   = TotalObjs0}}, {Size1, TotalObjs1}) ->
+                            {Size0 + Size1, TotalObjs0 + TotalObjs1}
+                    end, {0,0}, Ret4),
+    catch snmp_generic:variable_set(?SNMP_MSG_TOTAL_SIZE, Size2),
+    catch snmp_generic:variable_set(?SNMP_MSG_TOTAL_OBJS, TotalObjs2),
     ok;
 
 handle_call({sync, ?STAT_INTERVAL_5M}) ->

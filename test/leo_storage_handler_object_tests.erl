@@ -39,10 +39,10 @@
 %%--------------------------------------------------------------------
 -ifdef(EUNIT).
 
--define(TEST_BUCKET, "air").
--define(TEST_DIR_0,  "air/on/g/").
--define(TEST_KEY_0,  "air/on/g/string").
--define(TEST_KEY_1,  "air/on/g/bach/music").
+-define(TEST_BUCKET, <<"air">>).
+-define(TEST_DIR_0,  <<"air/on/g/">>).
+-define(TEST_KEY_0,  <<"air/on/g/string">>).
+-define(TEST_KEY_1,  <<"air/on/g/bach/music">>).
 -define(TEST_BIN,    <<"V">>).
 -define(TEST_META_0, #metadata{key   = ?TEST_KEY_0,
                                dsize = byte_size(?TEST_BIN)}).
@@ -628,8 +628,8 @@ prefix_search_and_remove_objects_(_) ->
                         Fun(term_to_binary({0, ?TEST_KEY_0}), term_to_binary(#metadata{}), []),
                         Fun(term_to_binary({0, ?TEST_DIR_0}), term_to_binary(#metadata{}), [#metadata{key=?TEST_KEY_0}]),
                         Fun(term_to_binary({0, ?TEST_KEY_1}), term_to_binary(#metadata{}), [#metadata{key=?TEST_KEY_0}]),
-                        Fun(term_to_binary({0, lists:append(["_",?TEST_KEY_1])}),
-                                           term_to_binary(#metadata{}), [#metadata{key=?TEST_KEY_0}])
+                        Fun(term_to_binary({0, << "_", ?TEST_KEY_1/binary >>}),
+                            term_to_binary(#metadata{}), [#metadata{key=?TEST_KEY_0}])
                 end),
 
     Res = leo_storage_handler_object:prefix_search_and_remove_objects(?TEST_BUCKET),
