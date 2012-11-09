@@ -181,15 +181,13 @@ put(Object, ReqId) when is_integer(ReqId)  ->
                                                            req_id = ReqId}),
     replicate(?REP_LOCAL, ?CMD_PUT, Object#object.addr_id, ObjectPool);
 
-%% @doc put object.
-%%
 put(ObjectPool, Ref) when is_reference(Ref) ->
     case catch leo_object_storage_pool:head(ObjectPool) of
         {'EXIT', Cause} ->
             {error, Ref, Cause};
         not_found ->
             {error, Ref, timeout};
-
+        %% FOR DELETE
         #metadata{addr_id = AddrId, key = Key, del = ?DEL_TRUE} ->
             case leo_object_storage_api:head({AddrId, Key}) of
                 {ok, MetaBin} ->
@@ -211,6 +209,7 @@ put(ObjectPool, Ref) when is_reference(Ref) ->
                 not_found = Cause ->
                     {error, Ref, Cause}
             end;
+        %% FOR PUT
         #metadata{addr_id = AddrId, key = Key, del = ?DEL_FALSE} ->
             put_fun(Ref, AddrId, Key, ObjectPool)
     end;
@@ -220,6 +219,8 @@ put(_,_) ->
 
 %% Input an object into the object-storage
 %% @private
+-spec(put_fun(reference(), integer(), binary(), pid()) ->
+             {ok, reference(), tuple()} | {error, reference(), any()}).
 put_fun(Ref, AddrId, Key, ObjectPool) ->
     case leo_object_storage_api:put({AddrId, Key}, ObjectPool) of
         {ok, ETag} ->
@@ -228,6 +229,11 @@ put_fun(Ref, AddrId, Key, ObjectPool) ->
             {error, Ref, Cause}
     end.
 
+
+%% Remove chunked objects from the object-storage
+%% @private
+-spec(delete_chunked_objects(integer(), binary()) ->
+             ok | {error, any()}).
 delete_chunked_objects(0,_) ->
     ok;
 delete_chunked_objects(CIndex, ParentKey) ->

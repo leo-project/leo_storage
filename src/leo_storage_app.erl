@@ -82,8 +82,8 @@ after_proc({ok, Pid}) ->
     ok = leo_statistics_metrics_vm:start_link(?SNMP_SYNC_INTERVAL_L),
     ok = leo_statistics_metrics_req:start_link(?SNMP_SYNC_INTERVAL_S),
     ok = leo_statistics_metrics_req:start_link(?SNMP_SYNC_INTERVAL_L),
-    ok = leo_storage_mq_statistics:start_link(?SNMP_SYNC_INTERVAL_S),
-    ok = leo_storage_mq_statistics:start_link(?SNMP_SYNC_INTERVAL_L),
+    ok = leo_storage_statistics:start_link(?SNMP_SYNC_INTERVAL_S),
+    ok = leo_storage_statistics:start_link(?SNMP_SYNC_INTERVAL_L),
 
     ensure_started(rex, rpc, start_link, worker, 2000),
 
