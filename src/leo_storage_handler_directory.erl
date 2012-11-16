@@ -67,19 +67,18 @@ find_by_parent_dir(ParentDir, _Delimiter, Marker, MaxKeys) ->
                                        [ParentDir, NewMarker, NewMaxKeys], ?DEF_REQ_TIMEOUT),
 
     case lists:foldl(fun({ok, List}, Acc0) ->
-                             Ret = lists:foldl(
-                                     fun(#metadata{key = Key} = Meta0, Acc1) ->
-                                             case lists:keyfind(Key, 2, Acc1) of
-                                                 false ->
-                                                     [Meta0|Acc1];
-                                                 #metadata{clock = Clock} when Meta0#metadata.clock > Clock ->
-                                                     Acc2 = lists:keydelete(Key, 2, Acc1),
-                                                     [Meta0|Acc2];
-                                                 _ ->
-                                                     Acc1
-                                             end
-                                     end, [], List),
-                             Acc0 ++ Ret;
+                             lists:foldl(
+                               fun(#metadata{key = Key} = Meta0, Acc1) ->
+                                       case lists:keyfind(Key, 2, Acc1) of
+                                           false ->
+                                               [Meta0|Acc1];
+                                           #metadata{clock = Clock} when Meta0#metadata.clock > Clock ->
+                                               Acc2 = lists:keydelete(Key, 2, Acc1),
+                                               [Meta0|Acc2];
+                                           _ ->
+                                               Acc1
+                                       end
+                               end, Acc0, List);
                         (_, Acc0) ->
                              Acc0
                      end, [], ResL0) of
