@@ -352,9 +352,9 @@ copy(DestNodes, AddrId, Key) ->
 %% API - Prefix Search (Fetch)
 %%--------------------------------------------------------------------
 prefix_search(ParentDir, Marker, MaxKeys) ->
-    Fun = fun(K, V, Acc) when length(Acc) =< MaxKeys ->
+    Fun = fun(K, V, Acc0) when length(Acc0) =< MaxKeys ->
                   {_AddrId, Key} = binary_to_term(K),
-                  Metadata       = binary_to_term(V),
+                  Meta0   = binary_to_term(V),
                   InRange = case Marker of
                                 [] -> true;
                                 _  ->
@@ -380,35 +380,56 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
                   case (InRange == true andalso Pos1 == 0) of
                       true ->
                           case (Length2 -1) of
-                              Length0 when Metadata#metadata.del == ?DEL_FALSE andalso
+                              Length0 when Meta0#metadata.del == ?DEL_FALSE andalso
                                            IsChunkedObj == false ->
                                   KeyLen = byte_size(Key),
 
                                   case (binary:part(Key, KeyLen - 1, 1) == ?DEF_DELIMITER andalso KeyLen > 1) of
-                                      true  -> ordsets:add_element(#metadata{key   = Key,
-                                                                             dsize = -1}, Acc);
-                                      false -> ordsets:add_element(Metadata, Acc)
+                                      true  ->
+                                          case lists:keyfind(Key, 2, Acc0) of
+                                              false ->
+                                                  ordsets:add_element(#metadata{key      = Key,
+                                                                                dsize    = -1}, Acc0);
+                                              _ ->
+                                                  Acc0
+                                          end;
+                                      false ->
+                                          case lists:keyfind(Key, 2, Acc0) of
+                                              false ->
+                                                  ordsets:add_element(Meta0#metadata{offset    = 0,
+                                                                                     ring_hash = 0}, Acc0);
+                                              #metadata{clock = Clock} when Meta0#metadata.clock > Clock ->
+                                                  Acc1 = lists:keydelete(Key, 2, Acc0),
+                                                  ordsets:add_element(Meta0#metadata{offset    = 0,
+                                                                                     ring_hash = 0}, Acc1);
+                                              _ ->
+                                                  Acc0
+                                          end
                                   end;
 
-                              Length1 when Metadata#metadata.del == ?DEL_FALSE andalso
+                              Length1 when Meta0#metadata.del == ?DEL_FALSE andalso
                                            IsChunkedObj == false ->
-
                                   {Token2, _} = lists:split(Length1, Token1),
                                   Dir = lists:foldl(fun(Bin0, <<>>) ->
                                                             << Bin0/binary, ?DEF_DELIMITER/binary >>;
                                                        (Bin0, Bin1) ->
                                                             << Bin1/binary, Bin0/binary, ?DEF_DELIMITER/binary >>
                                                     end, <<>>, Token2),
-                                  ordsets:add_element(#metadata{key   = Dir,
-                                                                dsize = -1}, Acc);
+                                  case lists:keyfind(Dir, 2, Acc0) of
+                                      false ->
+                                          ordsets:add_element(#metadata{key   = Dir,
+                                                                        dsize = -1}, Acc0);
+                                      _ ->
+                                          Acc0
+                                  end;
                               _ ->
-                                  Acc
+                                  Acc0
                           end;
                       false ->
-                          Acc
+                          Acc0
                   end;
-             (_, _, Acc) ->
-                  Acc
+             (_, _, Acc0) ->
+                  Acc0
           end,
     leo_object_storage_api:fetch_by_key(ParentDir, Fun).
 
