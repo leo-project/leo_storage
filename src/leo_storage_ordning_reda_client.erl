@@ -73,7 +73,6 @@ stack(DestNodes, AddrId, Key, Metadata, Object) ->
     stack_fun(DestNodes, AddrId, Key, Metadata, Object, []).
 
 
-%% @TODO
 %% Request from a remote-node
 %%
 -spec(request(binary()) ->
@@ -205,7 +204,7 @@ slice_and_store(Objects, Errors) ->
         ok ->
             slice_and_store(Rest4, Errors);
         {error, Cause} ->
-            ?warn("slice_and_store/2","key:~s, cause:~p",[Metadata#metadata.key, Cause]),
+            ?warn("slice_and_store/2","key:~s, cause:~p",[binary_to_list(Metadata#metadata.key), Cause]),
             slice_and_store(Rest4, [Metadata|Errors])
     end.
 
