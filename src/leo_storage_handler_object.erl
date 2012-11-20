@@ -567,35 +567,24 @@ replicate(_,_,_,_) ->
 %% @doc obj-replication request from remote node.
 %%
 replicate(?REP_REMOTE, Method, Object) ->
-    Key      = Object#object.key,
-    AddrId   = Object#object.addr_id,
-    Clock    = Object#object.clock,
-    Checksum = Object#object.checksum,
+    ObjectPool = leo_object_storage_pool:new(Object),
 
-    case leo_object_storage_api:head({AddrId, Key}) of
-        {ok, Metadata} when Metadata#metadata.clock    =:= Clock andalso
-                            Metadata#metadata.checksum =:= Checksum ->
-            {ok, erlang:node()};
-        _ ->
-            ObjectPool = leo_object_storage_pool:new(Object),
+    Ref  = make_ref(),
+    Ret0 = case Method of
+               ?CMD_PUT    -> ?MODULE:put(ObjectPool, Ref);
+               ?CMD_DELETE -> ?MODULE:delete(ObjectPool, Ref)
+           end,
+    ok = leo_object_storage_pool:destroy(ObjectPool),
 
-            Ref  = make_ref(),
-            Ret0 = case Method of
-                       ?CMD_PUT    -> ?MODULE:put(ObjectPool, Ref);
-                       ?CMD_DELETE -> ?MODULE:delete(ObjectPool, Ref)
-                   end,
-            ok = leo_object_storage_pool:destroy(ObjectPool),
-
-            case Ret0 of
-                %% Put
-                {ok, Ref, ETag} ->
-                    {ok, ETag};
-                %% Delete
-                {ok, Ref} ->
-                    ok;
-                {error, Ref, Cause} ->
-                    {error, Cause}
-            end
+    case Ret0 of
+        %% Put
+        {ok, Ref, ETag} ->
+            {ok, ETag};
+        %% Delete
+        {ok, Ref} ->
+            ok;
+        {error, Ref, Cause} ->
+            {error, Cause}
     end;
 replicate(_,_,_) ->
     {error, badarg}.

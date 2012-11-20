@@ -96,10 +96,8 @@ loop(0, From, {_NumOfNodes,_ResL,_Errors}) ->
 loop(W, From, { NumOfNodes,_ResL, Errors}) when (NumOfNodes - W) < length(Errors) ->
     From ! {error, Errors};
 
-loop(W, From, { NumOfNodes, ResL, Errors} = Args) ->
+loop(W, From, { NumOfNodes, ResL, Errors}) ->
     receive
-        ok ->
-            loop(W-1, From, Args);
         {ok, Checksum} ->
             loop(W-1, From, {NumOfNodes, [Checksum|ResL], Errors});
         {error, Node, Cause} ->

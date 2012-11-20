@@ -464,15 +464,18 @@ delete_1_({_Node0, _Node1}) ->
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, head,
                 fun(_Key) ->
-                        {ok, #metadata{checksum = Checksum,
-                                       clock    = Clock}}
+                        {ok, #metadata{del = ?DEL_TRUE}}
+                end),
+    meck:expect(leo_object_storage_api, delete,
+                fun(_Key, _) ->
+                        ok
                 end),
 
     Res = leo_storage_handler_object:delete(#object{key      = ?TEST_KEY_0,
                                                     addr_id  = 0,
                                                     checksum = Checksum,
                                                     clock    = Clock}),
-    ?assertEqual({ok, node()}, Res),
+    ?assertEqual(ok, Res),
     ok.
 
 %% delete/1
