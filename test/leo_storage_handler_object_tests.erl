@@ -313,24 +313,6 @@ put_0_({Node0, Node1}) ->
     ReqId     = 0,
     Timestamp = 0,
 
-    meck:new(leo_object_storage_pool),
-    meck:expect(leo_object_storage_pool, new,
-                fun(_) ->
-                        []
-                end),
-    meck:expect(leo_object_storage_pool, get,
-                fun(_) ->
-                        #object{data = ?TEST_BIN}
-                end),
-    meck:expect(leo_object_storage_pool, set_ring_hash,
-                fun(_, _) ->
-                        ok
-                end),
-    meck:expect(leo_object_storage_pool, destroy,
-                fun(_) ->
-                        ok
-                end),
-
     meck:new(leo_redundant_manager_api),
     meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id,
                 fun(put, _AddrId) ->
@@ -358,12 +340,6 @@ put_0_({Node0, Node1}) ->
 
 %% put/2
 put_1_({_Node0, _Node1}) ->
-    meck:new(leo_object_storage_pool),
-    meck:expect(leo_object_storage_pool, head,
-                fun(_) ->
-                        #metadata{key = ?TEST_KEY_0, addr_id = 0}
-                end),
-
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, put,
                 fun(_Key, _ObjPool) ->
@@ -376,20 +352,6 @@ put_1_({_Node0, _Node1}) ->
 
 %% put/1
 put_2_(_) ->
-    meck:new(leo_object_storage_pool),
-    meck:expect(leo_object_storage_pool, new,
-                fun(_) ->
-                        []
-                end),
-    meck:expect(leo_object_storage_pool, destroy,
-                fun(_) ->
-                        ok
-                end),
-    meck:expect(leo_object_storage_pool, head,
-                fun(_) ->
-                        not_found
-                end),
-
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, head,
                 fun(_Key) ->
@@ -402,7 +364,7 @@ put_2_(_) ->
 
     Object = #object{key = ?TEST_KEY_0},
     Res = leo_storage_handler_object:put(Object),
-    ?assertEqual({error, timeout}, Res),
+    ?assertEqual({ok, {etag, 1}}, Res),
     ok.
 
 
@@ -415,20 +377,6 @@ delete_0_({Node0, Node1}) ->
     Key       = ?TEST_KEY_0,
     ReqId     = 0,
     Timestamp = 0,
-
-    meck:new(leo_object_storage_pool),
-    meck:expect(leo_object_storage_pool, new,
-                fun(_) ->
-                        []
-                end),
-    meck:expect(leo_object_storage_pool, set_ring_hash,
-                fun(_, _) ->
-                        ok
-                end),
-    meck:expect(leo_object_storage_pool, destroy,
-                fun(_) ->
-                        ok
-                end),
 
     meck:new(leo_redundant_manager_api),
     meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id,
@@ -482,21 +430,6 @@ delete_1_({_Node0, _Node1}) ->
 delete_2_({_Node0, _Node1}) ->
     Clock0    = 1, Clock1    = 3,
     Checksum0 = 5, Checksum1 = 7,
-
-    meck:new(leo_object_storage_pool),
-    meck:expect(leo_object_storage_pool, new,
-                fun(_) ->
-                        []
-                end),
-    meck:expect(leo_object_storage_pool, get,
-                fun(_) ->
-                        #object{addr_id = 0,
-                                key = ?TEST_KEY_0}
-                end),
-    meck:expect(leo_object_storage_pool, destroy,
-                fun(_) ->
-                        ok
-                end),
 
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, head,

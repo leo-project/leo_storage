@@ -178,27 +178,27 @@ put(Object) ->
              ok | {error, any()}).
 put(Object, ReqId) when is_integer(ReqId)  ->
     _ = leo_statistics_req_counter:increment(?STAT_REQ_PUT),
-    ObjectPool = leo_object_storage_pool:new(Object#object{method = ?CMD_PUT,
-                                                           req_id = ReqId}),
-    replicate(?REP_LOCAL, ?CMD_PUT, Object#object.addr_id, ObjectPool);
 
-put(ObjectPool, Ref) when is_reference(Ref) ->
-    case catch leo_object_storage_pool:head(ObjectPool) of
-        {'EXIT', Cause} ->
-            {error, Ref, Cause};
-        not_found ->
-            {error, Ref, timeout};
-        %% FOR DELETE
-        #metadata{addr_id = AddrId, key = Key, del = ?DEL_TRUE} ->
+    replicate(?REP_LOCAL, ?CMD_PUT, Object#object.addr_id,
+              Object#object{method = ?CMD_PUT,
+                            clock  = leo_date:clock(),
+                            req_id = ReqId});
+
+put(Object, Ref) when is_reference(Ref) ->
+    AddrId = Object#object.addr_id,
+    Key    = Object#object.key,
+
+    case Object#object.del of
+        ?DEL_TRUE->
             case leo_object_storage_api:head({AddrId, Key}) of
                 {ok, MetaBin} ->
                     case binary_to_term(MetaBin) of
                         #metadata{cnumber = 0} ->
-                            put_fun(Ref, AddrId, Key, ObjectPool);
+                            put_fun(Ref, AddrId, Key, Object);
                         #metadata{cnumber = CNumber} ->
                             case delete_chunked_objects(CNumber, Key) of
                                 ok ->
-                                    put_fun(Ref, AddrId, Key, ObjectPool);
+                                    put_fun(Ref, AddrId, Key, Object);
                                 {error, Cause} ->
                                     {error, Ref, Cause}
                             end;
@@ -211,8 +211,8 @@ put(ObjectPool, Ref) when is_reference(Ref) ->
                     {error, Ref, Cause}
             end;
         %% FOR PUT
-        #metadata{addr_id = AddrId, key = Key, del = ?DEL_FALSE} ->
-            put_fun(Ref, AddrId, Key, ObjectPool)
+        ?DEL_FALSE ->
+            put_fun(Ref, AddrId, Key, Object)
     end;
 put(_,_) ->
     {error, badarg}.
@@ -235,10 +235,10 @@ put(From, Object, ReqId) ->
 
 %% Input an object into the object-storage
 %% @private
--spec(put_fun(reference(), integer(), binary(), pid()) ->
+-spec(put_fun(reference(), integer(), binary(), #object{}) ->
              {ok, reference(), tuple()} | {error, reference(), any()}).
-put_fun(Ref, AddrId, Key, ObjectPool) ->
-    case leo_object_storage_api:put({AddrId, Key}, ObjectPool) of
+put_fun(Ref, AddrId, Key, Object) ->
+    case leo_object_storage_api:put({AddrId, Key}, Object) of
         {ok, ETag} ->
             {ok, Ref, {etag, ETag}};
         {error, Cause} ->
@@ -257,9 +257,10 @@ delete_chunked_objects(CIndex, ParentKey) ->
     Key    = << ParentKey/binary, "\n", IndexBin/binary >>,
     AddrId = leo_redundant_manager_chash:vnode_id(Key),
 
-    case delete(#object{addr_id = AddrId,
-                        key     = Key,
-                        cindex  = CIndex}, 0) of
+    case delete(#object{addr_id  = AddrId,
+                        key      = Key,
+                        cindex   = CIndex,
+                        clock    = leo_date:clock()}, 0) of
         ok ->
             delete_chunked_objects(CIndex - 1, ParentKey);
         {error, Cause} ->
@@ -284,41 +285,35 @@ delete(Object) ->
              ok | {error, any()}).
 delete(Object, ReqId) when is_integer(ReqId) ->
     _ = leo_statistics_req_counter:increment(?STAT_REQ_DEL),
-    AddrId     = Object#object.addr_id,
-    ObjectPool = leo_object_storage_pool:new(Object#object{method = ?CMD_DELETE,
-                                                           data   = <<>>,
-                                                           dsize  = 0,
-                                                           req_id = ReqId,
-                                                           del    = ?DEL_TRUE}),
-    replicate(?REP_LOCAL, ?CMD_DELETE, AddrId, ObjectPool);
+    replicate(?REP_LOCAL, ?CMD_DELETE,
+              Object#object.addr_id, Object#object{method   = ?CMD_DELETE,
+                                                   data     = <<>>,
+                                                   dsize    = 0,
+                                                   clock    = leo_date:clock(),
+                                                   req_id   = ReqId,
+                                                   del      = ?DEL_TRUE});
 
-delete(ObjectPool, Ref) when is_reference(Ref) ->
-    case catch leo_object_storage_pool:get(ObjectPool) of
-        {'EXIT', Cause} ->
+delete(Object, Ref) when is_reference(Ref) ->
+    AddrId = Object#object.addr_id,
+    Key    = Object#object.key,
+
+    case leo_object_storage_api:head({AddrId, Key}) of
+        not_found = Cause ->
             {error, Ref, Cause};
-        not_found ->
-            {error, Ref, timeout};
-        #object{addr_id = AddrId,
-                key      = Key} ->
-            case leo_object_storage_api:head({AddrId, Key}) of
-                not_found = Cause ->
-                    {error, Ref, Cause};
-                {ok, Metadata} when Metadata#metadata.del == ?DEL_TRUE ->
+        {ok, Metadata} when Metadata#metadata.del == ?DEL_TRUE ->
+            {ok, Ref};
+        {ok, Metadata} when Metadata#metadata.del == ?DEL_FALSE ->
+            case leo_object_storage_api:delete({AddrId, Key}, Object) of
+                ok ->
                     {ok, Ref};
-                {ok, Metadata} when Metadata#metadata.del == ?DEL_FALSE ->
-                    case leo_object_storage_api:delete({AddrId, Key}, ObjectPool) of
-                        ok ->
-                            {ok, Ref};
-                        {error, Why} ->
-                            {error, Ref, Why}
-                    end;
-                {error, _Cause} ->
-                    {error, Ref, ?ERROR_COULD_NOT_GET_META}
-            end
+                {error, Why} ->
+                    {error, Ref, Why}
+            end;
+        {error, _Cause} ->
+            {error, Ref, ?ERROR_COULD_NOT_GET_META}
     end;
 delete(_,_) ->
     {error, badarg}.
-
 
 
 %%--------------------------------------------------------------------
@@ -526,11 +521,11 @@ read_and_repair(#read_parameter{addr_id   = AddrId,
     Ref   = make_ref(),
 
     case get_fun(Ref, AddrId, Key, StartPos, EndPos) of
-        {ok, Ref, Metadata, ObjectPool} when T =:= [] ->
-            {ok, Metadata, ObjectPool};
-        {ok, Ref, Metadata, ObjectPool} when T =/= [] ->
+        {ok, Ref, Metadata, Object} when T =:= [] ->
+            {ok, Metadata, Object};
+        {ok, Ref, Metadata, Object} when T =/= [] ->
             F = fun(ok) ->
-                        {ok, Metadata, ObjectPool};
+                        {ok, Metadata, Object};
                    ({error,_Cause}) ->
                         {error, ?ERROR_RECOVER_FAILURE}
                 end,
@@ -551,15 +546,15 @@ read_and_repair(#read_parameter{addr_id   = AddrId,
 
 %% @doc Replicate an object from local-node to remote node
 %% @private
--spec(replicate(replication(), put | delete, integer(), pid()) ->
+-spec(replicate(replication(), put | delete, integer(), #object{}) ->
              ok | {error, any()}).
-replicate(?REP_LOCAL, Method, AddrId, ObjectPool) ->
+replicate(?REP_LOCAL, Method, AddrId, Object0) ->
     case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
         {ok, #redundancies{nodes     = Redundancies,
                            w         = WriteQuorum,
                            d         = DeleteQuorum,
                            ring_hash = RingHash}} ->
-            _ = leo_object_storage_pool:set_ring_hash(ObjectPool, RingHash),
+            Object1 = Object0#object{ring_hash = RingHash},
             Quorum  = case Method of
                           ?CMD_PUT    -> WriteQuorum;
                           ?CMD_DELETE -> DeleteQuorum
@@ -572,7 +567,7 @@ replicate(?REP_LOCAL, Method, AddrId, ObjectPool) ->
                    ({error,_Cause}) ->
                         {error, ?ERROR_REPLICATE_FAILURE}
                 end,
-            leo_storage_replicator:replicate(Quorum, Redundancies, ObjectPool, F);
+            leo_storage_replicator:replicate(Quorum, Redundancies, Object1, F);
         _Error ->
             {error, ?ERROR_META_NOT_FOUND}
     end;
@@ -583,14 +578,11 @@ replicate(_,_,_,_) ->
 %% @doc obj-replication request from remote node.
 %%
 replicate(?REP_REMOTE, Method, Object) ->
-    ObjectPool = leo_object_storage_pool:new(Object),
-
     Ref  = make_ref(),
     Ret0 = case Method of
-               ?CMD_PUT    -> ?MODULE:put(ObjectPool, Ref);
-               ?CMD_DELETE -> ?MODULE:delete(ObjectPool, Ref)
+               ?CMD_PUT    -> ?MODULE:put(Object, Ref);
+               ?CMD_DELETE -> ?MODULE:delete(Object, Ref)
            end,
-    ok = leo_object_storage_pool:destroy(ObjectPool),
 
     case Ret0 of
         %% Put

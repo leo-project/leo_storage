@@ -96,14 +96,13 @@ replicate_obj_0_({Test0Node, Test1Node}) ->
                      addr_id = ?TEST_RING_ID_1,
                      dsize   = erlang:byte_size(?TEST_BODY_1),
                      data    = ?TEST_BODY_1},
-    ObjectPool = leo_object_storage_pool:new(Object),
 
     F = fun({ok, ETag}) ->
                 {ok, ETag};
            ({error, Cause}) ->
                 {error, Cause}
         end,
-    {ok, {etag, _}} = leo_storage_replicator:replicate(1, ?TEST_REDUNDANCIES_1, ObjectPool, F),
+    {ok, {etag, _}} = leo_storage_replicator:replicate(1, ?TEST_REDUNDANCIES_1, Object, F),
     timer:sleep(100),
     ok.
 
@@ -116,7 +115,6 @@ replicate_obj_1_({Test0Node, Test1Node}) ->
                      addr_id = ?TEST_RING_ID_1,
                      dsize   = erlang:byte_size(?TEST_BODY_1),
                      data    = ?TEST_BODY_1},
-    ObjectPool = leo_object_storage_pool:new(Object),
 
     F = fun({ok, ETag}) ->
                 {ok, ETag};
@@ -124,7 +122,7 @@ replicate_obj_1_({Test0Node, Test1Node}) ->
                 {error, Cause}
         end,
     %% {ok, {etag, _}} =
-    Res = leo_storage_replicator:replicate(1, ?TEST_REDUNDANCIES_1, ObjectPool, F),
+    Res = leo_storage_replicator:replicate(1, ?TEST_REDUNDANCIES_1, Object, F),
     ?assertEqual({ok, 1}, Res),
     timer:sleep(100),
     ok.
@@ -138,14 +136,13 @@ replicate_obj_2_({Test0Node, Test1Node}) ->
                      addr_id = ?TEST_RING_ID_1,
                      dsize   = erlang:byte_size(?TEST_BODY_1),
                      data    = ?TEST_BODY_1},
-    ObjectPool = leo_object_storage_pool:new(Object),
 
     F = fun({ok, ETag}) ->
                 {ok, ETag};
            ({error, Cause}) ->
                 {error, Cause}
         end,
-    {ok, {etag, _}} = leo_storage_replicator:replicate(1, ?TEST_REDUNDANCIES_1, ObjectPool, F),
+    {ok, {etag, _}} = leo_storage_replicator:replicate(1, ?TEST_REDUNDANCIES_1, Object, F),
     timer:sleep(100),
     ok.
 
