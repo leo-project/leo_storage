@@ -37,7 +37,8 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -export([get/1, get/3, get/4, get/5,
-         put/1, put/2, delete/1, delete/2, head/2,
+         put/1, put/2, put/3,
+         delete/1, delete/2, head/2,
          copy/3,
          prefix_search/3, prefix_search_and_remove_objects/1,
          find_uploaded_objects_by_key/1
@@ -215,6 +216,21 @@ put(ObjectPool, Ref) when is_reference(Ref) ->
     end;
 put(_,_) ->
     {error, badarg}.
+
+%% @doc Insert an  object (request from remote-storage-nodes).
+%%
+-spec(put(pid(), #object{}, integer()) ->
+             {ok, atom()} | {error, any()}).
+put(From, Object, ReqId) ->
+    _ = leo_statistics_req_counter:increment(?STAT_REQ_PUT),
+
+    case replicate(?REP_REMOTE, ?CMD_PUT, Object) of
+        {ok, ETag} ->
+            From ! {ok, ETag};
+        {error, Cause} ->
+            ?warn("put/3", "req-id:~w, cause:~p", [ReqId, Cause]),
+            From ! {error, {node(), Cause}}
+    end.
 
 
 %% Input an object into the object-storage

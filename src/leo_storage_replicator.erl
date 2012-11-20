@@ -32,7 +32,7 @@
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
--export([replicate/4, loop/3]).
+-export([replicate/4, loop/5]).
 
 -type(error_msg_type() :: ?ERR_TYPE_REPLICATE_DATA  |
                           ?ERR_TYPE_DELETE_DATA).
@@ -62,23 +62,21 @@ replicate(Quorum, Nodes, ObjectPool, Callback) ->
                 key     = Key,
                 req_id  = ReqId} = Object ->
             From = self(),
-            Pid  = spawn(?MODULE, loop, [Quorum, From, {length(Nodes), [], []}]),
-            ReqParams = #req_params{pid     = Pid,
-                                    addr_id = AddrId,
-                                    key     = Key,
-                                    req_id  = ReqId},
+            Pid  = spawn(?MODULE, loop, [Quorum, From, AddrId, Key, {length(Nodes), [], []}]),
+
             lists:foreach(
               fun({Node, true}) when Node == erlang:node() ->
                       spawn(fun() ->
-                                    replicate_fun(local, ReqParams#req_params{object_pool = ObjectPool})
+                                    replicate_fun(local, #req_params{pid         = Pid,
+                                                                     addr_id     = AddrId,
+                                                                     key         = Key,
+                                                                     object_pool = ObjectPool,
+                                                                     req_id      = ReqId})
                             end);
                  ({Node, true}) ->
-                      spawn(fun() ->
-                                    RPCKey = rpc:async_call(Node, leo_storage_handler_object, put, [Object]),
-                                    replicate_fun(Node, ReqParams#req_params{rpc_key = RPCKey})
-                            end);
+                      true = rpc:cast(Node, leo_storage_handler_object, put, [From, Object, ReqId]);
                  ({Node, false}) ->
-                      enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
+                      ok = enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
                       Pid ! {error, Node, nodedown}
               end, Nodes),
 
@@ -88,20 +86,22 @@ replicate(Quorum, Nodes, ObjectPool, Callback) ->
 
 %% @doc Waiting for messages (replication)
 %%
--spec(loop(integer(), function(), {integer(), string(), integer(), list()}) ->
+-spec(loop(integer(), function(), integer(), binary(),
+           {integer(), string(), integer(), list()}) ->
              ok).
-loop(0, From, {_NumOfNodes,_ResL,_Errors}) ->
+loop(0, From,_AddrId,_Key, {_NumOfNodes,_ResL,_Errors}) ->
     From ! {ok, hd(_ResL)};
 
-loop(W, From, { NumOfNodes,_ResL, Errors}) when (NumOfNodes - W) < length(Errors) ->
+loop(W, From,_AddrId,_Key, { NumOfNodes,_ResL, Errors}) when (NumOfNodes - W) < length(Errors) ->
     From ! {error, Errors};
 
-loop(W, From, { NumOfNodes, ResL, Errors}) ->
+loop(W, From, AddrId, Key, { NumOfNodes, ResL, Errors}) ->
     receive
         {ok, Checksum} ->
-            loop(W-1, From, {NumOfNodes, [Checksum|ResL], Errors});
-        {error, Node, Cause} ->
-            loop(W,   From, {NumOfNodes, ResL, [{Node, Cause}|Errors]})
+            loop(W-1, From, AddrId, Key, {NumOfNodes, [Checksum|ResL], Errors});
+        {error, {Node, Cause}} ->
+            ok = enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
+            loop(W,   From, AddrId, Key, {NumOfNodes, ResL, [{Node, Cause}|Errors]})
     after
         ?DEF_REQ_TIMEOUT ->
             case (W >= 0) of
@@ -113,7 +113,7 @@ loop(W, From, { NumOfNodes, ResL, Errors}) ->
     end.
 
 %% @doc Waiting for messages (result)
-%%
+%% @private
 -spec(loop(function()) ->
              any()).
 loop(Callback) ->
@@ -138,42 +138,16 @@ replicate_fun(local, #req_params{pid         = Pid,
                                  object_pool = ObjectPool,
                                  req_id      = ReqId}) ->
     Ref  = make_ref(),
-    Node = erlang:node(),
     Ret  = case leo_storage_handler_object:put(ObjectPool, Ref) of
                {ok, Ref, Checksum} ->
                    {ok, Checksum};
                {error, Ref, Cause} ->
                    ?warn("replicate_fun/2", "key:~s, node:~w, reqid:~w, cause:~p",
                          [Key, local, ReqId, Cause]),
-                   enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
-                   {error, Node, Cause}
+                   ok = enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
+                   {error, {node(), Cause}}
            end,
     catch leo_object_storage_pool:destroy(ObjectPool),
-    Pid ! Ret;
-
-%% @doc Request a replication-message for remote-node.
-%%
-replicate_fun(_Node, #req_params{pid     = Pid,
-                                 rpc_key = RPCKey,
-                                 addr_id = AddrId,
-                                 key     = Key}) ->
-    Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
-              {value, {ok, Checksum}} ->
-                  {ok, Checksum};
-              {value, {error, Cause}} ->
-                  {error, Cause};
-              {value, {badrpc, Cause}} ->
-                  {error, Cause};
-              timeout = Cause ->
-                  {error, Cause}
-          end,
-
-    case Ret of
-        {error, _Reason} ->
-            enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key);
-        _ ->
-            void
-    end,
     Pid ! Ret.
 
 

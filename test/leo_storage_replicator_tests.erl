@@ -123,7 +123,9 @@ replicate_obj_1_({Test0Node, Test1Node}) ->
            ({error, Cause}) ->
                 {error, Cause}
         end,
-    {ok, {etag, _}} = leo_storage_replicator:replicate(1, ?TEST_REDUNDANCIES_1, ObjectPool, F),
+    %% {ok, {etag, _}} =
+    Res = leo_storage_replicator:replicate(1, ?TEST_REDUNDANCIES_1, ObjectPool, F),
+    ?assertEqual({ok, 1}, Res),
     timer:sleep(100),
     ok.
 
@@ -172,6 +174,13 @@ gen_mock_2(object, {_Test0Node, _Test1Node}, Case) ->
                             fail -> {error, Ref, []}
                         end
                 end),
+    meck:expect(leo_storage_handler_object, put,
+                fun(From, _Object, _ReqId) ->
+                        case Case of
+                            ok   -> From ! {ok, 1};
+                            fail -> From ! {error, {node(), []}}
+                        end
+                end),
     ok.
 
 %% for object-operation #2.
@@ -189,6 +198,13 @@ gen_mock_3(object, Test1Node, Case) ->
                                                     case Case of
                                                         ok   -> {ok, {etag, 1}};
                                                         fail -> {error, []}
+                                                    end
+                                            end]),
+    ok = rpc:call(Test1Node, meck, expect, [leo_storage_handler_object, put,
+                                            fun(From,_Object,_ReqId) ->
+                                                    case Case of
+                                                        ok   -> From ! {ok, 1};
+                                                        fail -> From ! {error, {node(),[]}}
                                                     end
                                             end]),
     ok.
