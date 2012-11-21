@@ -71,7 +71,7 @@ replicate(Quorum, Nodes, Object, Callback) ->
               true = rpc:cast(Node, leo_storage_handler_object, put, [From, Object, ReqId]);
          ({Node, false}) ->
               ok = enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
-              Pid ! {error, Node, nodedown}
+              erlang:send(Pid, {error, {Node, nodedown}})
       end, Nodes),
 
     loop(Callback).
@@ -83,10 +83,10 @@ replicate(Quorum, Nodes, Object, Callback) ->
            {integer(), string(), integer(), list()}) ->
              ok).
 loop(0, From,_AddrId,_Key, {_NumOfNodes,_ResL,_Errors}) ->
-    From ! {ok, hd(_ResL)};
+    erlang:send(From, {ok, hd(_ResL)});
 
 loop(W, From,_AddrId,_Key, { NumOfNodes,_ResL, Errors}) when (NumOfNodes - W) < length(Errors) ->
-    From ! {error, Errors};
+    erlang:send(From, {error, Errors});
 
 loop(W, From, AddrId, Key, { NumOfNodes, ResL, Errors}) ->
     receive
@@ -99,7 +99,7 @@ loop(W, From, AddrId, Key, { NumOfNodes, ResL, Errors}) ->
         ?DEF_REQ_TIMEOUT ->
             case (W >= 0) of
                 true ->
-                    From ! {error, timeout};
+                    erlang:send(From, {error, timeout});
                 false ->
                     void
             end
@@ -140,7 +140,7 @@ replicate_fun(local, #req_params{pid     = Pid,
                    ok = enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
                    {error, {node(), Cause}}
            end,
-    Pid ! Ret.
+    erlang:send(Pid, Ret).
 
 
 %% @doc Input a message into the queue.

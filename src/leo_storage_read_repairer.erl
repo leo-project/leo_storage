@@ -80,10 +80,10 @@ repair(ReadQuorum, Nodes, Metadata, ReqId, Callback) ->
 -spec(loop(integer(), pid(), list(), tuple()) ->
              ok).
 loop(0, From,_NumOfNodes, {_,_,_Errors}) ->
-    From ! ok;
+    erlang:send(From, ok);
 
 loop(R, From, NumOfNodes, {_,_, Errors}) when (NumOfNodes - R) < length(Errors) ->
-    From ! {error, Errors};
+    erlang:send(From, {error, Errors});
 
 loop(R, From, NumOfNodes, {ReqId, Key, Errors} = Args) ->
     receive
@@ -95,7 +95,7 @@ loop(R, From, NumOfNodes, {ReqId, Key, Errors} = Args) ->
         ?DEF_REQ_TIMEOUT ->
             case (R >= 0) of
                 true ->
-                    From ! {error, timeout};
+                    erlang:send(From, {error, timeout});
                 false ->
                     void
             end
@@ -148,7 +148,7 @@ compare(Pid, RPCKey, Node, #req_params{metadata = #metadata{addr_id = AddrId,
                   [Node, AddrId, Key, Clock, Reason]),
             enqueue(AddrId, Key)
     end,
-    Pid ! Ret.
+    erlang:send(Pid, Ret).
 
 
 %% @doc Insert a message into the queue

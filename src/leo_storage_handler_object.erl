@@ -217,7 +217,7 @@ put(Object, Ref) when is_reference(Ref) ->
 put(_,_) ->
     {error, badarg}.
 
-%% @doc Insert an  object (request from remote-storage-nodes).
+%% @doc Insert an  object (request from remote-storage-nodes/replicator).
 %%
 -spec(put(pid(), #object{}, integer()) ->
              {ok, atom()} | {error, any()}).
@@ -226,10 +226,10 @@ put(From, Object, ReqId) ->
 
     case replicate(?REP_REMOTE, ?CMD_PUT, Object) of
         {ok, ETag} ->
-            From ! {ok, ETag};
+            erlang:send(From, {ok, ETag});
         {error, Cause} ->
             ?warn("put/3", "req-id:~w, cause:~p", [ReqId, Cause]),
-            From ! {error, {node(), Cause}}
+            erlang:send(From, {error, {node(), Cause}})
     end.
 
 
