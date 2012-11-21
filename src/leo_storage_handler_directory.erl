@@ -28,6 +28,7 @@
 -author('Yosuke Hara').
 
 -include("leo_storage.hrl").
+-include_lib("leo_object_storage/include/leo_object_storage.hrl").
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
@@ -65,8 +66,21 @@ find_by_parent_dir(ParentDir, _Delimiter, Marker, MaxKeys) ->
     {ResL0, _BadNodes} = rpc:multicall(Nodes, leo_storage_handler_object, prefix_search,
                                        [ParentDir, NewMarker, NewMaxKeys], ?DEF_REQ_TIMEOUT),
 
-    case lists:foldl(fun({ok, List}, Acc) ->
-                             Acc ++ List
+    case lists:foldl(fun({ok, List}, Acc0) ->
+                             lists:foldl(
+                               fun(#metadata{key = Key} = Meta0, Acc1) ->
+                                       case lists:keyfind(Key, 2, Acc1) of
+                                           false ->
+                                               [Meta0|Acc1];
+                                           #metadata{clock = Clock} when Meta0#metadata.clock > Clock ->
+                                               Acc2 = lists:keydelete(Key, 2, Acc1),
+                                               [Meta0|Acc2];
+                                           _ ->
+                                               Acc1
+                                       end
+                               end, Acc0, List);
+                        (_, Acc0) ->
+                             Acc0
                      end, [], ResL0) of
         [] ->
             {ok, []};

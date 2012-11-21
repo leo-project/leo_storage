@@ -75,7 +75,7 @@ suite_regular_(Node) ->
     ok = meck:new(leo_object_storage_api),
     ok = meck:expect(leo_object_storage_api, store,
                      fun(_Metadata, _Object) ->
-                             ?debugVal({_Metadata, byte_size(_Object)}),
+                             %% ?debugVal({_Metadata, byte_size(_Object)}),
                              ok
                      end),
     stack(Node),
