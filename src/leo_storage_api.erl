@@ -201,11 +201,15 @@ get_node_status() ->
     RingHashes  = [{ring_cur,  RingHashCur},
                    {ring_prev, RingHashPrev }
                   ],
-    Statistics  = [{total_mem_usage,  erlang:memory(total)},
+    Statistics  = [{vm_version,       erlang:system_info(version)},
+                   {total_mem_usage,  erlang:memory(total)},
                    {system_mem_usage, erlang:memory(system)},
                    {proc_mem_usage,   erlang:memory(system)},
                    {ets_mem_usage,    erlang:memory(ets)},
-                   {num_of_procs,     erlang:system_info(process_count)}
+                   {num_of_procs,     erlang:system_info(process_count)},
+                   {process_limit,    erlang:system_info(process_limit)},
+                   {kernel_poll,      erlang:system_info(kernel_poll)},
+                   {thread_pool_size, erlang:system_info(thread_pool_size)}
                   ],
 
     {ok, #cluster_node_status{type    = server,
