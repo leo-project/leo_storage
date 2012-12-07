@@ -87,7 +87,7 @@ loop(R, From, NumOfNodes, {ReqId, Key, Errors} = Args, Callback) ->
     receive
         ok ->
             loop(R-1, From, NumOfNodes, Args, Callback);
-        {error, Node, Cause} ->
+        {error, {Node, Cause}} ->
             loop(R,   From, NumOfNodes, {ReqId, Key, [{Node, Cause}|Errors]}, Callback)
     after
         ?DEF_REQ_TIMEOUT ->
