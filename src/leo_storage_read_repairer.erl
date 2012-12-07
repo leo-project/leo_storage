@@ -93,7 +93,7 @@ loop(R, From, NumOfNodes, {ReqId, Key, Errors} = Args, Callback) ->
         ?DEF_REQ_TIMEOUT ->
             case (R >= 0) of
                 true ->
-                    Callback( {error, timeout});
+                    Callback({error, timeout});
                 false ->
                     void
             end
