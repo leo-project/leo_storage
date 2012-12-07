@@ -34,7 +34,6 @@
 
 %% API
 -export([repair/5]).
--export([loop/4]).
 
 -record(req_params, {addr_id = 0       :: integer(),
                      key               :: string(),
@@ -60,58 +59,44 @@ repair(ReadQuorum, Nodes, Metadata, ReqId, Callback) ->
                          redundancies = Nodes,
                          metadata     = Metadata,
                          req_id       = ReqId},
-    Pid  = spawn(?MODULE, loop, [ReadQuorum, From, erlang:length(Nodes), {ReqId, Key, []}]),
+
     lists:foreach(
       fun({Node, true}) ->
               spawn(fun() ->
                             RPCKey = rpc:async_call(
                                        Node, leo_storage_handler_object, head, [AddrId, Key]),
-                            compare(Pid, RPCKey, Node, Params)
+                            compare(From, RPCKey, Node, Params)
                     end);
          ({_, false}) ->
               void
       end, Nodes),
 
-    loop(Callback).
+    loop(ReadQuorum, From, erlang:length(Nodes), {ReqId, Key, []}, Callback).
 
 
 %% @doc Waiting for messages (compare a metadata)
 %%
--spec(loop(integer(), pid(), list(), tuple()) ->
+-spec(loop(integer(), pid(), list(), tuple(), function()) ->
              ok).
-loop(0, From,_NumOfNodes, {_,_,_Errors}) ->
-    erlang:send(From, ok);
+loop(0,_From,_NumOfNodes, {_,_,_Errors}, Callback) ->
+    Callback(ok);
+loop(R,_From, NumOfNodes, {_,_, Errors}, Callback) when (NumOfNodes - R) < length(Errors) ->
+    Callback({error, Errors});
 
-loop(R, From, NumOfNodes, {_,_, Errors}) when (NumOfNodes - R) < length(Errors) ->
-    erlang:send(From, {error, Errors});
-
-loop(R, From, NumOfNodes, {ReqId, Key, Errors} = Args) ->
+loop(R, From, NumOfNodes, {ReqId, Key, Errors} = Args, Callback) ->
     receive
         ok ->
-            loop(R-1, From, NumOfNodes, Args);
+            loop(R-1, From, NumOfNodes, Args, Callback);
         {error, Node, Cause} ->
-            loop(R,   From, NumOfNodes, {ReqId, Key, [{Node, Cause}|Errors]})
+            loop(R,   From, NumOfNodes, {ReqId, Key, [{Node, Cause}|Errors]}, Callback)
     after
         ?DEF_REQ_TIMEOUT ->
             case (R >= 0) of
                 true ->
-                    erlang:send(From, {error, timeout});
+                    Callback( {error, timeout});
                 false ->
                     void
             end
-    end.
-
-
-%% @doc Waiting for messages (result)
-%%
--spec(loop(function()) ->
-             any()).
-loop(Callback) ->
-    receive
-        Res ->
-            Callback(Res)
-    after ?DEF_REQ_TIMEOUT ->
-            Callback({error, timeout})
     end.
 
 

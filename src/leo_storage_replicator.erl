@@ -32,7 +32,7 @@
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
--export([replicate/4, loop/5]).
+-export([replicate/4]).
 
 -type(error_msg_type() :: ?ERR_TYPE_REPLICATE_DATA  |
                           ?ERR_TYPE_DELETE_DATA).
@@ -54,14 +54,12 @@ replicate(Quorum, Nodes, Object, Callback) ->
     AddrId = Object#object.addr_id,
     Key    = Object#object.key,
     ReqId  = Object#object.req_id,
-
     From = self(),
-    Pid  = spawn(?MODULE, loop, [Quorum, From, AddrId, Key, {length(Nodes), [], []}]),
 
     lists:foreach(
       fun({Node, true}) when Node == erlang:node() ->
               spawn(fun() ->
-                            replicate_fun(local, #req_params{pid     = Pid,
+                            replicate_fun(local, #req_params{pid     = From,
                                                              addr_id = AddrId,
                                                              key     = Key,
                                                              object  = Object,
@@ -71,50 +69,36 @@ replicate(Quorum, Nodes, Object, Callback) ->
               true = rpc:cast(Node, leo_storage_handler_object, put, [From, Object, ReqId]);
          ({Node, false}) ->
               ok = enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
-              erlang:send(Pid, {error, {Node, nodedown}})
+              erlang:send(From, {error, {Node, nodedown}})
       end, Nodes),
 
-    loop(Callback).
-
+    loop(Quorum, From, AddrId, Key, {length(Nodes), [], []}, Callback).
 
 %% @doc Waiting for messages (replication)
 %%
 -spec(loop(integer(), function(), integer(), binary(),
-           {integer(), string(), integer(), list()}) ->
+           {integer(), string(), integer(), list()}, function()) ->
              ok).
-loop(0, From,_AddrId,_Key, {_NumOfNodes,_ResL,_Errors}) ->
-    erlang:send(From, {ok, hd(_ResL)});
+loop(0,_From,_AddrId,_Key, {_NumOfNodes,_ResL,_Errors}, Callback) ->
+    Callback({ok, hd(_ResL)});
+loop(W,_From,_AddrId,_Key, { NumOfNodes,_ResL, Errors}, Callback) when (NumOfNodes - W) < length(Errors) ->
+    Callback({error, Errors});
 
-loop(W, From,_AddrId,_Key, { NumOfNodes,_ResL, Errors}) when (NumOfNodes - W) < length(Errors) ->
-    erlang:send(From, {error, Errors});
-
-loop(W, From, AddrId, Key, { NumOfNodes, ResL, Errors}) ->
+loop(W, From, AddrId, Key, { NumOfNodes, ResL, Errors}, Callback) ->
     receive
         {ok, Checksum} ->
-            loop(W-1, From, AddrId, Key, {NumOfNodes, [Checksum|ResL], Errors});
+            loop(W-1, From, AddrId, Key, {NumOfNodes, [Checksum|ResL], Errors}, Callback);
         {error, {Node, Cause}} ->
             ok = enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
-            loop(W,   From, AddrId, Key, {NumOfNodes, ResL, [{Node, Cause}|Errors]})
+            loop(W,   From, AddrId, Key, {NumOfNodes, ResL, [{Node, Cause}|Errors]}, Callback)
     after
         ?DEF_REQ_TIMEOUT ->
             case (W >= 0) of
                 true ->
-                    erlang:send(From, {error, timeout});
+                    Callback({error, timeout});
                 false ->
                     void
             end
-    end.
-
-%% @doc Waiting for messages (result)
-%% @private
--spec(loop(function()) ->
-             any()).
-loop(Callback) ->
-    receive
-        Res ->
-            Callback(Res)
-    after ?DEF_REQ_TIMEOUT ->
-            Callback({error, timeout})
     end.
 
 
