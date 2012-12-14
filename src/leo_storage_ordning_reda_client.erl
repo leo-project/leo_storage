@@ -122,7 +122,7 @@ handle_fail(Node, [{AddrId, Key}|Rest]) ->
     ?warn("handle_fail/2","node:~w, addr-id:~w, key:~s", [Node, AddrId, Key]),
 
     ok = leo_storage_mq_client:publish(
-           ?QUEUE_TYPE_REPLICATION_MISS, AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
+           ?QUEUE_TYPE_PER_OBJECT, AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
     handle_fail(Node, Rest).
 
 

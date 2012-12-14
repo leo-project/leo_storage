@@ -142,5 +142,5 @@ compare(Pid, RPCKey, Node, #req_params{metadata = #metadata{addr_id = AddrId,
              ok | {error, any()}).
 enqueue(AddrId, Key) ->
     leo_storage_mq_client:publish(
-      ?QUEUE_TYPE_INCONSISTENT_DATA, AddrId, Key, ?ERR_TYPE_RECOVER_DATA).
+      ?QUEUE_TYPE_PER_OBJECT, AddrId, Key, ?ERR_TYPE_RECOVER_DATA).
 
