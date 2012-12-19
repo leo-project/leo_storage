@@ -40,7 +40,8 @@
 
 ordning_reda_test_() ->
     {foreach, fun setup/0, fun teardown/1,
-     [{with, [T]} || T <- [fun suite_regular_/1,
+     [{with, [T]} || T <- [fun suite_regular_1_/1,
+                           fun suite_regular_2_/1,
                            fun suite_error_/1
                           ]]}.
 
@@ -71,17 +72,40 @@ teardown(Node) ->
     meck:unload(),
     ok.
 
-suite_regular_(Node) ->
+suite_regular_1_(Node) ->
+    ok = meck:new(leo_storage_handler_object),
+    ok = meck:expect(leo_storage_handler_object, head, 2, {ok, #metadata{clock = -1}}),
+
     ok = meck:new(leo_object_storage_api),
     ok = meck:expect(leo_object_storage_api, store,
                      fun(_Metadata, _Object) ->
-                             %% ?debugVal({_Metadata, byte_size(_Object)}),
                              ok
                      end),
     stack(Node),
+
+    History = meck:history(leo_object_storage_api),
+    ?assertEqual(4, length(History)),
+    ok.
+
+suite_regular_2_(Node) ->
+    ok = meck:new(leo_storage_handler_object),
+    ok = meck:expect(leo_storage_handler_object, head, 2, {ok, #metadata{clock = 5}}),
+
+    ok = meck:new(leo_object_storage_api),
+    ok = meck:expect(leo_object_storage_api, store,
+                     fun(_Metadata, _Object) ->
+                             ok
+                     end),
+    stack(Node),
+
+    History = meck:history(leo_object_storage_api),
+    ?assertEqual([], History),
     ok.
 
 suite_error_(Node) ->
+    ok = meck:new(leo_storage_handler_object),
+    ok = meck:expect(leo_storage_handler_object, head, 2, {ok, #metadata{clock = -1}}),
+
     ok = meck:new(leo_object_storage_api),
     ok = meck:expect(leo_object_storage_api, store,
                      fun(_Metadata, _Object) ->

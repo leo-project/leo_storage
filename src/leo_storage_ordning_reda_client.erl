@@ -143,7 +143,8 @@ stack_fun([Node|Rest] = NodeList, AddrId, Key, Metadata, Object, E) ->
             MetaBin  = term_to_binary(Metadata),
             MetaSize = byte_size(MetaBin),
             ObjSize  = byte_size(Object),
-            Data = <<MetaSize:?BIN_META_SIZE, MetaBin/binary, ObjSize:?BIN_OBJ_SIZE, Object/binary, ?BIN_PADDING/binary>>,
+            Data = << MetaSize:?BIN_META_SIZE, MetaBin/binary,
+                      ObjSize:?BIN_OBJ_SIZE, Object/binary, ?BIN_PADDING/binary >>,
 
             case leo_ordning_reda_api:stack(Node, AddrId, Key, Data) of
                 ok ->
@@ -172,7 +173,7 @@ node_state(Node) ->
     end.
 
 
-%% @doc Slicing objects.
+%% @doc Slicing objects and Store objects
 %%
 -spec(slice_and_store(binary()) ->
              ok | {error, any()}).
@@ -200,11 +201,19 @@ slice_and_store(Objects, Errors) ->
     %% footer
     <<_Fotter:64, Rest4/binary>> = Rest3,
 
-    case leo_object_storage_api:store(Metadata, Object) of
-        ok ->
+    %% store an object to object-storage
+    case leo_storage_handler_object:head(Metadata#metadata.addr_id,
+                                         Metadata#metadata.key) of
+        {ok, #metadata{clock = Clock}} when Clock >= Metadata#metadata.clock ->
             slice_and_store(Rest4, Errors);
-        {error, Cause} ->
-            ?warn("slice_and_store/2","key:~s, cause:~p",[binary_to_list(Metadata#metadata.key), Cause]),
-            slice_and_store(Rest4, [Metadata|Errors])
+        _ ->
+            case leo_object_storage_api:store(Metadata, Object) of
+                ok ->
+                    slice_and_store(Rest4, Errors);
+                {error, Cause} ->
+                    ?warn("slice_and_store/2","key:~s, cause:~p",
+                          [binary_to_list(Metadata#metadata.key), Cause]),
+                    slice_and_store(Rest4, [Metadata|Errors])
+            end
     end.
 
