@@ -184,11 +184,7 @@ compact(MaxProc) ->
 %%
 -spec(get_node_status() -> {ok, #cluster_node_status{}}).
 get_node_status() ->
-    Version = case application:get_key(leo_storage, vsn) of
-                  {ok, Vsn} -> Vsn;
-                  undefined -> []
-              end,
-
+    {ok, Version} = application:get_env(leo_storage, system_version),
     {RingHashCur, RingHashPrev} =
         case leo_redundant_manager_api:checksum(ring) of
             {ok, {Chksum0, Chksum1}} -> {Chksum0, Chksum1};
