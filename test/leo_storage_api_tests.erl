@@ -221,11 +221,9 @@ synchronize_([Node0, _]) ->
 
 compact_(_) ->
     meck:new(leo_object_storage_api),
-    meck:expect(leo_object_storage_api, compact,
-                fun(_) ->
-                        ok
-                end),
-    ok = leo_storage_api:compact(),
+    meck:expect(leo_object_storage_api, compact, 2, ok),
+
+    ok = leo_storage_api:compact(3),
     Res = meck:history(leo_object_storage_api),
     ?assertEqual(1, length(Res)),
 
