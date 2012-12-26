@@ -155,9 +155,9 @@ gen_mock_2(object, {_Test0Node, _Test1Node}, Case) ->
     meck:new(leo_storage_mq_client),
     meck:expect(leo_storage_mq_client, publish,
                 fun(Type, VNodeId, Key, _ErrorType) ->
-                        ?assertEqual(?QUEUE_TYPE_REPLICATION_MISS, Type),
-                        ?assertEqual(?TEST_RING_ID_1,              VNodeId),
-                        ?assertEqual(?TEST_KEY_1,                  Key),
+                        ?assertEqual(?QUEUE_TYPE_PER_OBJECT, Type),
+                        ?assertEqual(?TEST_RING_ID_1,        VNodeId),
+                        ?assertEqual(?TEST_KEY_1,            Key),
                         ok
                 end),
 

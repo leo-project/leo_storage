@@ -142,7 +142,7 @@ teardown({_Test0Node, Test1Node}) ->
 start_(_) ->
     ok = leo_storage_mq_client:start("queue"),
     Res = meck:history(leo_mq_api),
-    ?assertEqual(5, length(Res)),
+    ?assertEqual(4, length(Res)),
     ok.
 
 %% sync vnode-id queue.
@@ -155,15 +155,15 @@ publish_({_, Test1Node}) ->
            ?QUEUE_TYPE_REBALANCE, Test1Node, ?TEST_VNODE_ID, ?TEST_VNODE_ID, ?TEST_KEY_1),
 
     ok = leo_storage_mq_client:publish(
-           ?QUEUE_TYPE_REPLICATION_MISS, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_REPLICATE_DATA),
+           ?QUEUE_TYPE_PER_OBJECT, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_REPLICATE_DATA),
     ok = leo_storage_mq_client:publish(
-           ?QUEUE_TYPE_REPLICATION_MISS, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_DELETE_DATA),
+           ?QUEUE_TYPE_PER_OBJECT, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_DELETE_DATA),
     ok = leo_storage_mq_client:publish(
-           ?QUEUE_TYPE_REPLICATION_MISS, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_REPLICATE_INDEX),
+           ?QUEUE_TYPE_PER_OBJECT, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_REPLICATE_INDEX),
     ok = leo_storage_mq_client:publish(
-           ?QUEUE_TYPE_REPLICATION_MISS, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_DELETE_INDEX),
+           ?QUEUE_TYPE_PER_OBJECT, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_DELETE_INDEX),
     ok = leo_storage_mq_client:publish(
-           ?QUEUE_TYPE_INCONSISTENT_DATA, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_RECOVER_DATA),
+           ?QUEUE_TYPE_PER_OBJECT, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_RECOVER_DATA),
 
     History0 = meck:history(leo_mq_api),
     ?assertEqual(true, length(History0) > 0),
@@ -193,7 +193,7 @@ subscribe_0_({Test0Node, Test1Node}) ->
                 end),
 
     timer:sleep(100),
-    leo_storage_mq_client:handle_call({consume, ?QUEUE_ID_REPLICATE_MISS, ?TEST_MSG_1}),
+    leo_storage_mq_client:handle_call({consume, ?QUEUE_ID_PER_OBJECT, ?TEST_MSG_1}),
 
     true = ets:delete(?TBL_REBALANCE_COUNTER),
     ok.
@@ -224,7 +224,7 @@ subscribe_1_({Test0Node, Test1Node}) ->
                         {ok, #member{state = ?STATE_RUNNING}}
                 end),
     timer:sleep(100),
-    leo_storage_mq_client:handle_call({consume, ?QUEUE_ID_REPLICATE_MISS, ?TEST_MSG_1}),
+    leo_storage_mq_client:handle_call({consume, ?QUEUE_ID_PER_OBJECT, ?TEST_MSG_1}),
 
     History1 = rpc:call(Test0Node, meck, history, [leo_storage_api]),
     ?assertEqual(1, length(History1)),

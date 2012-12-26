@@ -37,7 +37,7 @@
 %% API
 -export([register_in_monitor/1, get_routing_table_chksum/0,
          start/1, start/2, stop/0, attach/1, synchronize/3,
-         compact/0, get_node_status/0, rebalance/1]).
+         compact/1, get_node_status/0, rebalance/1]).
 
 %%--------------------------------------------------------------------
 %% API for Admin and System#1
@@ -160,7 +160,7 @@ synchronize(?TYPE_OBJ, InconsistentNodes, #metadata{addr_id = AddrId,
 
 synchronize(?TYPE_OBJ, Key, ErrorType) ->
     {ok, #redundancies{vnode_id = VNodeId}} = leo_redundant_manager_api:get_redundancies_by_key(Key),
-    leo_storage_mq_client:publish(?QUEUE_TYPE_REPLICATION_MISS, VNodeId, Key, ErrorType);
+    leo_storage_mq_client:publish(?QUEUE_TYPE_PER_OBJECT, VNodeId, Key, ErrorType);
 
 synchronize(sync_by_vnode_id, VNodeId, Node) ->
     leo_storage_mq_client:publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, VNodeId, Node).
@@ -171,10 +171,10 @@ synchronize(sync_by_vnode_id, VNodeId, Node) ->
 %%--------------------------------------------------------------------
 %% @doc
 %%
--spec(compact() -> ok | {error, any()}).
-compact() ->
+-spec(compact(integer()) -> ok | {error, any()}).
+compact(MaxProc) ->
     leo_object_storage_api:compact(
-      fun leo_redundant_manager_api:has_charge_of_node/1).
+      fun leo_redundant_manager_api:has_charge_of_node/1, MaxProc).
 
 
 %%--------------------------------------------------------------------
@@ -184,9 +184,11 @@ compact() ->
 %%
 -spec(get_node_status() -> {ok, #cluster_node_status{}}).
 get_node_status() ->
-    Version = case application:get_key(leo_storage, vsn) of
-                  {ok, Vsn} -> Vsn;
-                  undefined -> []
+    Version = case application:get_env(leo_storage, system_version) of
+                  {ok, EnvVersion} ->
+                      EnvVersion;
+                  _ ->
+                      []
               end,
 
     {RingHashCur, RingHashPrev} =

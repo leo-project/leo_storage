@@ -65,12 +65,11 @@ init() ->
 -spec(handle_call({sync, ?STAT_INTERVAL_1M | ?STAT_INTERVAL_5M}) ->
              ok).
 handle_call({sync, ?STAT_INTERVAL_1M}) ->
-    {ok, {Res0, _}} = leo_mq_api:status(?QUEUE_ID_REPLICATE_MISS),
-    {ok, {Res1, _}} = leo_mq_api:status(?QUEUE_ID_INCONSISTENT_DATA),
+    {ok, {Res1, _}} = leo_mq_api:status(?QUEUE_ID_PER_OBJECT),
     {ok, {Res2, _}} = leo_mq_api:status(?QUEUE_ID_SYNC_BY_VNODE_ID),
     {ok, {Res3, _}} = leo_mq_api:status(?QUEUE_ID_REBALANCE),
 
-    catch snmp_generic:variable_set(?SNMP_MSG_REPLICATE,  Res0 + Res1),
+    catch snmp_generic:variable_set(?SNMP_MSG_REPLICATE,  Res1),
     catch snmp_generic:variable_set(?SNMP_MSG_SYNC_VNODE, Res2),
     catch snmp_generic:variable_set(?SNMP_MSG_REBALANCE,  Res3),
 

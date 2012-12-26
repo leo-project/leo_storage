@@ -76,7 +76,7 @@ sync_(_) ->
     ok = leo_storage_statistics:handle_call({sync, ?STAT_INTERVAL_5M}),
 
     Res = meck:history(leo_mq_api),
-    ?assertEqual(4, length(Res)),
+    ?assertEqual(3, length(Res)),
     ok.
 
 -endif.

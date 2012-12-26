@@ -41,19 +41,16 @@
 -export([init/0, handle_call/1]).
 
 -define(SLASH, "/").
--define(MSG_PATH_REPLICATION_MISS,  "0").
--define(MSG_PATH_INCONSISTENT_DATA, "1").
--define(MSG_PATH_SYNC_VNODE_ID,     "2").
--define(MSG_PATH_REBALANCE,         "3").
--define(MSG_PATH_ASYNC_DELETION,    "4").
+-define(MSG_PATH_PER_OBJECT,     "1").
+-define(MSG_PATH_SYNC_VNODE_ID,  "2").
+-define(MSG_PATH_REBALANCE,      "3").
+-define(MSG_PATH_ASYNC_DELETION, "4").
 
--type(queue_type() :: ?QUEUE_TYPE_REPLICATION_MISS  |
-                      ?QUEUE_TYPE_INCONSISTENT_DATA |
+-type(queue_type() :: ?QUEUE_TYPE_PER_OBJECT  |
                       ?QUEUE_TYPE_SYNC_BY_VNODE_ID  |
                       ?QUEUE_TYPE_ASYNC_DELETION).
 
--type(queue_id()   :: ?QUEUE_ID_REPLICATE_MISS |
-                      ?QUEUE_ID_INCONSISTENT_DATA |
+-type(queue_id()   :: ?QUEUE_ID_PER_OBJECT |
                       ?QUEUE_ID_SYNC_BY_VNODE_ID |
                       ?QUEUE_ID_REBALANCE |
                       ?QUEUE_ID_ASYNC_DELETION).
@@ -84,11 +81,10 @@ start(RootPath0) ->
                                   {?MQ_PROP_MIN_INTERVAL, MinInterval}
                                  ])
 
-      end, [{?QUEUE_ID_REPLICATE_MISS,    ?MSG_PATH_REPLICATION_MISS,  64, 16},
-            {?QUEUE_ID_INCONSISTENT_DATA, ?MSG_PATH_INCONSISTENT_DATA, 64, 16},
-            {?QUEUE_ID_SYNC_BY_VNODE_ID,  ?MSG_PATH_SYNC_VNODE_ID,     32,  8},
-            {?QUEUE_ID_REBALANCE,         ?MSG_PATH_REBALANCE,         32,  8},
-            {?QUEUE_ID_ASYNC_DELETION,    ?MSG_PATH_ASYNC_DELETION,   128, 64}
+      end, [{?QUEUE_ID_PER_OBJECT,        ?MSG_PATH_PER_OBJECT,      64, 16},
+            {?QUEUE_ID_SYNC_BY_VNODE_ID,  ?MSG_PATH_SYNC_VNODE_ID,   32,  8},
+            {?QUEUE_ID_REBALANCE,         ?MSG_PATH_REBALANCE,       32,  8},
+            {?QUEUE_ID_ASYNC_DELETION,    ?MSG_PATH_ASYNC_DELETION, 128, 64}
            ]),
     ok.
 
@@ -117,17 +113,7 @@ publish(_,_,_) ->
 
 -spec(publish(queue_type(), integer(), any(), any()) ->
              ok).
-publish(?QUEUE_TYPE_REPLICATION_MISS = Id, AddrId, Key, ErrorType) ->
-    KeyBin = term_to_binary({ErrorType, Key}),
-    PublishedAt = leo_date:now(),
-    MessageBin  = term_to_binary(#inconsistent_data_message{id        = leo_date:clock(),
-                                                            type      = ErrorType,
-                                                            addr_id   = AddrId,
-                                                            key       = Key,
-                                                            timestamp = PublishedAt}),
-    leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
-
-publish(?QUEUE_TYPE_INCONSISTENT_DATA = Id, AddrId, Key, ErrorType) ->
+publish(?QUEUE_TYPE_PER_OBJECT = Id, AddrId, Key, ErrorType) ->
     KeyBin = term_to_binary({ErrorType, Key}),
     PublishedAt = leo_date:now(),
     MessageBin  = term_to_binary(#inconsistent_data_message{id        = leo_date:clock(),
@@ -178,8 +164,7 @@ init() ->
 handle_call({publish, _Id, _Reply}) ->
     ok;
 
-handle_call({consume, Id, MessageBin}) when Id == ?QUEUE_ID_REPLICATE_MISS;
-                                            Id == ?QUEUE_ID_INCONSISTENT_DATA ->
+handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
             {error, Cause};
@@ -190,11 +175,7 @@ handle_call({consume, Id, MessageBin}) when Id == ?QUEUE_ID_REPLICATE_MISS;
                 ok ->
                     ok;
                 Error ->
-                    Type = case Id of
-                               ?QUEUE_ID_REPLICATE_MISS    -> ?QUEUE_TYPE_REPLICATION_MISS;
-                               ?QUEUE_ID_INCONSISTENT_DATA -> ?QUEUE_TYPE_INCONSISTENT_DATA
-                           end,
-                    publish(Type, AddrId, Key, ErrorType),
+                    publish(?QUEUE_TYPE_PER_OBJECT, AddrId, Key, ErrorType),
                     Error
             end
     end;
@@ -241,7 +222,7 @@ handle_call({consume, ?QUEUE_ID_REBALANCE, MessageBin}) ->
                                             ok;
                                         Error ->
                                             ok = leo_storage_mq_client:publish(
-                                                   ?QUEUE_TYPE_REPLICATION_MISS, AddrId, Key,
+                                                   ?QUEUE_TYPE_PER_OBJECT, AddrId, Key,
                                                    ?ERR_TYPE_REPLICATE_DATA),
                                             Error
                                     end;
@@ -521,10 +502,8 @@ queue_id(?QUEUE_TYPE_SYNC_BY_VNODE_ID) ->
     ?QUEUE_ID_SYNC_BY_VNODE_ID;
 queue_id(?QUEUE_TYPE_ASYNC_DELETION) ->
     ?QUEUE_ID_ASYNC_DELETION;
-queue_id(?QUEUE_TYPE_REPLICATION_MISS) ->
-    ?QUEUE_ID_REPLICATE_MISS;
-queue_id(?QUEUE_TYPE_INCONSISTENT_DATA) ->
-    ?QUEUE_ID_INCONSISTENT_DATA;
+queue_id(?QUEUE_TYPE_PER_OBJECT) ->
+    ?QUEUE_ID_PER_OBJECT;
 queue_id(?QUEUE_TYPE_REBALANCE) ->
     ?QUEUE_ID_REBALANCE.
 

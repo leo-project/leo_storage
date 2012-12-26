@@ -59,25 +59,23 @@
 
 %% @doc queue-related.
 %%
--define(QUEUE_ID_REPLICATE_MISS,      'leo_replicate_miss_queue').
--define(QUEUE_ID_INCONSISTENT_DATA,   'leo_inconsistent_data_queue').
+-define(QUEUE_ID_PER_OBJECT,          'leo_per_object_queue').
 -define(QUEUE_ID_SYNC_BY_VNODE_ID,    'leo_sync_by_vnode_id_queue').
 -define(QUEUE_ID_DIRECTORY,           'leo_directory_queue').
 -define(QUEUE_ID_REBALANCE,           'leo_rebalance_queue').
 -define(QUEUE_ID_ASYNC_DELETION,      'leo_async_deletion_queue').
 
--define(QUEUE_TYPE_REPLICATION_MISS,  'replication_miss').
--define(QUEUE_TYPE_INCONSISTENT_DATA, 'inconsistent_data').
--define(QUEUE_TYPE_SYNC_BY_VNODE_ID,  'sync_by_vnode_id').
--define(QUEUE_TYPE_REBALANCE,         'rebalance').
--define(QUEUE_TYPE_ASYNC_DELETION,    'async_deletion').
+-define(QUEUE_TYPE_PER_OBJECT,        'queue_type_per_object').
+-define(QUEUE_TYPE_SYNC_BY_VNODE_ID,  'queue_type_sync_by_vnode_id').
+-define(QUEUE_TYPE_REBALANCE,         'queue_type_rebalance').
+-define(QUEUE_TYPE_ASYNC_DELETION,    'queue_type_async_deletion').
 
--define(ERR_TYPE_REPLICATE_DATA,      'replicate_data').
--define(ERR_TYPE_RECOVER_DATA,        'recover_data').
--define(ERR_TYPE_DELETE_DATA,         'delete_data').
--define(ERR_TYPE_REPLICATE_INDEX,     'replicate_index').
--define(ERR_TYPE_RECOVER_INDEX,       'recover_index').
--define(ERR_TYPE_DELETE_INDEX,        'delete_index').
+-define(ERR_TYPE_REPLICATE_DATA,      'error_msg_replicate_data').
+-define(ERR_TYPE_RECOVER_DATA,        'error_msg_recover_data').
+-define(ERR_TYPE_DELETE_DATA,         'error_msg_delete_data').
+-define(ERR_TYPE_REPLICATE_INDEX,     'error_msg_replicate_index').
+-define(ERR_TYPE_RECOVER_INDEX,       'error_msg_recover_index').
+-define(ERR_TYPE_DELETE_INDEX,        'error_msg_delete_index').
 
 -define(TBL_REBALANCE_COUNTER,        'leo_rebalance_counter').
 

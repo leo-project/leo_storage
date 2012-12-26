@@ -132,9 +132,9 @@ replicate_fun(local, #req_params{pid     = Pid,
 -spec(enqueue(error_msg_type(), integer(), string()) ->
              ok | void).
 enqueue(?ERR_TYPE_REPLICATE_DATA = Type,  AddrId, Key) ->
-    leo_storage_mq_client:publish(?QUEUE_TYPE_REPLICATION_MISS, AddrId, Key, Type);
+    leo_storage_mq_client:publish(?QUEUE_TYPE_PER_OBJECT, AddrId, Key, Type);
 enqueue(?ERR_TYPE_DELETE_DATA = Type,     AddrId, Key) ->
-    leo_storage_mq_client:publish(?QUEUE_TYPE_REPLICATION_MISS, AddrId, Key, Type);
+    leo_storage_mq_client:publish(?QUEUE_TYPE_PER_OBJECT, AddrId, Key, Type);
 enqueue(_,_,_) ->
     void.
 
