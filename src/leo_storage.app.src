@@ -25,7 +25,7 @@
     {vsn, "0.12.9"},
     {id, "leo_storage"},
     {registered,   []},
-    {applications, [kernel, stdlib, os_mon]},
+    {applications, [kernel, stdlib, crypto, os_mon]},
     {mod, {leo_storage_app, []}},
     {env, [
            {num_of_replicators,  32},
