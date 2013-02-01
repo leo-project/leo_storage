@@ -37,7 +37,7 @@
 %% API
 -export([register_in_monitor/1, get_routing_table_chksum/0,
          start/1, start/2, stop/0, attach/1, synchronize/3,
-         compact/1, get_node_status/0, rebalance/1]).
+         compact/1, compact/3, get_node_status/0, rebalance/1]).
 
 %%--------------------------------------------------------------------
 %% API for Admin and System#1
@@ -171,10 +171,17 @@ synchronize(sync_by_vnode_id, VNodeId, Node) ->
 %%--------------------------------------------------------------------
 %% @doc
 %%
--spec(compact(integer()) -> ok | {error, any()}).
-compact(MaxProc) ->
-    leo_object_storage_api:compact(
-      fun leo_redundant_manager_api:has_charge_of_node/1, MaxProc).
+-spec(compact(atom(), list(), integer()) -> ok | {error, any()}).
+compact(start, TargetPids, MaxProc) ->
+    leo_compaction_manager_fsm:start(
+      TargetPids, MaxProc, fun leo_redundant_manager_api:has_charge_of_node/1).
+
+compact(suspend) ->
+    leo_compaction_manager_fsm:suspend();
+compact(resume) ->
+    leo_compaction_manager_fsm:resume();
+compact(status) ->
+    leo_compaction_manager_fsm:status().
 
 
 %%--------------------------------------------------------------------
