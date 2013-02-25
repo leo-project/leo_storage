@@ -171,7 +171,7 @@ synchronize(sync_by_vnode_id, VNodeId, Node) ->
 %%--------------------------------------------------------------------
 %% @doc
 %%
--spec(compact(atom(), list(), integer()) -> ok | {error, any()}).
+-spec(compact(atom(), list(string()), integer()) -> ok | {error, any()}).
 compact(start, TargetPids, MaxProc) ->
     leo_compaction_manager_fsm:start(
       TargetPids, MaxProc, fun leo_redundant_manager_api:has_charge_of_node/1).
