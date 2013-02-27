@@ -68,11 +68,11 @@ after_proc({ok, Pid}) ->
     ensure_started(net_sup, erl_distribution, start_link, supervisor, infinity),
 
     QueueDir = ?env_queue_dir(leo_storage),
-    Managers  = ?env_manager_nodes(leo_storage),
+    Managers = ?env_manager_nodes(leo_storage),
 
     ok = launch_logger(),
-    ok = launch_object_storage(),
-    ok = leo_storage_mq_client:start(QueueDir),
+    ok = launch_object_storage(Pid),
+    ok = leo_storage_mq_client:start(Pid, QueueDir),
     ok = leo_redundant_manager_api:start(storage, Managers, QueueDir),
     ok = leo_ordning_reda_api:start(),
 
@@ -110,7 +110,7 @@ launch_logger() ->
 
 %% @doc Launch Object-Storage
 %%
-launch_object_storage() ->
+launch_object_storage(RefSup) ->
     ObjStoageInfo = case ?env_storage_device() of
                         [] -> [];
                         Devices ->
@@ -120,7 +120,12 @@ launch_object_storage() ->
                                               {Containers, Path}
                                       end, Devices)
                     end,
-    leo_object_storage_api:start(ObjStoageInfo).
+
+    ChildSpec = {leo_object_storage_sup,
+                 {leo_object_storage_sup, start_link, [ObjStoageInfo]},
+                 permanent, 2000, supervisor, [leo_object_storage]},
+    {ok, _} = supervisor:start_child(RefSup, ChildSpec),
+    ok.
 
 
 %% @doc Retrieve log-appneder(s)

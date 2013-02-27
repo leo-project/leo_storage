@@ -37,7 +37,7 @@
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
--export([start/1, publish/3, publish/4, publish/5]).
+-export([start/1, start/2, publish/3, publish/4, publish/5]).
 -export([init/0, handle_call/1]).
 
 -define(SLASH, "/").
@@ -60,9 +60,26 @@
 %%--------------------------------------------------------------------
 %% @doc create queues and launch mq-servers.
 %%
--spec(start(string()) ->
-             ok | {error, any()}).
 start(RootPath0) ->
+    start(leo_storage_sup, RootPath0).
+
+-spec(start(pid(), string()) ->
+             ok | {error, any()}).
+start(RefSup, RootPath0) ->
+    %% launch mq-sup under storage-sup
+    RefMqSup =
+        case whereis(leo_mq_sup) of
+            undefined ->
+                ChildSpec = {leo_mq_sup,
+                             {leo_mq_sup, start_link, []},
+                             permanent, 2000, supervisor, [leo_mq_sup]},
+                {ok, Pid} = supervisor:start_child(RefSup, ChildSpec),
+                Pid;
+            Pid ->
+                Pid
+        end,
+
+    %% launch queue-processes
     RootPath1 =
         case (string:len(RootPath0) == string:rstr(RootPath0, ?SLASH)) of
             true  -> RootPath0;
@@ -73,14 +90,13 @@ start(RootPath0) ->
                                      [named_table, public, {read_concurrency, true}]),
     lists:foreach(
       fun({Id, Path, MaxInterval, MinInterval}) ->
-              leo_mq_api:new(Id, [{?MQ_PROP_MOD,          ?MODULE},
-                                  {?MQ_PROP_FUN,          ?MQ_SUBSCRIBE_FUN},
-                                  {?MQ_PROP_ROOT_PATH,    RootPath1 ++ Path},
-                                  {?MQ_PROP_DB_PROCS,     ?env_num_of_mq_procs()},
-                                  {?MQ_PROP_MAX_INTERVAL, MaxInterval},
-                                  {?MQ_PROP_MIN_INTERVAL, MinInterval}
-                                 ])
-
+              leo_mq_api:new(RefMqSup, Id, [{?MQ_PROP_MOD,          ?MODULE},
+                                            {?MQ_PROP_FUN,          ?MQ_SUBSCRIBE_FUN},
+                                            {?MQ_PROP_ROOT_PATH,    RootPath1 ++ Path},
+                                            {?MQ_PROP_DB_PROCS,     ?env_num_of_mq_procs()},
+                                            {?MQ_PROP_MAX_INTERVAL, MaxInterval},
+                                            {?MQ_PROP_MIN_INTERVAL, MinInterval}
+                                           ])
       end, [{?QUEUE_ID_PER_OBJECT,        ?MSG_PATH_PER_OBJECT,      64, 16},
             {?QUEUE_ID_SYNC_BY_VNODE_ID,  ?MSG_PATH_SYNC_VNODE_ID,   32,  8},
             {?QUEUE_ID_REBALANCE,         ?MSG_PATH_REBALANCE,       32,  8},
