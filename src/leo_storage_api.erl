@@ -210,6 +210,20 @@ get_node_status() ->
     RingHashes  = [{ring_cur,  RingHashCur},
                    {ring_prev, RingHashPrev }
                   ],
+
+    NumOfQueue1 = case leo_mq_api:status(?QUEUE_ID_PER_OBJECT) of
+                      {ok, {Res1, _}} -> Res1;
+                      _ -> 0
+                  end,
+    NumOfQueue2 = case leo_mq_api:status(?QUEUE_ID_SYNC_BY_VNODE_ID) of
+                      {ok, {Res2, _}} -> Res2;
+                      _ -> 0
+                  end,
+    NumOfQueue3 = case leo_mq_api:status(?QUEUE_ID_REBALANCE) of
+                      {ok, {Res3, _}} -> Res3;
+                      _ -> 0
+                  end,
+
     Statistics  = [{vm_version,       erlang:system_info(version)},
                    {total_mem_usage,  erlang:memory(total)},
                    {system_mem_usage, erlang:memory(system)},
@@ -218,9 +232,13 @@ get_node_status() ->
                    {num_of_procs,     erlang:system_info(process_count)},
                    {process_limit,    erlang:system_info(process_limit)},
                    {kernel_poll,      erlang:system_info(kernel_poll)},
-                   {thread_pool_size, erlang:system_info(thread_pool_size)}
+                   {thread_pool_size, erlang:system_info(thread_pool_size)},
+                   {storage,
+                    [{num_of_replication_msg, NumOfQueue1},
+                     {num_of_sync_vnode_msg,  NumOfQueue2},
+                     {num_of_rebalance_msg,   NumOfQueue3}
+                    ]}
                   ],
-
     {ok, #cluster_node_status{type    = server,
                               version = Version,
                               dirs    = Directories,
