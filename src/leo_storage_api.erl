@@ -211,15 +211,15 @@ get_node_status() ->
                    {ring_prev, RingHashPrev }
                   ],
 
-    NumOfQueue1 = case leo_mq_api:status(?QUEUE_ID_PER_OBJECT) of
+    NumOfQueue1 = case catch leo_mq_api:status(?QUEUE_ID_PER_OBJECT) of
                       {ok, {Res1, _}} -> Res1;
                       _ -> 0
                   end,
-    NumOfQueue2 = case leo_mq_api:status(?QUEUE_ID_SYNC_BY_VNODE_ID) of
+    NumOfQueue2 = case catch leo_mq_api:status(?QUEUE_ID_SYNC_BY_VNODE_ID) of
                       {ok, {Res2, _}} -> Res2;
                       _ -> 0
                   end,
-    NumOfQueue3 = case leo_mq_api:status(?QUEUE_ID_REBALANCE) of
+    NumOfQueue3 = case catch leo_mq_api:status(?QUEUE_ID_REBALANCE) of
                       {ok, {Res3, _}} -> Res3;
                       _ -> 0
                   end,
