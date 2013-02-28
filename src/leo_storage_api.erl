@@ -213,7 +213,7 @@ get_node_status() ->
     Statistics  = [{vm_version,       erlang:system_info(version)},
                    {total_mem_usage,  erlang:memory(total)},
                    {system_mem_usage, erlang:memory(system)},
-                   {proc_mem_usage,   erlang:memory(system)},
+                   {proc_mem_usage,   erlang:memory(processes)},
                    {ets_mem_usage,    erlang:memory(ets)},
                    {num_of_procs,     erlang:system_info(process_count)},
                    {process_limit,    erlang:system_info(process_limit)},
