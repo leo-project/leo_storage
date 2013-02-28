@@ -73,7 +73,7 @@ after_proc({ok, Pid}) ->
     ok = launch_logger(),
     ok = launch_object_storage(Pid),
     ok = leo_storage_mq_client:start(Pid, QueueDir),
-    ok = leo_redundant_manager_api:start(storage, Managers, QueueDir),
+    ok = launch_redundant_manager(Pid, Managers, QueueDir),
     ok = leo_ordning_reda_api:start(),
 
     ok = leo_statistics_api:start_link(leo_storage),
@@ -124,6 +124,16 @@ launch_object_storage(RefSup) ->
     ChildSpec = {leo_object_storage_sup,
                  {leo_object_storage_sup, start_link, [ObjStoageInfo]},
                  permanent, 2000, supervisor, [leo_object_storage]},
+    {ok, _} = supervisor:start_child(RefSup, ChildSpec),
+    ok.
+
+
+%% @doc Launch redundnat-manager
+%% @private
+launch_redundant_manager(RefSup, Managers, QueueDir) ->
+    ChildSpec = {leo_redundant_manager_sup,
+                 {leo_redundant_manager_sup, start_link, [storage, Managers, QueueDir]},
+                 permanent, 2000, supervisor, [leo_redundant_manager_sup]},
     {ok, _} = supervisor:start_child(RefSup, ChildSpec),
     ok.
 
