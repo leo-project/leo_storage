@@ -40,8 +40,11 @@
 -define(SNMP_MSG_REPLICATE,  'num-of-msg-replicate').
 -define(SNMP_MSG_SYNC_VNODE, 'num-of-msg-sync-vnode').
 -define(SNMP_MSG_REBALANCE,  'num-of-msg-rebalance').
--define(SNMP_MSG_TOTAL_SIZE, 'storage-total-objects-sizes').
--define(SNMP_MSG_TOTAL_OBJS, 'storage-total-objects').
+
+-define(SNMP_MSG_ACTIVE_SIZE, 'storage-active-objects-sizes').
+-define(SNMP_MSG_ACTIVE_OBJS, 'storage-active-objects').
+-define(SNMP_MSG_TOTAL_SIZE,  'storage-total-objects-sizes').
+-define(SNMP_MSG_TOTAL_OBJS,  'storage-total-objects').
 
 %%--------------------------------------------------------------------
 %% API
@@ -74,13 +77,23 @@ handle_call({sync, ?STAT_INTERVAL_1M}) ->
     catch snmp_generic:variable_set(?SNMP_MSG_REBALANCE,  Res3),
 
     {ok, Ret4} = leo_object_storage_api:stats(),
-    {Size2, TotalObjs2} =
-        lists:foldl(fun({ok, #storage_stats{total_sizes = Size0,
-                                            total_num   = TotalObjs0}}, {Size1, TotalObjs1}) ->
-                            {Size0 + Size1, TotalObjs0 + TotalObjs1}
-                    end, {0,0}, Ret4),
-    catch snmp_generic:variable_set(?SNMP_MSG_TOTAL_SIZE, Size2),
-    catch snmp_generic:variable_set(?SNMP_MSG_TOTAL_OBJS, TotalObjs2),
+    {TSize2, ASize2, TObjs2, AObjs2} =
+        lists:foldl(fun({ok, #storage_stats{total_sizes  = TSize0,
+                                            active_sizes = ASize0,
+                                            total_num    = TObjs0,
+                                            active_num   = AObjs0}}, {TSize1, ASize1, TObjs1, AObjs1}) ->
+                            {TSize0 + TSize1,
+                             ASize0 + ASize1,
+                             TObjs0 + TObjs1,
+                             AObjs0 + AObjs1};
+                       (_, Acc) ->
+                            Acc
+                    end, {0,0,0,0}, Ret4),
+
+    catch snmp_generic:variable_set(?SNMP_MSG_TOTAL_SIZE,  erlang:round(TSize2)),
+    catch snmp_generic:variable_set(?SNMP_MSG_ACTIVE_SIZE, erlang:round(ASize2)),
+    catch snmp_generic:variable_set(?SNMP_MSG_TOTAL_OBJS,  TObjs2),
+    catch snmp_generic:variable_set(?SNMP_MSG_ACTIVE_OBJS, AObjs2),
     ok;
 
 handle_call({sync, ?STAT_INTERVAL_5M}) ->
