@@ -171,10 +171,36 @@ synchronize(sync_by_vnode_id, VNodeId, Node) ->
 %%--------------------------------------------------------------------
 %% @doc
 %%
--spec(compact(atom(), list(string()), integer()) -> ok | {error, any()}).
-compact(start, TargetPids, MaxProc) ->
-    leo_compaction_manager_fsm:start(
-      TargetPids, MaxProc, fun leo_redundant_manager_api:has_charge_of_node/1).
+-spec(compact(atom(), 'all' | integer(), integer()) -> ok | {error, any()}).
+compact(start, NumOfTargets, MaxProc) ->
+    TargetPids1 =
+        case leo_compaction_manager_fsm:status() of
+            {ok, {[], _, _}} ->
+                case leo_object_storage_api:get_object_storage_pid('all') of
+                    TargetPids0 when is_list(TargetPids0) ->
+                        TargetPids0;
+                    _ ->
+                        []
+                end;
+            {ok, {TargetPids0, _, _}} ->
+                TargetPids0;
+            _ ->
+                []
+        end,
+    ?debugVal(TargetPids1),
+
+    case TargetPids1 of
+        [] ->
+            ok;
+        _ ->
+            TargetPids2 = case NumOfTargets of
+                              'all'  -> TargetPids1;
+                              _Other -> lists:sublist(TargetPids1, NumOfTargets)
+                          end,
+            ?debugVal(TargetPids2),
+            leo_compaction_manager_fsm:start(
+              TargetPids2, MaxProc, fun leo_redundant_manager_api:has_charge_of_node/1)
+    end.
 
 compact(suspend) ->
     leo_compaction_manager_fsm:suspend();
