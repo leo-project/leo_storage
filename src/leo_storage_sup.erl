@@ -51,11 +51,21 @@ start_link() ->
 %% @doc stop process.
 %% @end
 stop() ->
+    ?debugVal({?MODULE, stop}),
+
     case whereis(?MODULE) of
-        Pid when is_pid(Pid) == true ->
+        Pid when is_pid(Pid) ->
+            ?debugVal(Pid),
+            List = supervisor:which_children(Pid),
+            Len  = length(List),
+            ?debugVal({Len, List}),
+
+            ok = terminate_children(List),
+            timer:sleep(Len * 100),
             exit(Pid, shutdown),
             ok;
-        _ -> not_started
+        _ ->
+            not_started
     end.
 
 
@@ -69,3 +79,19 @@ stop() ->
 init([]) ->
     {ok, {_SupFlags = {one_for_one, ?MAX_RESTART, ?MAX_TIME}, []}}.
 
+
+%% ---------------------------------------------------------------------
+%% Internal Functions
+%% ---------------------------------------------------------------------
+%% @doc Terminate children
+%% @private
+-spec(terminate_children(list()) ->
+             ok).
+terminate_children([]) ->
+    ok;
+terminate_children([{_Id,_Pid, supervisor, [Mod|_]}|T]) ->
+    ?debugVal(Mod),
+    Mod:stop(),
+    terminate_children(T);
+terminate_children([_|T]) ->
+    terminate_children(T).
