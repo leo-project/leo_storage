@@ -175,14 +175,14 @@ synchronize(sync_by_vnode_id, VNodeId, Node) ->
 compact(start, NumOfTargets, MaxProc) ->
     TargetPids1 =
         case leo_compaction_manager_fsm:status() of
-            {ok, {[], _, _}} ->
+            {ok, {_, [], _, _}} ->
                 case leo_object_storage_api:get_object_storage_pid('all') of
                     TargetPids0 when is_list(TargetPids0) ->
                         TargetPids0;
                     _ ->
                         []
                 end;
-            {ok, {TargetPids0, _, _}} ->
+            {ok, {_, TargetPids0, _, _}} ->
                 TargetPids0;
             _ ->
                 []
