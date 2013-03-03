@@ -187,7 +187,6 @@ compact(start, NumOfTargets, MaxProc) ->
             _ ->
                 []
         end,
-    ?debugVal(TargetPids1),
 
     case TargetPids1 of
         [] ->
@@ -197,7 +196,6 @@ compact(start, NumOfTargets, MaxProc) ->
                               'all'  -> TargetPids1;
                               _Other -> lists:sublist(TargetPids1, NumOfTargets)
                           end,
-            ?debugVal(TargetPids2),
             leo_compaction_manager_fsm:start(
               TargetPids2, MaxProc, fun leo_redundant_manager_api:has_charge_of_node/1)
     end.

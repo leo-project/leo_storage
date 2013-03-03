@@ -51,14 +51,10 @@ start_link() ->
 %% @doc stop process.
 %% @end
 stop() ->
-    ?debugVal({?MODULE, stop}),
-
     case whereis(?MODULE) of
         Pid when is_pid(Pid) ->
-            ?debugVal(Pid),
             List = supervisor:which_children(Pid),
             Len  = length(List),
-            ?debugVal({Len, List}),
 
             ok = terminate_children(List),
             timer:sleep(Len * 100),
@@ -90,7 +86,6 @@ init([]) ->
 terminate_children([]) ->
     ok;
 terminate_children([{_Id,_Pid, supervisor, [Mod|_]}|T]) ->
-    ?debugVal(Mod),
     Mod:stop(),
     terminate_children(T);
 terminate_children([_|T]) ->
