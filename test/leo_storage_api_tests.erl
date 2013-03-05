@@ -47,7 +47,6 @@ api_test_() ->
                            fun start_/1,
                            fun stop_/1,
                            fun attach_/1,
-                           fun compact_/1,
                            fun get_node_status_/1,
                            fun rebalance_/1
                           ]]}.
@@ -214,18 +213,6 @@ synchronize_([Node0, _]) ->
     ok = leo_storage_api:synchronize(sync_by_vnode_id, 0, Node0),
     Res2 = meck:history(leo_storage_mq_client),
     ?assertEqual(2, length(Res2)),
-
-    meck:unload(),
-    ok.
-
-
-compact_(_) ->
-    meck:new(leo_object_storage_api),
-    meck:expect(leo_object_storage_api, compact, 2, ok),
-
-    ok = leo_storage_api:compact(3),
-    Res = meck:history(leo_object_storage_api),
-    ?assertEqual(1, length(Res)),
 
     meck:unload(),
     ok.

@@ -37,7 +37,7 @@
 %% API
 -export([register_in_monitor/1, get_routing_table_chksum/0,
          start/1, start/2, stop/0, attach/1, synchronize/3,
-         compact/1, get_node_status/0, rebalance/1]).
+         compact/1, compact/3, get_node_status/0, rebalance/1]).
 
 %%--------------------------------------------------------------------
 %% API for Admin and System#1
@@ -171,10 +171,36 @@ synchronize(sync_by_vnode_id, VNodeId, Node) ->
 %%--------------------------------------------------------------------
 %% @doc
 %%
--spec(compact(integer()) -> ok | {error, any()}).
-compact(MaxProc) ->
-    leo_object_storage_api:compact(
-      fun leo_redundant_manager_api:has_charge_of_node/1, MaxProc).
+-spec(compact(atom(), 'all' | integer(), integer()) -> ok | {error, any()}).
+compact(start, NumOfTargets, MaxProc) ->
+    TargetPids1 =
+        case leo_compaction_manager_fsm:status() of
+            {ok, #compaction_stats{status = Status,
+                                   pending_targets = PendingTargets}} when Status == ?COMPACTION_STATUS_SUSPEND;
+                                                                           Status == ?COMPACTION_STATUS_IDLE ->
+                PendingTargets;
+            _ ->
+                []
+        end,
+
+    case TargetPids1 of
+        [] ->
+            {error, "Not exists compaction-targets"};
+        _ ->
+            TargetPids2 = case NumOfTargets of
+                              'all'  -> TargetPids1;
+                              _Other -> lists:sublist(TargetPids1, NumOfTargets)
+                          end,
+            leo_compaction_manager_fsm:start(
+              TargetPids2, MaxProc, fun leo_redundant_manager_api:has_charge_of_node/1)
+    end.
+
+compact(suspend) ->
+    leo_compaction_manager_fsm:suspend();
+compact(resume) ->
+    leo_compaction_manager_fsm:resume();
+compact(status) ->
+    leo_compaction_manager_fsm:status().
 
 
 %%--------------------------------------------------------------------
@@ -203,17 +229,35 @@ get_node_status() ->
     RingHashes  = [{ring_cur,  RingHashCur},
                    {ring_prev, RingHashPrev }
                   ],
+
+    NumOfQueue1 = case catch leo_mq_api:status(?QUEUE_ID_PER_OBJECT) of
+                      {ok, {Res1, _}} -> Res1;
+                      _ -> 0
+                  end,
+    NumOfQueue2 = case catch leo_mq_api:status(?QUEUE_ID_SYNC_BY_VNODE_ID) of
+                      {ok, {Res2, _}} -> Res2;
+                      _ -> 0
+                  end,
+    NumOfQueue3 = case catch leo_mq_api:status(?QUEUE_ID_REBALANCE) of
+                      {ok, {Res3, _}} -> Res3;
+                      _ -> 0
+                  end,
+
     Statistics  = [{vm_version,       erlang:system_info(version)},
                    {total_mem_usage,  erlang:memory(total)},
                    {system_mem_usage, erlang:memory(system)},
-                   {proc_mem_usage,   erlang:memory(system)},
+                   {proc_mem_usage,   erlang:memory(processes)},
                    {ets_mem_usage,    erlang:memory(ets)},
                    {num_of_procs,     erlang:system_info(process_count)},
                    {process_limit,    erlang:system_info(process_limit)},
                    {kernel_poll,      erlang:system_info(kernel_poll)},
-                   {thread_pool_size, erlang:system_info(thread_pool_size)}
+                   {thread_pool_size, erlang:system_info(thread_pool_size)},
+                   {storage,
+                    [{num_of_replication_msg, NumOfQueue1},
+                     {num_of_sync_vnode_msg,  NumOfQueue2},
+                     {num_of_rebalance_msg,   NumOfQueue3}
+                    ]}
                   ],
-
     {ok, #cluster_node_status{type    = server,
                               version = Version,
                               dirs    = Directories,
