@@ -175,23 +175,17 @@ synchronize(sync_by_vnode_id, VNodeId, Node) ->
 compact(start, NumOfTargets, MaxProc) ->
     TargetPids1 =
         case leo_compaction_manager_fsm:status() of
-            {ok, #compaction_stats{num_of_reserved_targets = N}} when N == 0 ->
-                case leo_object_storage_api:get_object_storage_pid('all') of
-                    TargetPids0 when is_list(TargetPids0) ->
-                        TargetPids0;
-                    _ ->
-                        []
-                end;
-            {ok, #compaction_stats{num_of_reserved_targets = N,
-                                   reserved_targets = TargetPids0}} when N > 0 ->
-                TargetPids0;
+            {ok, #compaction_stats{status = Status,
+                                   pending_targets = PendingTargets}} when Status == ?COMPACTION_STATUS_SUSPEND;
+                                                                           Status == ?COMPACTION_STATUS_IDLE ->
+                PendingTargets;
             _ ->
                 []
         end,
 
     case TargetPids1 of
         [] ->
-            ok;
+            {error, "Not exists compaction-targets"};
         _ ->
             TargetPids2 = case NumOfTargets of
                               'all'  -> TargetPids1;
