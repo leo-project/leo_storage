@@ -223,12 +223,35 @@ get_node_status() ->
             _ -> {[], []}
         end,
 
-    Directories = [{log,    ?env_log_dir(leo_storage)},
-                   {mnesia, []}
+    QueueDir  = case application:get_env(leo_storage, queue_dir) of
+                   {ok, EnvQueueDir} -> EnvQueueDir;
+                   _ -> []
+               end,
+    SNMPAgent = case application:get_env(leo_storage, snmp_agent) of
+                   {ok, EnvSNMPAgent} -> EnvSNMPAgent;
+                   _ -> []
+               end,
+    Directories = [{log,        ?env_log_dir(leo_storage)},
+                   {mnesia,     []},
+                   {queue,      QueueDir},
+                   {snmp_agent, SNMPAgent}
                   ],
     RingHashes  = [{ring_cur,  RingHashCur},
                    {ring_prev, RingHashPrev }
                   ],
+
+    %% Managers  = case application:get_env(leo_storage, managers) of
+    %%                {ok, EnvManagers} -> EnvManagers;
+    %%                _ -> []
+    %%            end,
+    %% LogLevel  = case application:get_env(leo_storage, log_level) of
+    %%                {ok, EnvLogLevel} -> EnvLogLevel;
+    %%                _ -> []
+    %%            end,
+    %% Appender  = case application:get_env(leo_storage, log_appender) of
+    %%                {ok, EnvLogAppender} -> EnvLogAppender;
+    %%                _ -> []
+    %%            end,
 
     NumOfQueue1 = case catch leo_mq_api:status(?QUEUE_ID_PER_OBJECT) of
                       {ok, {Res1, _}} -> Res1;
@@ -253,7 +276,8 @@ get_node_status() ->
                    {kernel_poll,      erlang:system_info(kernel_poll)},
                    {thread_pool_size, erlang:system_info(thread_pool_size)},
                    {storage,
-                    [{num_of_replication_msg, NumOfQueue1},
+                    [
+                     {num_of_replication_msg, NumOfQueue1},
                      {num_of_sync_vnode_msg,  NumOfQueue2},
                      {num_of_rebalance_msg,   NumOfQueue3}
                     ]}
