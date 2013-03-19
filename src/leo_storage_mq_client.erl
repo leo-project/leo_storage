@@ -379,9 +379,9 @@ correct_redundancies1(Key, AddrId, [{Node, _}|T], Metadatas, ErrorNodes) ->
                     correct_redundancies1(Key, AddrId, T, Metadatas, [Node|ErrorNodes])
             end;
         {ok, #member{state = ?STATE_DETACHED}} ->
-            ok;
-        _ ->
-            {error, inactive}
+            correct_redundancies1(Key, AddrId, T, Metadatas, ErrorNodes);
+        _Other ->
+            correct_redundancies1(Key, AddrId, T, Metadatas, [Node|ErrorNodes])
     end.
 
 %% correct_redundancies2/3
