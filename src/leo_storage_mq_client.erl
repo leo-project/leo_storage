@@ -363,7 +363,7 @@ correct_redundancies1(_Key,_AddrId, [], [], _ErrorNodes) ->
 correct_redundancies1(_Key,_AddrId, [], Metadatas, ErrorNodes) ->
     correct_redundancies2(Metadatas, ErrorNodes);
 
-correct_redundancies1(Key, AddrId, [{Node, true}|T], Metadatas, ErrorNodes) ->
+correct_redundancies1(Key, AddrId, [{Node, _}|T], Metadatas, ErrorNodes) ->
     %% NOTE:
     %% If remote-node status is NOT 'running',
     %%     this function cannot operate 'rpc-call'.
@@ -378,13 +378,11 @@ correct_redundancies1(Key, AddrId, [{Node, true}|T], Metadatas, ErrorNodes) ->
                 _Error ->
                     correct_redundancies1(Key, AddrId, T, Metadatas, [Node|ErrorNodes])
             end;
+        {ok, #member{state = ?STATE_DETACHED}} ->
+            ok;
         _ ->
             {error, inactive}
-    end;
-
-correct_redundancies1(Key, AddrId, [{_Node, false}|T], Metadatas, ErrorNodes) ->
-    correct_redundancies1(Key, AddrId, T, Metadatas, ErrorNodes).
-
+    end.
 
 %% correct_redundancies2/3
 %%
