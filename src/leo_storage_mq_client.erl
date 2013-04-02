@@ -190,6 +190,8 @@ handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
             case correct_redundancies(Key) of
                 ok ->
                     ok;
+                {error, not_found} ->
+                    ok;
                 Error ->
                     publish(?QUEUE_TYPE_PER_OBJECT, AddrId, Key, ErrorType),
                     Error
