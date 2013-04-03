@@ -45,18 +45,6 @@
 -define(CMD_DELETE, delete).
 -define(CMD_HEAD,   head).
 
-%% @doc data-types.
-%%
--define(TYPE_DIR,     directory).
--define(TYPE_OBJ,     object).
--define(REP_TYPE_DIR, 'directory').
--define(REP_TYPE_OBJ, 'data').
-
-%% @doc prefix of process.
-%%
--define(PFIX_REPLICATOR, "replicator_").
--define(PFIX_REPAIRER,   "repairer_").
-
 %% @doc queue-related.
 %%
 -define(QUEUE_ID_PER_OBJECT,          'leo_per_object_queue').
@@ -174,5 +162,4 @@
             {ok, StackingTimeout} -> StackingTimeout;
             _ -> 1000 %% 1sec
         end).
-
 

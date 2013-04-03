@@ -154,16 +154,16 @@ attach(#system_conf{n = NumOfReplicas,
 %%
 -spec(synchronize(object | sync_by_vnode_id, list() | string(), #metadata{} | atom()) ->
              ok | {error, any()}).
-synchronize(?TYPE_OBJ, InconsistentNodes, #metadata{addr_id = AddrId,
+synchronize(object, InconsistentNodes, #metadata{addr_id = AddrId,
                                                     key     = Key}) ->
     leo_storage_handler_object:copy(InconsistentNodes, AddrId, Key);
 
-synchronize(?TYPE_OBJ, Key, ErrorType) ->
+synchronize(object, Key, ErrorType) ->
     {ok, #redundancies{vnode_id = VNodeId}} = leo_redundant_manager_api:get_redundancies_by_key(Key),
-    leo_storage_mq_client:publish(?QUEUE_TYPE_PER_OBJECT, VNodeId, Key, ErrorType);
+    leo_storage_mq_client:publish(?QUEUE_TYPE_PER_OBJECT, VNodeId, Key, ErrorType).
 
-synchronize(sync_by_vnode_id, VNodeId, Node) ->
-    leo_storage_mq_client:publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, VNodeId, Node).
+%% synchronize(sync_by_vnode_id, VNodeId, Node) ->
+%%     leo_storage_mq_client:publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, VNodeId, Node).
 
 
 %%--------------------------------------------------------------------

@@ -425,7 +425,7 @@ correct_redundancies3(_, [], _) ->
     {error, 'could not fix inconsistency'};
 correct_redundancies3(InconsistentNodes, [Node|Rest], Metadata) ->
     RPCKey = rpc:async_call(Node, leo_storage_api, synchronize,
-                            [?TYPE_OBJ, InconsistentNodes, Metadata]),
+                            [object, InconsistentNodes, Metadata]),
     Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
               {value, ok} ->
                   ok;
