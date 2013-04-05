@@ -52,11 +52,13 @@
 -define(QUEUE_ID_DIRECTORY,           'leo_directory_queue').
 -define(QUEUE_ID_REBALANCE,           'leo_rebalance_queue').
 -define(QUEUE_ID_ASYNC_DELETION,      'leo_async_deletion_queue').
+-define(QUEUE_ID_RECOVERY_NODE,       'leo_recovery_node_queue').
 
 -define(QUEUE_TYPE_PER_OBJECT,        'queue_type_per_object').
 -define(QUEUE_TYPE_SYNC_BY_VNODE_ID,  'queue_type_sync_by_vnode_id').
 -define(QUEUE_TYPE_REBALANCE,         'queue_type_rebalance').
 -define(QUEUE_TYPE_ASYNC_DELETION,    'queue_type_async_deletion').
+-define(QUEUE_TYPE_RECOVERY_NODE,     'queue_type_recovery_node').
 
 -define(ERR_TYPE_REPLICATE_DATA,      'error_msg_replicate_data').
 -define(ERR_TYPE_RECOVER_DATA,        'error_msg_recover_data').
@@ -119,6 +121,12 @@
           id = 0                :: integer(),
           addr_id = 0           :: integer(),
           key                   :: any(),
+          timestamp = 0         :: integer(),
+          times = 0             :: integer()}).
+
+-record(recovery_node_message, {
+          id = 0                :: integer(),
+          node                  :: atom(),
           timestamp = 0         :: integer(),
           times = 0             :: integer()}).
 

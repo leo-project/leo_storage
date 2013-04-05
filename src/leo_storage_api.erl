@@ -35,8 +35,9 @@
 -include_lib("eunit/include/eunit.hrl").
 
 %% API
--export([register_in_monitor/1, get_routing_table_chksum/0,
-         start/1, start/2, stop/0, attach/1, synchronize/3,
+-export([register_in_monitor/1, register_in_monitor/2,
+         get_routing_table_chksum/0,
+         start/1, start/2, stop/0, attach/1, synchronize/1, synchronize/2,
          compact/1, compact/3, get_node_status/0, rebalance/1]).
 
 %%--------------------------------------------------------------------
@@ -44,38 +45,46 @@
 %%--------------------------------------------------------------------
 %% @doc register into the manager's monitor.
 %%
--spec(register_in_monitor(first | again) -> ok).
+-spec(register_in_monitor(first | again) ->
+             ok | {error, not_found}).
 register_in_monitor(RequestedTimes) ->
     case whereis(leo_storage_sup) of
         undefined ->
             {error, not_found};
         Pid ->
-            Fun = fun(Node0, Res) ->
-                          Node1 = case is_atom(Node0) of
-                                      true  -> Node0;
-                                      false -> list_to_atom(Node0)
-                                  end,
+            register_in_monitor(Pid, RequestedTimes)
+    end.
 
-                          case leo_misc:node_existence(Node1) of
-                              true ->
-                                  case rpc:call(Node1, leo_manager_api, register,
-                                                [RequestedTimes, Pid, erlang:node(), storage],
-                                                ?DEF_REQ_TIMEOUT) of
-                                      ok ->
-                                          true;
-                                      Error ->
-                                          ?error("register_in_monitor/1", "manager:~w, cause:~p", [Node1, Error]),
-                                          Res
-                                  end;
-                              false ->
+-spec(register_in_monitor(pid(), first | again) ->
+             ok | {error, any()}).
+register_in_monitor(Pid, RequestedTimes) ->
+    Fun = fun(Node0, Res) ->
+                  Node1 = case is_atom(Node0) of
+                              true  -> Node0;
+                              false -> list_to_atom(Node0)
+                          end,
+                  case leo_misc:node_existence(Node1) of
+                      true ->
+                          case rpc:call(Node1, leo_manager_api, register,
+                                        [RequestedTimes, Pid, erlang:node(), storage],
+                                        ?DEF_REQ_TIMEOUT) of
+                              ok ->
+                                  true;
+                              Error ->
+                                  ?error("register_in_monitor/1",
+                                         "manager:~w, cause:~p", [Node1, Error]),
                                   Res
-                          end
-                  end,
+                          end;
+                      false ->
+                          Res
+                  end
+          end,
 
-            case lists:foldl(Fun, false, ?env_manager_nodes(leo_storage)) of
-                true  -> ok;
-                false -> {error, ?ERROR_COULD_NOT_CONNECT}
-            end
+    case lists:foldl(Fun, false, ?env_manager_nodes(leo_storage)) of
+        true ->
+            ok;
+        false ->
+            {error, ?ERROR_COULD_NOT_CONNECT}
     end.
 
 %% @doc get routing_table's checksum.
@@ -152,18 +161,20 @@ attach(#system_conf{n = NumOfReplicas,
 %%--------------------------------------------------------------------
 %% @doc synchronize a data.
 %%
--spec(synchronize(object | sync_by_vnode_id, list() | string(), #metadata{} | atom()) ->
+-spec(synchronize(atom()) ->
              ok | {error, any()}).
-synchronize(object, InconsistentNodes, #metadata{addr_id = AddrId,
-                                                    key     = Key}) ->
+synchronize(Node) ->
+    leo_storage_mq_client:publish(?QUEUE_TYPE_RECOVERY_NODE, Node).
+
+-spec(synchronize(list() | string(), #metadata{} | atom()) ->
+             ok | {error, any()}).
+synchronize(InconsistentNodes, #metadata{addr_id = AddrId,
+                                         key     = Key}) ->
     leo_storage_handler_object:copy(InconsistentNodes, AddrId, Key);
 
-synchronize(object, Key, ErrorType) ->
+synchronize(Key, ErrorType) ->
     {ok, #redundancies{vnode_id = VNodeId}} = leo_redundant_manager_api:get_redundancies_by_key(Key),
     leo_storage_mq_client:publish(?QUEUE_TYPE_PER_OBJECT, VNodeId, Key, ErrorType).
-
-%% synchronize(sync_by_vnode_id, VNodeId, Node) ->
-%%     leo_storage_mq_client:publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, VNodeId, Node).
 
 
 %%--------------------------------------------------------------------
@@ -224,13 +235,13 @@ get_node_status() ->
         end,
 
     QueueDir  = case application:get_env(leo_storage, queue_dir) of
-                   {ok, EnvQueueDir} -> EnvQueueDir;
-                   _ -> []
-               end,
+                    {ok, EnvQueueDir} -> EnvQueueDir;
+                    _ -> []
+                end,
     SNMPAgent = case application:get_env(leo_storage, snmp_agent) of
-                   {ok, EnvSNMPAgent} -> EnvSNMPAgent;
-                   _ -> []
-               end,
+                    {ok, EnvSNMPAgent} -> EnvSNMPAgent;
+                    _ -> []
+                end,
     Directories = [{log,        ?env_log_dir(leo_storage)},
                    {mnesia,     []},
                    {queue,      QueueDir},

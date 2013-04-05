@@ -199,13 +199,13 @@ synchronize_([Node0, _]) ->
 
     %% 1.
     Key = "air/on/g/string",
-    ok = leo_storage_api:synchronize(object, [Node0], #metadata{addr_id = 0,
-                                                                key = Key}),
+    ok = leo_storage_api:synchronize([Node0], #metadata{addr_id = 0,
+                                                        key = Key}),
     Res0 = meck:history(leo_storage_handler_object),
     ?assertEqual(1, length(Res0)),
 
     %% 2.
-    ok = leo_storage_api:synchronize(object, Key, []),
+    ok = leo_storage_api:synchronize(Key, []),
     Res1 = meck:history(leo_storage_mq_client),
     ?assertEqual(1, length(Res1)),
 
