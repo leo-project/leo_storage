@@ -251,19 +251,6 @@ get_node_status() ->
                    {ring_prev, RingHashPrev }
                   ],
 
-    %% Managers  = case application:get_env(leo_storage, managers) of
-    %%                {ok, EnvManagers} -> EnvManagers;
-    %%                _ -> []
-    %%            end,
-    %% LogLevel  = case application:get_env(leo_storage, log_level) of
-    %%                {ok, EnvLogLevel} -> EnvLogLevel;
-    %%                _ -> []
-    %%            end,
-    %% Appender  = case application:get_env(leo_storage, log_appender) of
-    %%                {ok, EnvLogAppender} -> EnvLogAppender;
-    %%                _ -> []
-    %%            end,
-
     NumOfQueue1 = case catch leo_mq_api:status(?QUEUE_ID_PER_OBJECT) of
                       {ok, {Res1, _}} -> Res1;
                       _ -> 0
@@ -293,12 +280,15 @@ get_node_status() ->
                      {num_of_rebalance_msg,   NumOfQueue3}
                     ]}
                   ],
-    {ok, #cluster_node_status{type    = server,
-                              version = Version,
-                              dirs    = Directories,
-                              avs     = ?env_storage_device(),
-                              ring_checksum = RingHashes,
-                              statistics    = Statistics}}.
+    {ok, [
+          {type,          storage},
+          {version,       Version},
+          {dirs,          Directories},
+          {avs,           ?env_storage_device()},
+          {ring_checksum, RingHashes},
+          {statistics,    Statistics}
+         ]}.
+
 
 %% @doc Do rebalance which means "Objects are copied to the specified node".
 %% @param RebalanceInfo: [{VNodeId, DestNode}]

@@ -222,7 +222,7 @@ get_node_status_(_) ->
                 end),
 
     {ok, ClusterStatus} = leo_storage_api:get_node_status(),
-    ?assertEqual(true, is_record(ClusterStatus, cluster_node_status)),
+    ?assertEqual(true, is_list(ClusterStatus)),
 
     Res = meck:history(leo_redundant_manager_api),
     ?assertEqual(1, length(Res)),
