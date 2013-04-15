@@ -224,7 +224,7 @@ subscribe_1_({Test0Node, Test1Node}) ->
 
     ok = rpc:call(Test0Node, meck, new,    [leo_storage_api, [no_link]]),
     ok = rpc:call(Test0Node, meck, expect, [leo_storage_api, synchronize,
-                                            fun(_Type, _InconsistentNodes, _CorrectMetadata) ->
+                                            fun(_InconsistentNodes, _CorrectMetadata) ->
                                                     ok
                                             end]),
     meck:expect(leo_redundant_manager_api, get_member_by_node,

@@ -199,20 +199,15 @@ synchronize_([Node0, _]) ->
 
     %% 1.
     Key = "air/on/g/string",
-    ok = leo_storage_api:synchronize(?TYPE_OBJ, [Node0], #metadata{addr_id = 0,
-                                                                     key = Key}),
+    ok = leo_storage_api:synchronize([Node0], #metadata{addr_id = 0,
+                                                        key = Key}),
     Res0 = meck:history(leo_storage_handler_object),
     ?assertEqual(1, length(Res0)),
 
     %% 2.
-    ok = leo_storage_api:synchronize(?TYPE_OBJ, Key, []),
+    ok = leo_storage_api:synchronize(Key, []),
     Res1 = meck:history(leo_storage_mq_client),
     ?assertEqual(1, length(Res1)),
-
-    %% 3.
-    ok = leo_storage_api:synchronize(sync_by_vnode_id, 0, Node0),
-    Res2 = meck:history(leo_storage_mq_client),
-    ?assertEqual(2, length(Res2)),
 
     meck:unload(),
     ok.
@@ -227,7 +222,7 @@ get_node_status_(_) ->
                 end),
 
     {ok, ClusterStatus} = leo_storage_api:get_node_status(),
-    ?assertEqual(true, is_record(ClusterStatus, cluster_node_status)),
+    ?assertEqual(true, is_list(ClusterStatus)),
 
     Res = meck:history(leo_redundant_manager_api),
     ?assertEqual(1, length(Res)),

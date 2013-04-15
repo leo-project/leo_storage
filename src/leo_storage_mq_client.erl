@@ -37,7 +37,8 @@
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
--export([start/1, start/2, publish/3, publish/4, publish/5]).
+-export([start/1, start/2,
+         publish/2, publish/3, publish/4, publish/5]).
 -export([init/0, handle_call/1]).
 
 -define(SLASH, "/").
@@ -45,15 +46,18 @@
 -define(MSG_PATH_SYNC_VNODE_ID,  "2").
 -define(MSG_PATH_REBALANCE,      "3").
 -define(MSG_PATH_ASYNC_DELETION, "4").
+-define(MSG_PATH_RECOVERY_NODE,  "5").
 
 -type(queue_type() :: ?QUEUE_TYPE_PER_OBJECT  |
                       ?QUEUE_TYPE_SYNC_BY_VNODE_ID  |
-                      ?QUEUE_TYPE_ASYNC_DELETION).
+                      ?QUEUE_TYPE_ASYNC_DELETION |
+                      ?QUEUE_TYPE_RECOVERY_NODE).
 
 -type(queue_id()   :: ?QUEUE_ID_PER_OBJECT |
                       ?QUEUE_ID_SYNC_BY_VNODE_ID |
                       ?QUEUE_ID_REBALANCE |
-                      ?QUEUE_ID_ASYNC_DELETION).
+                      ?QUEUE_ID_ASYNC_DELETION |
+                      ?QUEUE_ID_RECOVERY_NODE).
 
 %%--------------------------------------------------------------------
 %% API
@@ -100,12 +104,24 @@ start(RefSup, RootPath0) ->
       end, [{?QUEUE_ID_PER_OBJECT,        ?MSG_PATH_PER_OBJECT,      64, 16},
             {?QUEUE_ID_SYNC_BY_VNODE_ID,  ?MSG_PATH_SYNC_VNODE_ID,   32,  8},
             {?QUEUE_ID_REBALANCE,         ?MSG_PATH_REBALANCE,       32,  8},
-            {?QUEUE_ID_ASYNC_DELETION,    ?MSG_PATH_ASYNC_DELETION, 128, 64}
+            {?QUEUE_ID_ASYNC_DELETION,    ?MSG_PATH_ASYNC_DELETION, 128, 64},
+            {?QUEUE_ID_RECOVERY_NODE,     ?MSG_PATH_RECOVERY_NODE,  128, 64}
            ]),
     ok.
 
 %% @doc Input a message into the queue.
 %%
+-spec(publish(queue_type(), atom()) ->
+             ok).
+publish(?QUEUE_TYPE_RECOVERY_NODE = Id, Node) ->
+    KeyBin     = term_to_binary(Node),
+    MessageBin = term_to_binary(#recovery_node_message{id        = leo_date:clock(),
+                                                       node      = Node,
+                                                       timestamp = leo_date:now()}),
+    leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
+publish(_,_) ->
+    {error, badarg}.
+
 -spec(publish(queue_type(), integer(), atom()) ->
              ok).
 publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID = Id, VNodeId, Node) ->
@@ -190,6 +206,8 @@ handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
             case correct_redundancies(Key) of
                 ok ->
                     ok;
+                {error, not_found} ->
+                    ok;
                 Error ->
                     publish(?QUEUE_TYPE_PER_OBJECT, AddrId, Key, ErrorType),
                     Error
@@ -269,12 +287,46 @@ handle_call({consume, ?QUEUE_ID_ASYNC_DELETION, MessageBin}) ->
                 {error, _Cause} ->
                     publish(?QUEUE_TYPE_ASYNC_DELETION, AddrId, Key)
             end
+    end;
+
+handle_call({consume, ?QUEUE_ID_RECOVERY_NODE, MessageBin}) ->
+    case catch binary_to_term(MessageBin) of
+        {'EXIT', Cause} ->
+            {error, Cause};
+        #recovery_node_message{node = Node} ->
+            recover_node(Node)
     end.
 
 
 %%--------------------------------------------------------------------
 %% INNTERNAL FUNCTIONS
 %%--------------------------------------------------------------------
+%% @doc synchronize by vnode-id.
+%%
+-spec(recover_node(atom()) ->
+             ok).
+recover_node(Node) ->
+    Fun = fun(K, _V, Acc) ->
+                  {AddrId, Key} = binary_to_term(K),
+
+                  case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
+                      {ok, #redundancies{nodes = Redundancies}} ->
+                          Nodes = [N || {N, _} <- Redundancies],
+                          case lists:member(Node, Nodes) of
+                              true ->
+                                  ?MODULE:publish(?QUEUE_TYPE_PER_OBJECT,
+                                                  AddrId, Key, ?ERR_TYPE_RECOVER_DATA);
+                              false  ->
+                                  void
+                          end,
+                          {ok, Acc};
+                      _ ->
+                          {ok, Acc}
+                  end
+          end,
+    _ = leo_object_storage_api:fetch_by_addr_id(0, Fun),
+    ok.
+
 %% @doc synchronize by vnode-id.
 %%
 -spec(sync_vnodes(atom(), integer(), list()) ->
@@ -423,7 +475,7 @@ correct_redundancies3(_, [], _) ->
     {error, 'could not fix inconsistency'};
 correct_redundancies3(InconsistentNodes, [Node|Rest], Metadata) ->
     RPCKey = rpc:async_call(Node, leo_storage_api, synchronize,
-                            [?TYPE_OBJ, InconsistentNodes, Metadata]),
+                            [InconsistentNodes, Metadata]),
     Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
               {value, ok} ->
                   ok;
@@ -522,5 +574,7 @@ queue_id(?QUEUE_TYPE_ASYNC_DELETION) ->
 queue_id(?QUEUE_TYPE_PER_OBJECT) ->
     ?QUEUE_ID_PER_OBJECT;
 queue_id(?QUEUE_TYPE_REBALANCE) ->
-    ?QUEUE_ID_REBALANCE.
+    ?QUEUE_ID_REBALANCE;
+queue_id(?QUEUE_TYPE_RECOVERY_NODE) ->
+    ?QUEUE_ID_RECOVERY_NODE.
 
