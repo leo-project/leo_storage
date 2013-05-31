@@ -37,6 +37,7 @@
 %% API
 -export([register_in_monitor/1, register_in_monitor/2,
          get_routing_table_chksum/0,
+         update_manager_nodes/1,
          start/1, start/2, stop/0, attach/1, synchronize/1, synchronize/2,
          compact/1, compact/3, get_node_status/0, rebalance/1]).
 
@@ -99,6 +100,13 @@ register_in_monitor(Pid, RequestedTimes) ->
 get_routing_table_chksum() ->
     leo_redundant_manager_api:checksum(ring).
 
+%% @doc update manager nodes
+%%
+-spec(update_manager_nodes(list()) ->
+             ok).
+update_manager_nodes(Managers) ->
+    ?update_env_manager_nodes(leo_storage, Managers),
+    leo_membership:update_manager_nodes(Managers).
 
 %% @doc start storage-server.
 %%
