@@ -40,6 +40,9 @@
          start/1, start/2, stop/0, attach/1, synchronize/1, synchronize/2,
          compact/1, compact/3, get_node_status/0, rebalance/1]).
 
+%% interval to notify to leo_manager
+-define(CHECK_INTERVAL, 3000).
+
 %%--------------------------------------------------------------------
 %% API for Admin and System#1
 %%--------------------------------------------------------------------
@@ -84,7 +87,9 @@ register_in_monitor(Pid, RequestedTimes) ->
         true ->
             ok;
         false ->
-            {error, ?ERROR_COULD_NOT_CONNECT}
+            timer:apply_after(?CHECK_INTERVAL, ?MODULE, register_in_monitor,
+                              [Pid, RequestedTimes]),
+            ok
     end.
 
 %% @doc get routing_table's checksum.

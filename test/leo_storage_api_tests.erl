@@ -99,7 +99,7 @@ register_in_monitor_([_Node0, Node1]) ->
     ok = rpc:call(Node1, meck, new,    [leo_manager_api, [no_link]]),
 
     Res2 = leo_storage_api:register_in_monitor(first),
-    ?assertEqual({error, ?ERROR_COULD_NOT_CONNECT}, Res2),
+    ?assertEqual(ok, Res2),
 
     meck:unload(),
     ok.
