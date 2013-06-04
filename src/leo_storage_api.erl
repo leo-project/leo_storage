@@ -69,8 +69,13 @@ register_in_monitor(Pid, RequestedTimes) ->
                           end,
                   case leo_misc:node_existence(Node1) of
                       true ->
+                          GroupL1 = ?env_grp_level_1(),
+                          GroupL2 = ?env_grp_level_2(),
+                          NumOfNodes = ?env_num_of_vnodes(),
+
                           case rpc:call(Node1, leo_manager_api, register,
-                                        [RequestedTimes, Pid, erlang:node(), storage],
+                                        [RequestedTimes, Pid, erlang:node(), storage,
+                                         GroupL1, GroupL2, NumOfNodes],
                                         ?DEF_REQ_TIMEOUT) of
                               ok ->
                                   true;
