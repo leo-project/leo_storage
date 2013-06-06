@@ -239,11 +239,9 @@ compact(status) ->
 %%
 -spec(get_node_status() -> {ok, #cluster_node_status{}}).
 get_node_status() ->
-    Version = case application:get_env(leo_storage, system_version) of
-                  {ok, EnvVersion} ->
-                      EnvVersion;
-                  _ ->
-                      []
+    Version = case application:get_key(leo_storage, vsn) of
+                  {ok, _Version} -> _Version;
+                  _ -> "undefined"
               end,
 
     {RingHashCur, RingHashPrev} =
@@ -301,6 +299,8 @@ get_node_status() ->
     {ok, [
           {type,          storage},
           {version,       Version},
+          {num_of_vnodes, ?env_num_of_vnodes()},
+          {grp_level_2,   ?env_grp_level_2()},
           {dirs,          Directories},
           {avs,           ?env_storage_device()},
           {ring_checksum, RingHashes},
