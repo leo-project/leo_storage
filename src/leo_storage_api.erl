@@ -130,12 +130,16 @@ start(Members, SystemConf) ->
                                  r = ReadQuorum,
                                  w = WriteQuorum,
                                  d = DeleteQuorum,
-                                 bit_of_ring = BitOfRing} = SystemConf,
+                                 bit_of_ring = BitOfRing,
+                                 level_1 = L1,
+                                 level_2 = L2} = SystemConf,
                     ok = leo_redundant_manager_api:set_options([{n, NumOfReplicas},
                                                                 {r, ReadQuorum},
                                                                 {w, WriteQuorum},
                                                                 {d, DeleteQuorum},
-                                                                {bit_of_ring, BitOfRing}])
+                                                                {bit_of_ring, BitOfRing},
+                                                                {level_1, L1},
+                                                                {level_2, L2}])
             end,
             {ok, {node(), Chksums}};
         {error, Cause} ->
