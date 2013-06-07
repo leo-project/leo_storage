@@ -37,8 +37,12 @@
 %% API
 -export([register_in_monitor/1, register_in_monitor/2,
          get_routing_table_chksum/0,
+         update_manager_nodes/1,
          start/1, start/2, stop/0, attach/1, synchronize/1, synchronize/2,
          compact/1, compact/3, get_node_status/0, rebalance/1]).
+
+%% interval to notify to leo_manager
+-define(CHECK_INTERVAL, 3000).
 
 %%--------------------------------------------------------------------
 %% API for Admin and System#1
@@ -65,8 +69,13 @@ register_in_monitor(Pid, RequestedTimes) ->
                           end,
                   case leo_misc:node_existence(Node1) of
                       true ->
+                          GroupL1 = ?env_grp_level_1(),
+                          GroupL2 = ?env_grp_level_2(),
+                          NumOfNodes = ?env_num_of_vnodes(),
+
                           case rpc:call(Node1, leo_manager_api, register,
-                                        [RequestedTimes, Pid, erlang:node(), storage],
+                                        [RequestedTimes, Pid, erlang:node(), storage,
+                                         GroupL1, GroupL2, NumOfNodes],
                                         ?DEF_REQ_TIMEOUT) of
                               ok ->
                                   true;
@@ -84,7 +93,9 @@ register_in_monitor(Pid, RequestedTimes) ->
         true ->
             ok;
         false ->
-            {error, ?ERROR_COULD_NOT_CONNECT}
+            timer:apply_after(?CHECK_INTERVAL, ?MODULE, register_in_monitor,
+                              [Pid, RequestedTimes]),
+            ok
     end.
 
 %% @doc get routing_table's checksum.
@@ -94,6 +105,13 @@ register_in_monitor(Pid, RequestedTimes) ->
 get_routing_table_chksum() ->
     leo_redundant_manager_api:checksum(ring).
 
+%% @doc update manager nodes
+%%
+-spec(update_manager_nodes(list()) ->
+             ok).
+update_manager_nodes(Managers) ->
+    ?update_env_manager_nodes(leo_storage, Managers),
+    leo_membership:update_manager_nodes(Managers).
 
 %% @doc start storage-server.
 %%
@@ -112,12 +130,16 @@ start(Members, SystemConf) ->
                                  r = ReadQuorum,
                                  w = WriteQuorum,
                                  d = DeleteQuorum,
-                                 bit_of_ring = BitOfRing} = SystemConf,
+                                 bit_of_ring = BitOfRing,
+                                 level_1 = L1,
+                                 level_2 = L2} = SystemConf,
                     ok = leo_redundant_manager_api:set_options([{n, NumOfReplicas},
                                                                 {r, ReadQuorum},
                                                                 {w, WriteQuorum},
                                                                 {d, DeleteQuorum},
-                                                                {bit_of_ring, BitOfRing}])
+                                                                {bit_of_ring, BitOfRing},
+                                                                {level_1, L1},
+                                                                {level_2, L2}])
             end,
             {ok, {node(), Chksums}};
         {error, Cause} ->
@@ -221,11 +243,9 @@ compact(status) ->
 %%
 -spec(get_node_status() -> {ok, #cluster_node_status{}}).
 get_node_status() ->
-    Version = case application:get_env(leo_storage, system_version) of
-                  {ok, EnvVersion} ->
-                      EnvVersion;
-                  _ ->
-                      []
+    Version = case application:get_key(leo_storage, vsn) of
+                  {ok, _Version} -> _Version;
+                  _ -> "undefined"
               end,
 
     {RingHashCur, RingHashPrev} =
@@ -283,6 +303,8 @@ get_node_status() ->
     {ok, [
           {type,          storage},
           {version,       Version},
+          {num_of_vnodes, ?env_num_of_vnodes()},
+          {grp_level_2,   ?env_grp_level_2()},
           {dirs,          Directories},
           {avs,           ?env_storage_device()},
           {ring_checksum, RingHashes},

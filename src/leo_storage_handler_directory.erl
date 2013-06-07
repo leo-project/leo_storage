@@ -50,9 +50,9 @@ find_by_parent_dir(ParentDir, _Delimiter, Marker, MaxKeys) ->
                      true  -> MaxKeys;
                      false -> ?DEF_MAX_KEYS
                  end,
-    NewMarker  = case is_list(Marker) of
+    NewMarker  = case is_binary(Marker) of
                      true  -> Marker;
-                     false -> []
+                     false -> <<>>
                  end,
 
     {ok, Members} = leo_redundant_manager_api:get_members(),

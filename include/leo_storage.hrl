@@ -171,3 +171,20 @@
             _ -> 1000 %% 1sec
         end).
 
+-define(env_grp_level_1(),
+        case application:get_env(leo_storage, grp_level_1) of
+            {ok, _GrpLevel1} -> _GrpLevel1;
+            _ -> []
+        end).
+
+-define(env_grp_level_2(),
+        case application:get_env(leo_storage, grp_level_2) of
+            {ok, _GrpLevel2} -> _GrpLevel2;
+            _ -> []
+        end).
+
+-define(env_num_of_vnodes(),
+        case application:get_env(leo_storage, num_of_vnodes) of
+            {ok, _NumOfVNodes} -> _NumOfVNodes;
+            _ -> 168
+        end).
