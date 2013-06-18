@@ -195,7 +195,7 @@ synchronize(InconsistentNodes, #metadata{addr_id = AddrId,
     leo_storage_handler_object:copy(InconsistentNodes, AddrId, Key);
 
 synchronize(Key, ErrorType) ->
-    {ok, #redundancies{vnode_id = VNodeId}} = leo_redundant_manager_api:get_redundancies_by_key(Key),
+    {ok, #redundancies{vnode_id_to = VNodeId}} = leo_redundant_manager_api:get_redundancies_by_key(Key),
     leo_storage_mq_client:publish(?QUEUE_TYPE_PER_OBJECT, VNodeId, Key, ErrorType).
 
 

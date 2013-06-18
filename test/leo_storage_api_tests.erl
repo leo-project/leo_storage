@@ -184,7 +184,7 @@ synchronize_([Node0, _]) ->
     meck:new(leo_redundant_manager_api),
     meck:expect(leo_redundant_manager_api, get_redundancies_by_key,
                 fun(_Key) ->
-                        {ok, #redundancies{vnode_id = 12345}}
+                        {ok, #redundancies{vnode_id_to = 12345}}
                 end),
 
     meck:new(leo_storage_mq_client),
