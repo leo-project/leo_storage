@@ -188,3 +188,64 @@
             {ok, _NumOfVNodes} -> _NumOfVNodes;
             _ -> 168
         end).
+
+-define(DEF_MQ_INTERVAL_MAX, 32).
+-define(DEF_MQ_INTERVAL_MIN,  8).
+-define(env_mq_consumption_intervals(),
+        [
+         %% per_object
+         {cns_interval_per_object_min,
+          case application:get_env(leo_storage, cns_interval_per_object_min) of
+              {ok, _CnsInterval1_Min} -> _CnsInterval1_Min;
+              _ -> ?DEF_MQ_INTERVAL_MIN
+          end},
+         {cns_interval_per_object_max,
+          case application:get_env(leo_storage, cns_interval_per_object_max) of
+              {ok, _CnsInterval1_Max} -> _CnsInterval1_Max;
+              _ -> ?DEF_MQ_INTERVAL_MAX
+          end},
+         %% sync_by_vnode_id
+         {cns_interval_sync_by_vnode_id_min,
+          case application:get_env(leo_storage, cns_interval_sync_by_vnode_id_min) of
+              {ok, _CnsInterval2_Min} -> _CnsInterval2_Min;
+              _ -> ?DEF_MQ_INTERVAL_MIN
+          end},
+         {cns_interval_sync_by_vnode_id_max,
+          case application:get_env(leo_storage, cns_interval_sync_by_vnode_id_max) of
+              {ok, _CnsInterval2_Max} -> _CnsInterval2_Max;
+              _ -> ?DEF_MQ_INTERVAL_MAX
+          end},
+         %% for rebalance
+         {cns_interval_rebalance_min,
+          case application:get_env(leo_storage, cns_interval_rebalance_min) of
+              {ok, _CnsInterval3_Min} -> _CnsInterval3_Min;
+              _ -> ?DEF_MQ_INTERVAL_MIN
+          end},
+         {cns_interval_rebalance_max,
+          case application:get_env(leo_storage, cns_interval_rebalance_max) of
+              {ok, _CnsInterval3_Max} -> _CnsInterval3_Max;
+              _ -> ?DEF_MQ_INTERVAL_MAX
+          end},
+         %% async deletion objects (after remove a bucket)
+         {cns_interval_async_deletion_min,
+          case application:get_env(leo_storage, cns_interval_async_deletion_min) of
+              {ok, _CnsInterval3_Min} -> _CnsInterval3_Min;
+              _ -> ?DEF_MQ_INTERVAL_MIN
+          end},
+         {cns_interval_async_deletion_max,
+          case application:get_env(leo_storage, cns_interval_async_deletion_max) of
+              {ok, _CnsInterval3_Max} -> _CnsInterval3_Max;
+              _ -> ?DEF_MQ_INTERVAL_MAX
+          end},
+         %% recovery node
+         {cns_interval_recovery_node_min,
+          case application:get_env(leo_storage, cns_interval_recovery_node_min) of
+              {ok, _CnsInterval4_Min} -> _CnsInterval4_Min;
+              _ -> ?DEF_MQ_INTERVAL_MIN
+          end},
+         {cns_interval_recovery_node_max,
+          case application:get_env(leo_storage, cns_interval_recovery_node_max) of
+              {ok, _CnsInterval4_Max} -> _CnsInterval4_Max;
+              _ -> ?DEF_MQ_INTERVAL_MAX
+          end}
+        ]).
