@@ -215,6 +215,7 @@ handle_call({publish, _Id, _Reply}) ->
 handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
+            ?error("handle_call/1 - QUEUE_ID_PER_OBJECT", "cause:~p", [Cause]),
             {error, Cause};
         #inconsistent_data_message{addr_id = AddrId,
                                    key     = Key,
@@ -224,15 +225,17 @@ handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
                     ok;
                 {error, not_found} ->
                     ok;
-                Error ->
+                {error, Cause} ->
                     publish(?QUEUE_TYPE_PER_OBJECT, AddrId, Key, ErrorType),
-                    Error
+                    ?warn("handle_call/1 - QUEUE_ID_PER_OBJECT", "cause:~p", [Cause]),
+                    {error, Cause}
             end
     end;
 
 handle_call({consume, ?QUEUE_ID_SYNC_BY_VNODE_ID, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
+            ?error("handle_call/1 - QUEUE_ID_SYNC_BY_VNODE_ID", "cause:~p", [Cause]),
             {error, Cause};
         #sync_unit_of_vnode_message{vnode_id = ToVNodeId,
                                     node     = Node} ->
@@ -250,6 +253,7 @@ handle_call({consume, ?QUEUE_ID_SYNC_BY_VNODE_ID, MessageBin}) ->
 handle_call({consume, ?QUEUE_ID_REBALANCE, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
+            ?error("handle_call/1 - QUEUE_ID_REBALANCE", "cause:~p", [Cause]),
             {error, Cause};
         #rebalance_message{node     = Node,
                            vnode_id = VNodeId,
@@ -290,6 +294,7 @@ handle_call({consume, ?QUEUE_ID_REBALANCE, MessageBin}) ->
 handle_call({consume, ?QUEUE_ID_ASYNC_DELETION, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
+            ?error("handle_call/1 - QUEUE_ID_ASYNC_DELETION", "cause:~p", [Cause]),
             {error, Cause};
         #async_deletion_message{addr_id  = AddrId,
                                 key      = Key} ->
@@ -308,6 +313,7 @@ handle_call({consume, ?QUEUE_ID_ASYNC_DELETION, MessageBin}) ->
 handle_call({consume, ?QUEUE_ID_RECOVERY_NODE, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
+            ?error("handle_call/1 - QUEUE_ID_RECOVERY_NODE", "cause:~p", [Cause]),
             {error, Cause};
         #recovery_node_message{node = Node} ->
             recover_node(Node)
