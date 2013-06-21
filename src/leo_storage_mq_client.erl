@@ -37,7 +37,7 @@
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
--export([start/1, start/2,
+-export([start/2, start/3,
          publish/2, publish/3, publish/4, publish/5]).
 -export([init/0, handle_call/1]).
 
@@ -64,12 +64,14 @@
 %%--------------------------------------------------------------------
 %% @doc create queues and launch mq-servers.
 %%
-start(RootPath0) ->
-    start(leo_storage_sup, RootPath0).
-
--spec(start(pid(), string()) ->
+-spec(start(string(), list(tuple())) ->
              ok | {error, any()}).
-start(RefSup, RootPath0) ->
+start(RootPath0, Intervals) ->
+    start(leo_storage_sup, Intervals, RootPath0).
+
+-spec(start(pid(), list(tuple()), string()) ->
+             ok | {error, any()}).
+start(RefSup, Intervals, RootPath0) ->
     %% launch mq-sup under storage-sup
     RefMqSup =
         case whereis(leo_mq_sup) of
@@ -101,12 +103,26 @@ start(RefSup, RootPath0) ->
                                             {?MQ_PROP_MAX_INTERVAL, MaxInterval},
                                             {?MQ_PROP_MIN_INTERVAL, MinInterval}
                                            ])
-      end, [{?QUEUE_ID_PER_OBJECT,        ?MSG_PATH_PER_OBJECT,      64, 16},
-            {?QUEUE_ID_SYNC_BY_VNODE_ID,  ?MSG_PATH_SYNC_VNODE_ID,   32,  8},
-            {?QUEUE_ID_REBALANCE,         ?MSG_PATH_REBALANCE,       32,  8},
-            {?QUEUE_ID_ASYNC_DELETION,    ?MSG_PATH_ASYNC_DELETION, 128, 64},
-            {?QUEUE_ID_RECOVERY_NODE,     ?MSG_PATH_RECOVERY_NODE,  128, 64}
-           ]),
+      end, [{?QUEUE_ID_PER_OBJECT, ?MSG_PATH_PER_OBJECT,
+             leo_misc:get_value(cns_interval_per_object_max, Intervals, ?DEF_MQ_INTERVAL_MAX),
+             leo_misc:get_value(cns_interval_per_object_min, Intervals, ?DEF_MQ_INTERVAL_MIN)
+            },
+            {?QUEUE_ID_SYNC_BY_VNODE_ID, ?MSG_PATH_SYNC_VNODE_ID,
+             leo_misc:get_value(cns_interval_sync_by_vnode_id_max, Intervals, ?DEF_MQ_INTERVAL_MAX),
+             leo_misc:get_value(cns_interval_sync_by_vnode_id_min, Intervals, ?DEF_MQ_INTERVAL_MIN)
+            },
+            {?QUEUE_ID_REBALANCE, ?MSG_PATH_REBALANCE,
+             leo_misc:get_value(cns_interval_rebalance_max, Intervals, ?DEF_MQ_INTERVAL_MAX),
+             leo_misc:get_value(cns_interval_rebalance_min, Intervals, ?DEF_MQ_INTERVAL_MIN)
+            },
+            {?QUEUE_ID_ASYNC_DELETION, ?MSG_PATH_ASYNC_DELETION,
+             leo_misc:get_value(cns_interval_async_deletion_max, Intervals, ?DEF_MQ_INTERVAL_MAX),
+             leo_misc:get_value(cns_interval_async_deletion_min, Intervals, ?DEF_MQ_INTERVAL_MIN)
+            },
+            {?QUEUE_ID_RECOVERY_NODE, ?MSG_PATH_RECOVERY_NODE,
+             leo_misc:get_value(cns_interval_recovery_node_max, Intervals, ?DEF_MQ_INTERVAL_MAX),
+             leo_misc:get_value(cns_interval_recovery_node_min, Intervals, ?DEF_MQ_INTERVAL_MIN)
+            }]),
     ok.
 
 %% @doc Input a message into the queue.
@@ -199,6 +215,7 @@ handle_call({publish, _Id, _Reply}) ->
 handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
+            ?error("handle_call/1 - QUEUE_ID_PER_OBJECT", "cause:~p", [Cause]),
             {error, Cause};
         #inconsistent_data_message{addr_id = AddrId,
                                    key     = Key,
@@ -208,15 +225,17 @@ handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
                     ok;
                 {error, not_found} ->
                     ok;
-                Error ->
+                {error, Cause} ->
                     publish(?QUEUE_TYPE_PER_OBJECT, AddrId, Key, ErrorType),
-                    Error
+                    ?warn("handle_call/1 - QUEUE_ID_PER_OBJECT", "cause:~p", [Cause]),
+                    {error, Cause}
             end
     end;
 
 handle_call({consume, ?QUEUE_ID_SYNC_BY_VNODE_ID, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
+            ?error("handle_call/1 - QUEUE_ID_SYNC_BY_VNODE_ID", "cause:~p", [Cause]),
             {error, Cause};
         #sync_unit_of_vnode_message{vnode_id = ToVNodeId,
                                     node     = Node} ->
@@ -234,6 +253,7 @@ handle_call({consume, ?QUEUE_ID_SYNC_BY_VNODE_ID, MessageBin}) ->
 handle_call({consume, ?QUEUE_ID_REBALANCE, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
+            ?error("handle_call/1 - QUEUE_ID_REBALANCE", "cause:~p", [Cause]),
             {error, Cause};
         #rebalance_message{node     = Node,
                            vnode_id = VNodeId,
@@ -274,6 +294,7 @@ handle_call({consume, ?QUEUE_ID_REBALANCE, MessageBin}) ->
 handle_call({consume, ?QUEUE_ID_ASYNC_DELETION, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
+            ?error("handle_call/1 - QUEUE_ID_ASYNC_DELETION", "cause:~p", [Cause]),
             {error, Cause};
         #async_deletion_message{addr_id  = AddrId,
                                 key      = Key} ->
@@ -292,6 +313,7 @@ handle_call({consume, ?QUEUE_ID_ASYNC_DELETION, MessageBin}) ->
 handle_call({consume, ?QUEUE_ID_RECOVERY_NODE, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
+            ?error("handle_call/1 - QUEUE_ID_RECOVERY_NODE", "cause:~p", [Cause]),
             {error, Cause};
         #recovery_node_message{node = Node} ->
             recover_node(Node)

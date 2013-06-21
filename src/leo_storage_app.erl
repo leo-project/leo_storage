@@ -72,9 +72,11 @@ after_proc({ok, Pid}) ->
 
     ok = launch_logger(),
     ok = launch_object_storage(Pid),
-    ok = leo_storage_mq_client:start(Pid, QueueDir),
     ok = launch_redundant_manager(Pid, Managers, QueueDir),
     ok = leo_ordning_reda_api:start(),
+
+    Intervals = ?env_mq_consumption_intervals(),
+    ok = leo_storage_mq_client:start(Pid, Intervals, QueueDir),
 
     ok = leo_statistics_api:start_link(leo_storage),
     ok = leo_statistics_metrics_vm:start_link(?STATISTICS_SYNC_INTERVAL),
