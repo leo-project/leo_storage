@@ -564,8 +564,13 @@ replicate(?REP_LOCAL, Method, AddrId, Object0) ->
                         {ok, ETag};
                    ({ok,_ETag}) when Method == ?CMD_DELETE ->
                         ok;
-                   ({error,_Cause}) ->
-                        {error, ?ERROR_REPLICATE_FAILURE}
+                   ({error, Cause}) ->
+                        case lists:keyfind(not_found, 2, Cause) of
+                            false ->
+                                {error, ?ERROR_REPLICATE_FAILURE};
+                            _ ->
+                                {error, not_found}
+                        end
                 end,
             leo_storage_replicator:replicate(Quorum, Redundancies, Object1, F);
         _Error ->
@@ -591,6 +596,8 @@ replicate(?REP_REMOTE, Method, Object) ->
         %% Delete
         {ok, Ref} ->
             ok;
+        {error, Ref, not_found} ->
+            {error, not_found};
         {error, Ref, Cause} ->
             {error, Cause}
     end;
