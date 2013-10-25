@@ -156,7 +156,4 @@ log_file_appender([], []) ->
 log_file_appender([], Acc) ->
     lists:reverse(Acc);
 log_file_appender([{Type, _}|T], Acc) when Type == file ->
-    log_file_appender(T, [{?LOG_ID_FILE_ERROR, ?LOG_APPENDER_FILE}|[{?LOG_ID_FILE_INFO, ?LOG_APPENDER_FILE}|Acc]]);
-%% @TODO
-log_file_appender([{Type, _}|T], Acc) when Type == zmq ->
-    log_file_appender(T, [{?LOG_ID_ZMQ, ?LOG_APPENDER_ZMQ}|Acc]).
+    log_file_appender(T, [{?LOG_ID_FILE_ERROR, ?LOG_APPENDER_FILE}|[{?LOG_ID_FILE_INFO, ?LOG_APPENDER_FILE}|Acc]]).
