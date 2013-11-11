@@ -28,6 +28,7 @@
 
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
+-include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 
 -define(TEST_KEY_1, <<"air/on/g/string/music.png">>).
 -define(TEST_META_1, #metadata{key       = ?TEST_KEY_1,
@@ -95,7 +96,8 @@ regular_({Test0Node, Test1Node}) ->
                         ok
                 end),
 
-    Nodes = [{Test0Node, true},{Test1Node, true}],
+    Nodes = [#redundant_node{node = Test0Node, available = true},
+             #redundant_node{node = Test1Node, available = true}],
     F = fun(_) -> ok end,
     ok = leo_storage_read_repairer:repair(1, Nodes, ?TEST_META_1, 0, F),
     ok.
@@ -115,7 +117,8 @@ fail_1_({Test0Node, Test1Node}) ->
                         ok
                 end),
 
-    Nodes = [{Test0Node, true},{Test1Node, true}],
+    Nodes = [#redundant_node{node = Test0Node, available = true},
+             #redundant_node{node = Test1Node, available = true}],
     F = fun(_) -> ok end,
     ok = leo_storage_read_repairer:repair(1, Nodes, ?TEST_META_1, 0, F),
     ok.
@@ -135,7 +138,8 @@ fail_2_({Test0Node, Test1Node}) ->
                         ok
                 end),
 
-    Nodes = [{Test0Node, true},{Test1Node, true}],
+    Nodes = [#redundant_node{node = Test0Node, available = true},
+             #redundant_node{node = Test1Node, available = true}],
     F = fun(_) -> ok end,
     ok = leo_storage_read_repairer:repair(1, Nodes, ?TEST_META_2, 0, F),
     ok.

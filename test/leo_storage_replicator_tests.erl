@@ -42,8 +42,8 @@
                                timestamp = 8,
                                checksum  = 7}).
 
--define(TEST_REDUNDANCIES_1, [{Test0Node, true},
-                              {Test1Node, true}]).
+-define(TEST_REDUNDANCIES_1, [#redundant_node{node = Test0Node, available = true},
+                              #redundant_node{node = Test1Node, available = true}]).
 
 %%--------------------------------------------------------------------
 %% TEST FUNCTIONS

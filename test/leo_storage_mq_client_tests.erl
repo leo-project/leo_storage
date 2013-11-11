@@ -105,13 +105,19 @@ setup() ->
     meck:new(leo_redundant_manager_api),
     meck:expect(leo_redundant_manager_api, get_redundancies_by_key,
                 fun(_, _) ->
-                        {ok, #redundancies{nodes = [{Test0Node, true},
-                                                    {Test1Node, true}], id = ?TEST_VNODE_ID}}
+                        {ok, #redundancies{nodes = [#redundant_node{node = Test0Node,
+                                                                    available = true},
+                                                    #redundant_node{node = Test1Node,
+                                                                    available = true}],
+                                           id = ?TEST_VNODE_ID}}
                 end),
     meck:expect(leo_redundant_manager_api, get_redundancies_by_key,
                 fun(_) ->
-                        {ok, #redundancies{nodes = [{Test0Node, true},
-                                                    {Test1Node, true}], id = ?TEST_VNODE_ID}}
+                        {ok, #redundancies{nodes = [#redundant_node{node = Test0Node,
+                                                                    available = true},
+                                                    #redundant_node{node = Test1Node,
+                                                                    available = true}],
+                                           id = ?TEST_VNODE_ID}}
                 end),
     meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id,
                 fun(_,_) ->
