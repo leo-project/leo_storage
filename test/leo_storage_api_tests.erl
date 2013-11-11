@@ -120,13 +120,17 @@ start_([Node0, _]) ->
     %% 1.
     meck:new(leo_redundant_manager_api),
     meck:expect(leo_redundant_manager_api, create,
-                fun(Members) ->
+                fun(_, Members) ->
                         {ok, Members, [{?CHECKSUM_RING,   {1234, 5678}},
                                        {?CHECKSUM_MEMBER, 1234567890}]}
                 end),
     meck:expect(leo_redundant_manager_api, get_ring,
                 fun() ->
                         {ok, []}
+                end),
+    meck:expect(leo_redundant_manager_api, checksum,
+                fun(_) ->
+                        {ok, {1234, 5678}}
                 end),
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, start, fun(_,_) -> ok end),
@@ -139,7 +143,7 @@ start_([Node0, _]) ->
     meck:unload(leo_redundant_manager_api),
     meck:new(leo_redundant_manager_api),
     meck:expect(leo_redundant_manager_api, create,
-                fun(_Members) ->
+                fun(_,_Members) ->
                         {error , []}
                 end),
     meck:expect(leo_redundant_manager_api, get_ring,

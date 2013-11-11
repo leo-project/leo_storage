@@ -103,7 +103,7 @@ register_in_monitor(Pid, RequestedTimes) ->
 -spec(get_routing_table_chksum() ->
              {ok, integer()}).
 get_routing_table_chksum() ->
-    leo_redundant_manager_api:checksum(ring).
+    leo_redundant_manager_api:checksum(?CHECKSUM_RING).
 
 %% @doc update manager nodes
 %%
@@ -120,28 +120,33 @@ update_manager_nodes(Managers) ->
 start(Members) ->
     start(Members, undefined).
 start(Members, SystemConf) ->
-    case leo_redundant_manager_api:create(Members) of
-        {ok, _NewMembers, [{?CHECKSUM_RING,   Chksums},
-                           {?CHECKSUM_MEMBER,_Chksum1}]} ->
-            case SystemConf of
-                undefined -> void;
-                _ ->
-                    #system_conf{n = NumOfReplicas,
-                                 r = ReadQuorum,
-                                 w = WriteQuorum,
-                                 d = DeleteQuorum,
-                                 bit_of_ring = BitOfRing,
-                                 level_1 = L1,
-                                 level_2 = L2} = SystemConf,
-                    ok = leo_redundant_manager_api:set_options([{n, NumOfReplicas},
-                                                                {r, ReadQuorum},
-                                                                {w, WriteQuorum},
-                                                                {d, DeleteQuorum},
-                                                                {bit_of_ring, BitOfRing},
-                                                                {level_1, L1},
-                                                                {level_2, L2}])
-            end,
-            {ok, {node(), Chksums}};
+    case leo_redundant_manager_api:create(?VER_CURRENT, Members) of
+        {ok,_,_} ->
+            case leo_redundant_manager_api:create(?VER_PREV, Members) of
+                {ok,_,_} ->
+                    case SystemConf of
+                        undefined -> void;
+                        _ ->
+                            #system_conf{n = NumOfReplicas,
+                                         r = ReadQuorum,
+                                         w = WriteQuorum,
+                                         d = DeleteQuorum,
+                                         bit_of_ring = BitOfRing,
+                                         level_1 = L1,
+                                         level_2 = L2} = SystemConf,
+                            ok = leo_redundant_manager_api:set_options([{n, NumOfReplicas},
+                                                                        {r, ReadQuorum},
+                                                                        {w, WriteQuorum},
+                                                                        {d, DeleteQuorum},
+                                                                        {bit_of_ring, BitOfRing},
+                                                                        {level_1, L1},
+                                                                        {level_2, L2}])
+                    end,
+                    {ok, Chksums} = leo_redundant_manager_api:checksum(?CHECKSUM_RING),
+                    {ok, {node(), Chksums}};
+                {error, Cause} ->
+                    {error, {node(), Cause}}
+            end;
         {error, Cause} ->
             {error, {node(), Cause}}
     end.
@@ -249,7 +254,7 @@ get_node_status() ->
               end,
 
     {RingHashCur, RingHashPrev} =
-        case leo_redundant_manager_api:checksum(ring) of
+        case leo_redundant_manager_api:checksum(?CHECKSUM_RING) of
             {ok, {Chksum0, Chksum1}} -> {Chksum0, Chksum1};
             _ -> {[], []}
         end,
