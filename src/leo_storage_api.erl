@@ -120,7 +120,7 @@ update_manager_nodes(Managers) ->
 start(Members) ->
     start(Members, undefined).
 start(Members, SystemConf) ->
-    case leo_redundant_manager_api:create(?VER_CURRENT, Members) of
+    case leo_redundant_manager_api:create(?VER_CUR, Members) of
         {ok,_,_} ->
             case leo_redundant_manager_api:create(?VER_PREV, Members) of
                 {ok,_,_} ->
