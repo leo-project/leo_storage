@@ -120,13 +120,13 @@ start_([Node0, _]) ->
     %% 1.
     meck:new(leo_redundant_manager_api),
     meck:expect(leo_redundant_manager_api, create,
-                fun(_, Members) ->
-                        {ok, Members, [{?CHECKSUM_RING,   {1234, 5678}},
-                                       {?CHECKSUM_MEMBER, 1234567890}]}
-                end),
-    meck:expect(leo_redundant_manager_api, get_ring,
                 fun() ->
-                        {ok, []}
+                        {ok, [], [{?CHECKSUM_RING,   {1234, 5678}},
+                                  {?CHECKSUM_MEMBER, 1234567890}]}
+                end),
+    meck:expect(leo_redundant_manager_api, update_members,
+                fun(_) ->
+                        ok
                 end),
     meck:expect(leo_redundant_manager_api, checksum,
                 fun(_) ->
@@ -135,23 +135,23 @@ start_([Node0, _]) ->
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, start, fun(_,_) -> ok end),
 
-    {ok, {Node, Chksums}} = leo_storage_api:start([]),
+    {ok, {Node, Chksums}} = leo_storage_api:start([#member{node = 'node_0@127.0.0.1'}]),
     ?assertEqual(Node, Node0),
     ?assertEqual({1234, 5678}, Chksums),
 
     %% 2.
     meck:unload(leo_redundant_manager_api),
     meck:new(leo_redundant_manager_api),
+    meck:expect(leo_redundant_manager_api, update_members,
+                fun(_) ->
+                        ok
+                end),
     meck:expect(leo_redundant_manager_api, create,
-                fun(_,_Members) ->
+                fun() ->
                         {error , []}
                 end),
-    meck:expect(leo_redundant_manager_api, get_ring,
-                fun() ->
-                        {ok, []}
-                end),
 
-    {error, {Node, Cause}} = leo_storage_api:start([]),
+    {error, {Node, Cause}} = leo_storage_api:start([#member{node = 'node_0@127.0.0.1'}]),
     ?assertEqual(Node, Node0),
     ?assertEqual([], Cause),
     meck:unload(),
@@ -168,10 +168,10 @@ attach_(_) ->
                 end),
 
     ok = leo_storage_api:attach(#system_conf{n = 3,
-                                               r = 1,
-                                               w = 2,
-                                               d = 2,
-                                               bit_of_ring = 128}),
+                                             r = 1,
+                                             w = 2,
+                                             d = 2,
+                                             bit_of_ring = 128}),
     Res = meck:history(leo_redundant_manager_api),
     ?assertEqual(1, length(Res)),
 
@@ -243,7 +243,7 @@ rebalance_([Node0, Node1]) ->
                 end),
 
     ok = leo_storage_api:rebalance([{0,   Node0},
-                                      {255, Node1}]),
+                                    {255, Node1}]),
     Res = meck:history(leo_storage_mq_client),
     ?assertEqual(2, length(Res)),
 

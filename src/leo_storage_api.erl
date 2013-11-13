@@ -119,36 +119,33 @@ update_manager_nodes(Managers) ->
              {ok, {atom(), integer()}} | {error, {atom(), any()}}).
 start(Members) ->
     start(Members, undefined).
+start([], _) ->
+    {error, 'empty_members'};
 start(Members, SystemConf) ->
-    case leo_redundant_manager_api:create(?VER_CUR, Members) of
-        {ok,_,_} ->
-            case leo_redundant_manager_api:create(?VER_PREV, Members) of
+    case SystemConf of
+        undefined -> void;
+        _ ->
+            ok = leo_redundant_manager_api:set_options(
+                   [{n, SystemConf#system_conf.n},
+                    {r, SystemConf#system_conf.r},
+                    {w, SystemConf#system_conf.w},
+                    {d, SystemConf#system_conf.d},
+                    {bit_of_ring, SystemConf#system_conf.bit_of_ring},
+                    {level_1,     SystemConf#system_conf.level_1},
+                    {level_2,     SystemConf#system_conf.level_2}])
+    end,
+
+    case leo_redundant_manager_api:update_members(Members) of
+        ok ->
+            case leo_redundant_manager_api:create() of
                 {ok,_,_} ->
-                    case SystemConf of
-                        undefined -> void;
-                        _ ->
-                            #system_conf{n = NumOfReplicas,
-                                         r = ReadQuorum,
-                                         w = WriteQuorum,
-                                         d = DeleteQuorum,
-                                         bit_of_ring = BitOfRing,
-                                         level_1 = L1,
-                                         level_2 = L2} = SystemConf,
-                            ok = leo_redundant_manager_api:set_options([{n, NumOfReplicas},
-                                                                        {r, ReadQuorum},
-                                                                        {w, WriteQuorum},
-                                                                        {d, DeleteQuorum},
-                                                                        {bit_of_ring, BitOfRing},
-                                                                        {level_1, L1},
-                                                                        {level_2, L2}])
-                    end,
                     {ok, Chksums} = leo_redundant_manager_api:checksum(?CHECKSUM_RING),
                     {ok, {node(), Chksums}};
                 {error, Cause} ->
                     {error, {node(), Cause}}
             end;
-        {error, Cause} ->
-            {error, {node(), Cause}}
+        Error ->
+            Error
     end.
 
 
@@ -171,16 +168,15 @@ stop() ->
 %%
 -spec(attach(#system_conf{}) ->
              ok | {error, any()}).
-attach(#system_conf{n = NumOfReplicas,
-                    r = ReadQuorum,
-                    w = WriteQuorum,
-                    d = DeleteQuorum,
-                    bit_of_ring = BitOfRing}) ->
-    leo_redundant_manager_api:set_options([{n, NumOfReplicas},
-                                           {r, ReadQuorum},
-                                           {w, WriteQuorum},
-                                           {d, DeleteQuorum},
-                                           {bit_of_ring, BitOfRing}]).
+attach(SystemConf) ->
+    ok = leo_redundant_manager_api:set_options(
+           [{n, SystemConf#system_conf.n},
+            {r, SystemConf#system_conf.r},
+            {w, SystemConf#system_conf.w},
+            {d, SystemConf#system_conf.d},
+            {bit_of_ring, SystemConf#system_conf.bit_of_ring},
+            {level_1,     SystemConf#system_conf.level_1},
+            {level_2,     SystemConf#system_conf.level_2}]).
 
 
 %%--------------------------------------------------------------------
