@@ -321,6 +321,7 @@ get_node_status() ->
 rebalance([]) ->
     ok;
 rebalance([{VNodeId, Node}|T]) ->
+    ok = leo_redundant_manager_api:force_sync_workers(),
     ok = leo_storage_mq_client:publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, VNodeId, Node),
     rebalance(T).
 

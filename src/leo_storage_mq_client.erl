@@ -269,12 +269,10 @@ handle_call({consume, ?QUEUE_ID_REBALANCE, MessageBin}) ->
 
                     case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
                         {ok, #redundancies{nodes = Redundancies}} ->
-                            case lists:delete(#redundant_node{node = Node,
-                                                              available = true,
-                                                              can_read_repair = true}, Redundancies) of
-                                [#redundant_node{node = N,
-                                                 available = true,
-                                                 can_read_repair = true}|_] when N == node() ->
+                            case delete_node_from_redundancies(Redundancies, Node, []) of
+                                {ok, [#redundant_node{node = N,
+                                                      available = true,
+                                                      can_read_repair = true}|_]} when N == node() ->
                                     case leo_storage_handler_object:copy([Node], AddrId, Key) of
                                         ok ->
                                             ok;
@@ -391,6 +389,16 @@ sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
     _ = leo_object_storage_api:fetch_by_addr_id(FromAddrId, Fun),
     _ = notify_message_to_manager(?env_manager_nodes(leo_storage), ToAddrId, erlang:node()),
     sync_vnodes(Node, RingHash, T).
+
+
+%% @doc Remove a node from redundancies
+%% @private
+delete_node_from_redundancies([],_, Acc) ->
+    {ok, lists:reverse(Acc)};
+delete_node_from_redundancies([#redundant_node{node = Node}|Rest], Node, Acc) ->
+    delete_node_from_redundancies(Rest, Node, Acc);
+delete_node_from_redundancies([RedundatNode|Rest], Node, Acc) ->
+    delete_node_from_redundancies(Rest, Node, [RedundatNode|Acc]).
 
 
 %% @doc Notify a message to manager node(s)

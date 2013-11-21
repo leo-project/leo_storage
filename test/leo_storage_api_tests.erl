@@ -242,6 +242,12 @@ rebalance_([Node0, Node1]) ->
                         ok
                 end),
 
+    meck:new(leo_redundant_manager_api),
+    meck:expect(leo_redundant_manager_api, force_sync_workers,
+                fun() ->
+                        ok
+                end),
+
     ok = leo_storage_api:rebalance([{0,   Node0},
                                     {255, Node1}]),
     Res = meck:history(leo_storage_mq_client),
