@@ -318,10 +318,14 @@ get_node_status() ->
 %%
 -spec(rebalance(list()) ->
              ok | {error, any()}).
-rebalance([]) ->
-    ok;
-rebalance([{VNodeId, Node}|T]) ->
+rebalance(RebalanceList) ->
     ok = leo_redundant_manager_api:force_sync_workers(),
+    rebalance_1(RebalanceList).
+
+%% @private
+rebalance_1([]) ->
+    ok;
+rebalance_1([{VNodeId, Node}|T]) ->
     ok = leo_storage_mq_client:publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, VNodeId, Node),
-    rebalance(T).
+    rebalance_1(T).
 

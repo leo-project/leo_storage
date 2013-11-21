@@ -267,7 +267,7 @@ handle_call({consume, ?QUEUE_ID_REBALANCE, MessageBin}) ->
                     %% Copy objects to a remote-node
                     ok = decrement_counter(?TBL_REBALANCE_COUNTER, VNodeId),
 
-                    case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
+                    case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
                         {ok, #redundancies{nodes = Redundancies}} ->
                             case delete_node_from_redundancies(Redundancies, Node, []) of
                                 {ok, [#redundant_node{node = N,
