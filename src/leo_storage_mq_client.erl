@@ -276,15 +276,20 @@ handle_call({consume, ?QUEUE_ID_REBALANCE, MessageBin}) ->
                     case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
                         {ok, #redundancies{nodes = Redundancies}} ->
                             case delete_node_from_redundancies(Redundancies, Node, []) of
-                                {ok, [#redundant_node{node = N}|_]} when N == node() ->
-                                    case leo_storage_handler_object:copy([Node], AddrId, Key) of
-                                        ok ->
-                                            ok;
-                                        Error ->
-                                            ok = leo_storage_mq_client:publish(
-                                                   ?QUEUE_TYPE_PER_OBJECT, AddrId, Key,
-                                                   ?ERR_TYPE_REPLICATE_DATA),
-                                            Error
+                                {ok, Redundancies_1} ->
+                                    case find_node_from_redundancies(Redundancies_1, erlang:node()) of
+                                        true ->
+                                            case leo_storage_handler_object:copy([Node], AddrId, Key) of
+                                                ok ->
+                                                    ok;
+                                                Error ->
+                                                    ok = leo_storage_mq_client:publish(
+                                                           ?QUEUE_TYPE_PER_OBJECT, AddrId, Key,
+                                                           ?ERR_TYPE_REPLICATE_DATA),
+                                                    Error
+                                            end;
+                                        false ->
+                                            ok
                                     end;
                                 _ ->
                                     ok
@@ -397,12 +402,26 @@ sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
 
 %% @doc Remove a node from redundancies
 %% @private
+-spec(delete_node_from_redundancies(list(#redundant_node{}), atom(), list(#redundant_node{})) ->
+             {ok, list(#redundant_node{})}).
 delete_node_from_redundancies([],_, Acc) ->
     {ok, lists:reverse(Acc)};
 delete_node_from_redundancies([#redundant_node{node = Node}|Rest], Node, Acc) ->
     delete_node_from_redundancies(Rest, Node, Acc);
 delete_node_from_redundancies([RedundatNode|Rest], Node, Acc) ->
     delete_node_from_redundancies(Rest, Node, [RedundatNode|Acc]).
+
+
+%% @doc Find a node from redundancies
+%% @private
+-spec(find_node_from_redundancies(list(#redundant_node{}), atom()) ->
+             boolean()).
+find_node_from_redundancies([],_) ->
+    false;
+find_node_from_redundancies([#redundant_node{node = Node}|_], Node) ->
+    true;
+find_node_from_redundancies([_|Rest], Node) ->
+    find_node_from_redundancies(Rest, Node).
 
 
 %% @doc Notify a message to manager node(s)
