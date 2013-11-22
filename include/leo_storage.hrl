@@ -189,11 +189,17 @@
             _ -> 168
         end).
 
+-define(DEF_MQ_NUM_OF_BATCH_PROC,  1).
 -define(DEF_MQ_INTERVAL_MAX, 32).
 -define(DEF_MQ_INTERVAL_MIN,  8).
 -define(env_mq_consumption_intervals(),
         [
          %% per_object
+         {cns_num_of_batch_process_per_object,
+          case application:get_env(leo_storage, cns_num_of_batch_process_per_object) of
+              {ok, _CnsNumofBatchProc1} -> _CnsNumofBatchProc1;
+              _ -> ?DEF_MQ_NUM_OF_BATCH_PROC
+          end},
          {cns_interval_per_object_min,
           case application:get_env(leo_storage, cns_interval_per_object_min) of
               {ok, _CnsInterval1_Min} -> _CnsInterval1_Min;
@@ -205,6 +211,11 @@
               _ -> ?DEF_MQ_INTERVAL_MAX
           end},
          %% sync_by_vnode_id
+         {cns_num_of_batch_process_sync_by_vnode_id,
+          case application:get_env(leo_storage, cns_num_of_batch_process_sync_by_vnode_id) of
+              {ok, _CnsNumofBatchProc2} -> _CnsNumofBatchProc2;
+              _ -> ?DEF_MQ_NUM_OF_BATCH_PROC
+          end},
          {cns_interval_sync_by_vnode_id_min,
           case application:get_env(leo_storage, cns_interval_sync_by_vnode_id_min) of
               {ok, _CnsInterval2_Min} -> _CnsInterval2_Min;
@@ -216,6 +227,11 @@
               _ -> ?DEF_MQ_INTERVAL_MAX
           end},
          %% for rebalance
+         {cns_num_of_batch_process_rebalance,
+          case application:get_env(leo_storage, cns_num_of_batch_process_rebalance) of
+              {ok, _CnsNumofBatchProc3} -> _CnsNumofBatchProc3;
+              _ -> ?DEF_MQ_NUM_OF_BATCH_PROC
+          end},
          {cns_interval_rebalance_min,
           case application:get_env(leo_storage, cns_interval_rebalance_min) of
               {ok, _CnsInterval3_Min} -> _CnsInterval3_Min;
@@ -227,6 +243,11 @@
               _ -> ?DEF_MQ_INTERVAL_MAX
           end},
          %% async deletion objects (after remove a bucket)
+         {cns_num_of_batch_process_async_deletion,
+          case application:get_env(leo_storage, cns_num_of_batch_process_async_deletion) of
+              {ok, _CnsNumofBatchProc4} -> _CnsNumofBatchProc4;
+              _ -> ?DEF_MQ_NUM_OF_BATCH_PROC
+          end},
          {cns_interval_async_deletion_min,
           case application:get_env(leo_storage, cns_interval_async_deletion_min) of
               {ok, _CnsInterval3_Min} -> _CnsInterval3_Min;
@@ -238,6 +259,11 @@
               _ -> ?DEF_MQ_INTERVAL_MAX
           end},
          %% recovery node
+         {cns_num_of_batch_process_recovery_node,
+          case application:get_env(leo_storage, cns_num_of_batch_process_recovery_node) of
+              {ok, _CnsNumofBatchProc5} -> _CnsNumofBatchProc5;
+              _ -> ?DEF_MQ_NUM_OF_BATCH_PROC
+          end},
          {cns_interval_recovery_node_min,
           case application:get_env(leo_storage, cns_interval_recovery_node_min) of
               {ok, _CnsInterval4_Min} -> _CnsInterval4_Min;

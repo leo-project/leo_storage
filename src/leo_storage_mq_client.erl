@@ -95,31 +95,37 @@ start(RefSup, Intervals, RootPath0) ->
     ?TBL_REBALANCE_COUNTER = ets:new(?TBL_REBALANCE_COUNTER,
                                      [named_table, public, {read_concurrency, true}]),
     lists:foreach(
-      fun({Id, Path, MaxInterval, MinInterval}) ->
+      fun({Id, Path, NumOfBatchProcs, MaxInterval, MinInterval}) ->
               leo_mq_api:new(RefMqSup, Id, [{?MQ_PROP_MOD,          ?MODULE},
                                             {?MQ_PROP_FUN,          ?MQ_SUBSCRIBE_FUN},
                                             {?MQ_PROP_ROOT_PATH,    RootPath1 ++ Path},
                                             {?MQ_PROP_DB_PROCS,     ?env_num_of_mq_procs()},
+                                            {?MQ_PROP_NUM_OF_BATCH_PROC, NumOfBatchProcs},
                                             {?MQ_PROP_MAX_INTERVAL, MaxInterval},
                                             {?MQ_PROP_MIN_INTERVAL, MinInterval}
                                            ])
       end, [{?QUEUE_ID_PER_OBJECT, ?MSG_PATH_PER_OBJECT,
+             leo_misc:get_value(cns_num_of_batch_process_per_object, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC),
              leo_misc:get_value(cns_interval_per_object_max, Intervals, ?DEF_MQ_INTERVAL_MAX),
              leo_misc:get_value(cns_interval_per_object_min, Intervals, ?DEF_MQ_INTERVAL_MIN)
             },
             {?QUEUE_ID_SYNC_BY_VNODE_ID, ?MSG_PATH_SYNC_VNODE_ID,
+             leo_misc:get_value(cns_num_of_batch_process_sync_by_vnode_id, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC),
              leo_misc:get_value(cns_interval_sync_by_vnode_id_max, Intervals, ?DEF_MQ_INTERVAL_MAX),
              leo_misc:get_value(cns_interval_sync_by_vnode_id_min, Intervals, ?DEF_MQ_INTERVAL_MIN)
             },
             {?QUEUE_ID_REBALANCE, ?MSG_PATH_REBALANCE,
+             leo_misc:get_value(cns_num_of_batch_process_rebalance, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC),
              leo_misc:get_value(cns_interval_rebalance_max, Intervals, ?DEF_MQ_INTERVAL_MAX),
              leo_misc:get_value(cns_interval_rebalance_min, Intervals, ?DEF_MQ_INTERVAL_MIN)
             },
             {?QUEUE_ID_ASYNC_DELETION, ?MSG_PATH_ASYNC_DELETION,
+             leo_misc:get_value(cns_num_of_batch_process_async_deletion, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC),
              leo_misc:get_value(cns_interval_async_deletion_max, Intervals, ?DEF_MQ_INTERVAL_MAX),
              leo_misc:get_value(cns_interval_async_deletion_min, Intervals, ?DEF_MQ_INTERVAL_MIN)
             },
             {?QUEUE_ID_RECOVERY_NODE, ?MSG_PATH_RECOVERY_NODE,
+             leo_misc:get_value(cns_num_of_batch_process_recovery_node, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC),
              leo_misc:get_value(cns_interval_recovery_node_max, Intervals, ?DEF_MQ_INTERVAL_MAX),
              leo_misc:get_value(cns_interval_recovery_node_min, Intervals, ?DEF_MQ_INTERVAL_MIN)
             }]),
