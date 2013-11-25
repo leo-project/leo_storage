@@ -121,8 +121,7 @@ start_([Node0, _]) ->
     meck:new(leo_redundant_manager_api),
     meck:expect(leo_redundant_manager_api, create,
                 fun() ->
-                        {ok, [], [{?CHECKSUM_RING,   {1234, 5678}},
-                                  {?CHECKSUM_MEMBER, 1234567890}]}
+                        {ok, [],[]}
                 end),
     meck:expect(leo_redundant_manager_api, update_members,
                 fun(_) ->
@@ -132,6 +131,16 @@ start_([Node0, _]) ->
                 fun(_) ->
                         {ok, {1234, 5678}}
                 end),
+    meck:expect(leo_redundant_manager_api, set_options,
+                fun(_) ->
+                        ok
+                end),
+    meck:expect(leo_redundant_manager_api, synchronize,
+                fun(_,_) ->
+                        {ok, {node(), [{?CHECKSUM_RING,   {1234, 5678}},
+                                       {?CHECKSUM_MEMBER, 1234567890}]}}
+                end),
+
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, start, fun(_,_) -> ok end),
 
@@ -146,9 +155,13 @@ start_([Node0, _]) ->
                 fun(_) ->
                         ok
                 end),
-    meck:expect(leo_redundant_manager_api, create,
-                fun() ->
-                        {error , []}
+    meck:expect(leo_redundant_manager_api, set_options,
+                fun(_) ->
+                        ok
+                end),
+    meck:expect(leo_redundant_manager_api, synchronize,
+                fun(_,_) ->
+                        {error, []}
                 end),
 
     {error, {Node, Cause}} = leo_storage_api:start([#member{node = 'node_0@127.0.0.1'}]),

@@ -38,8 +38,9 @@
 -export([register_in_monitor/1, register_in_monitor/2,
          get_routing_table_chksum/0,
          update_manager_nodes/1,
-         start/1, start/2, stop/0, attach/1, synchronize/1, synchronize/2,
-         compact/1, compact/3, get_node_status/0, rebalance/1]).
+         start/1, start/2, start/3, stop/0, attach/1, synchronize/1, synchronize/2,
+         compact/1, compact/3, get_node_status/0,
+         rebalance/1, rebalance/3]).
 
 %% interval to notify to leo_manager
 -define(CHECK_INTERVAL, 3000).
@@ -117,13 +118,17 @@ update_manager_nodes(Managers) ->
 %%
 -spec(start(list()) ->
              {ok, {atom(), integer()}} | {error, {atom(), any()}}).
-start(Members) ->
-    start(Members, undefined).
+start(MembersCur) ->
+    start(MembersCur, undefined).
 start([], _) ->
     {error, 'empty_members'};
-start(Members, SystemConf) ->
+start(MembersCur, SystemConf) ->
+    start(MembersCur, [], SystemConf).
+
+start(MembersCur, MembersPrev, SystemConf) ->
     case SystemConf of
-        undefined -> void;
+        undefined -> ok;
+        [] -> ok;
         _ ->
             ok = leo_redundant_manager_api:set_options(
                    [{n, SystemConf#system_conf.n},
@@ -134,9 +139,14 @@ start(Members, SystemConf) ->
                     {level_1,     SystemConf#system_conf.level_1},
                     {level_2,     SystemConf#system_conf.level_2}])
     end,
+    start_1(MembersCur, MembersPrev).
 
-    case leo_redundant_manager_api:update_members(Members) of
-        ok ->
+%% @private
+start_1(MembersCur, MembersPrev) ->
+    case leo_redundant_manager_api:synchronize(
+           ?SYNC_TARGET_MEMBER, [{?VER_CUR,  MembersCur },
+                                 {?VER_PREV, MembersPrev}]) of
+        {ok,_MembersChecksum} ->
             case leo_redundant_manager_api:create() of
                 {ok,_,_} ->
                     {ok, Chksums} = leo_redundant_manager_api:checksum(?CHECKSUM_RING),
@@ -144,8 +154,8 @@ start(Members, SystemConf) ->
                 {error, Cause} ->
                     {error, {node(), Cause}}
             end;
-        Error ->
-            Error
+        {error, Cause} ->
+            {error, {node(), Cause}}
     end.
 
 
@@ -321,6 +331,20 @@ get_node_status() ->
 rebalance(RebalanceList) ->
     ok = leo_redundant_manager_api:force_sync_workers(),
     rebalance_1(RebalanceList).
+
+-spec(rebalance(list(), list(#member{}), list(#member{})) ->
+             ok | {error, any()}).
+rebalance(RebalanceList, MembersCur, MembersPrev) ->
+    case leo_redundant_manager_api:synchronize(
+           ?SYNC_TARGET_BOTH, [{?VER_CUR,  MembersCur},
+                               {?VER_PREV, MembersPrev}]) of
+        {ok, Hashes} ->
+            ok = rebalance(RebalanceList),
+            {ok, Hashes};
+        Error ->
+            Error
+    end.
+
 
 %% @private
 rebalance_1([]) ->
