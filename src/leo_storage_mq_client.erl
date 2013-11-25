@@ -147,8 +147,9 @@ publish(_,_) ->
 -spec(publish(queue_type(), integer(), atom()) ->
              ok).
 publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID = Id, VNodeId, Node) ->
-    KeyBin     = term_to_binary(VNodeId),
-    MessageBin = term_to_binary(#sync_unit_of_vnode_message{id        = leo_date:clock(),
+    Clock = leo_date:clock(),
+    KeyBin     = term_to_binary({VNodeId, Node, Clock}),
+    MessageBin = term_to_binary(#sync_unit_of_vnode_message{id        = Clock,
                                                             vnode_id  = VNodeId,
                                                             node      = Node,
                                                             timestamp = leo_date:now()}),
