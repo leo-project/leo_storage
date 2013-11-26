@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012 Rakuten, Inc.
+%% Copyright (c) 2012-2013 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -95,31 +95,37 @@ start(RefSup, Intervals, RootPath0) ->
     ?TBL_REBALANCE_COUNTER = ets:new(?TBL_REBALANCE_COUNTER,
                                      [named_table, public, {read_concurrency, true}]),
     lists:foreach(
-      fun({Id, Path, MaxInterval, MinInterval}) ->
+      fun({Id, Path, NumOfBatchProcs, MaxInterval, MinInterval}) ->
               leo_mq_api:new(RefMqSup, Id, [{?MQ_PROP_MOD,          ?MODULE},
                                             {?MQ_PROP_FUN,          ?MQ_SUBSCRIBE_FUN},
                                             {?MQ_PROP_ROOT_PATH,    RootPath1 ++ Path},
                                             {?MQ_PROP_DB_PROCS,     ?env_num_of_mq_procs()},
+                                            {?MQ_PROP_NUM_OF_BATCH_PROC, NumOfBatchProcs},
                                             {?MQ_PROP_MAX_INTERVAL, MaxInterval},
                                             {?MQ_PROP_MIN_INTERVAL, MinInterval}
                                            ])
       end, [{?QUEUE_ID_PER_OBJECT, ?MSG_PATH_PER_OBJECT,
+             leo_misc:get_value(cns_num_of_batch_process_per_object, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC),
              leo_misc:get_value(cns_interval_per_object_max, Intervals, ?DEF_MQ_INTERVAL_MAX),
              leo_misc:get_value(cns_interval_per_object_min, Intervals, ?DEF_MQ_INTERVAL_MIN)
             },
             {?QUEUE_ID_SYNC_BY_VNODE_ID, ?MSG_PATH_SYNC_VNODE_ID,
+             leo_misc:get_value(cns_num_of_batch_process_sync_by_vnode_id, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC),
              leo_misc:get_value(cns_interval_sync_by_vnode_id_max, Intervals, ?DEF_MQ_INTERVAL_MAX),
              leo_misc:get_value(cns_interval_sync_by_vnode_id_min, Intervals, ?DEF_MQ_INTERVAL_MIN)
             },
             {?QUEUE_ID_REBALANCE, ?MSG_PATH_REBALANCE,
+             leo_misc:get_value(cns_num_of_batch_process_rebalance, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC),
              leo_misc:get_value(cns_interval_rebalance_max, Intervals, ?DEF_MQ_INTERVAL_MAX),
              leo_misc:get_value(cns_interval_rebalance_min, Intervals, ?DEF_MQ_INTERVAL_MIN)
             },
             {?QUEUE_ID_ASYNC_DELETION, ?MSG_PATH_ASYNC_DELETION,
+             leo_misc:get_value(cns_num_of_batch_process_async_deletion, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC),
              leo_misc:get_value(cns_interval_async_deletion_max, Intervals, ?DEF_MQ_INTERVAL_MAX),
              leo_misc:get_value(cns_interval_async_deletion_min, Intervals, ?DEF_MQ_INTERVAL_MIN)
             },
             {?QUEUE_ID_RECOVERY_NODE, ?MSG_PATH_RECOVERY_NODE,
+             leo_misc:get_value(cns_num_of_batch_process_recovery_node, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC),
              leo_misc:get_value(cns_interval_recovery_node_max, Intervals, ?DEF_MQ_INTERVAL_MAX),
              leo_misc:get_value(cns_interval_recovery_node_min, Intervals, ?DEF_MQ_INTERVAL_MIN)
             }]),
@@ -141,8 +147,9 @@ publish(_,_) ->
 -spec(publish(queue_type(), integer(), atom()) ->
              ok).
 publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID = Id, VNodeId, Node) ->
-    KeyBin     = term_to_binary(VNodeId),
-    MessageBin = term_to_binary(#sync_unit_of_vnode_message{id        = leo_date:clock(),
+    Clock = leo_date:clock(),
+    KeyBin     = term_to_binary({VNodeId, Node, Clock}),
+    MessageBin = term_to_binary(#sync_unit_of_vnode_message{id        = Clock,
                                                             vnode_id  = VNodeId,
                                                             node      = Node,
                                                             timestamp = leo_date:now()}),
@@ -269,16 +276,21 @@ handle_call({consume, ?QUEUE_ID_REBALANCE, MessageBin}) ->
 
                     case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
                         {ok, #redundancies{nodes = Redundancies}} ->
-                            case lists:delete({Node, true}, Redundancies) of
-                                [{N, true}|_] when N == node() ->
-                                    case leo_storage_handler_object:copy([Node], AddrId, Key) of
-                                        ok ->
-                                            ok;
-                                        Error ->
-                                            ok = leo_storage_mq_client:publish(
-                                                   ?QUEUE_TYPE_PER_OBJECT, AddrId, Key,
-                                                   ?ERR_TYPE_REPLICATE_DATA),
-                                            Error
+                            case delete_node_from_redundancies(Redundancies, Node, []) of
+                                {ok, Redundancies_1} ->
+                                    case find_node_from_redundancies(Redundancies_1, erlang:node()) of
+                                        true ->
+                                            case leo_storage_handler_object:copy([Node], AddrId, Key) of
+                                                ok ->
+                                                    ok;
+                                                Error ->
+                                                    ok = leo_storage_mq_client:publish(
+                                                           ?QUEUE_TYPE_PER_OBJECT, AddrId, Key,
+                                                           ?ERR_TYPE_REPLICATE_DATA),
+                                                    Error
+                                            end;
+                                        false ->
+                                            ok
                                     end;
                                 _ ->
                                     ok
@@ -333,7 +345,7 @@ recover_node(Node) ->
 
                   case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
                       {ok, #redundancies{nodes = Redundancies}} ->
-                          Nodes = [N || {N, _} <- Redundancies],
+                          Nodes = [N || #redundant_node{node = N} <- Redundancies],
                           case lists:member(Node, Nodes) of
                               true ->
                                   ?MODULE:publish(?QUEUE_TYPE_PER_OBJECT,
@@ -367,7 +379,7 @@ sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
                       true when Metadata#metadata.ring_hash =/= RingHash ->
                           case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
                               {ok, #redundancies{nodes = Redundancies}} ->
-                                  Nodes = [N || {N, _} <- Redundancies],
+                                  Nodes = [N || #redundant_node{node = N} <- Redundancies],
                                   case lists:member(Node, Nodes) of
                                       true ->
                                           VNodeId = ToAddrId,
@@ -387,6 +399,30 @@ sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
     _ = leo_object_storage_api:fetch_by_addr_id(FromAddrId, Fun),
     _ = notify_message_to_manager(?env_manager_nodes(leo_storage), ToAddrId, erlang:node()),
     sync_vnodes(Node, RingHash, T).
+
+
+%% @doc Remove a node from redundancies
+%% @private
+-spec(delete_node_from_redundancies(list(#redundant_node{}), atom(), list(#redundant_node{})) ->
+             {ok, list(#redundant_node{})}).
+delete_node_from_redundancies([],_, Acc) ->
+    {ok, lists:reverse(Acc)};
+delete_node_from_redundancies([#redundant_node{node = Node}|Rest], Node, Acc) ->
+    delete_node_from_redundancies(Rest, Node, Acc);
+delete_node_from_redundancies([RedundatNode|Rest], Node, Acc) ->
+    delete_node_from_redundancies(Rest, Node, [RedundatNode|Acc]).
+
+
+%% @doc Find a node from redundancies
+%% @private
+-spec(find_node_from_redundancies(list(#redundant_node{}), atom()) ->
+             boolean()).
+find_node_from_redundancies([],_) ->
+    false;
+find_node_from_redundancies([#redundant_node{node = Node}|_], Node) ->
+    true;
+find_node_from_redundancies([_|Rest], Node) ->
+    find_node_from_redundancies(Rest, Node).
 
 
 %% @doc Notify a message to manager node(s)
@@ -425,19 +461,19 @@ notify_message_to_manager([Manager|T], VNodeId, Node) ->
 correct_redundancies(Key) ->
     {ok, #redundancies{nodes = Redundancies,
                        id    = AddrId}} = leo_redundant_manager_api:get_redundancies_by_key(Key),
-    correct_redundancies1(Key, AddrId, Redundancies, [], []).
+    correct_redundancies_1(Key, AddrId, Redundancies, [], []).
 
-%% correct_redundancies1/5 - next.
+%% correct_redundancies_1/5 - next.
 %%
--spec(correct_redundancies1(string(), integer(), list(), list(), list()) ->
+-spec(correct_redundancies_1(string(), integer(), list(), list(), list()) ->
              ok | {error, any()}).
-correct_redundancies1(_Key,_AddrId, [], [], _ErrorNodes) ->
+correct_redundancies_1(_Key,_AddrId, [], [], _ErrorNodes) ->
     {error, not_found};
 
-correct_redundancies1(_Key,_AddrId, [], Metadatas, ErrorNodes) ->
-    correct_redundancies2(Metadatas, ErrorNodes);
+correct_redundancies_1(_Key,_AddrId, [], Metadatas, ErrorNodes) ->
+    correct_redundancies_2(Metadatas, ErrorNodes);
 
-correct_redundancies1(Key, AddrId, [{Node, _}|T], Metadatas, ErrorNodes) ->
+correct_redundancies_1(Key, AddrId, [#redundant_node{node = Node}|T], Metadatas, ErrorNodes) ->
     %% NOTE:
     %% If remote-node status is NOT 'running',
     %%     this function cannot operate 'rpc-call'.
@@ -448,21 +484,21 @@ correct_redundancies1(Key, AddrId, [{Node, _}|T], Metadatas, ErrorNodes) ->
 
             case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
                 {value, {ok, Metadata}} ->
-                    correct_redundancies1(Key, AddrId, T, [{Node, Metadata}|Metadatas], ErrorNodes);
+                    correct_redundancies_1(Key, AddrId, T, [{Node, Metadata}|Metadatas], ErrorNodes);
                 _Error ->
-                    correct_redundancies1(Key, AddrId, T, Metadatas, [Node|ErrorNodes])
+                    correct_redundancies_1(Key, AddrId, T, Metadatas, [Node|ErrorNodes])
             end;
         {ok, #member{state = ?STATE_DETACHED}} ->
-            correct_redundancies1(Key, AddrId, T, Metadatas, ErrorNodes);
+            correct_redundancies_1(Key, AddrId, T, Metadatas, ErrorNodes);
         _Other ->
-            correct_redundancies1(Key, AddrId, T, Metadatas, [Node|ErrorNodes])
+            correct_redundancies_1(Key, AddrId, T, Metadatas, [Node|ErrorNodes])
     end.
 
-%% correct_redundancies2/3
+%% correct_redundancies_2/3
 %%
--spec(correct_redundancies2(list(), list()) ->
+-spec(correct_redundancies_2(list(), list()) ->
              ok | {error, any()}).
-correct_redundancies2(ListOfMetadata, ErrorNodes) ->
+correct_redundancies_2(ListOfMetadata, ErrorNodes) ->
     [{_, Metadata} = H|_] = lists:sort(fun({_, M1}, {_, M2}) ->
                                                M1#metadata.clock >= M2#metadata.clock;
                                           (_,_) ->
@@ -484,18 +520,18 @@ correct_redundancies2(ListOfMetadata, ErrorNodes) ->
                   {Dest, C, [Node|R]}
           end, {H, [], []}, ListOfMetadata),
 
-    correct_redundancies3(ErrorNodes ++ InconsistentNodes, CorrectNodes, Metadata).
+    correct_redundancies_3(ErrorNodes ++ InconsistentNodes, CorrectNodes, Metadata).
 
 
-%% correct_redundancies3/4 - last.
+%% correct_redundancies_3/4 - last.
 %%
--spec(correct_redundancies3(list(), list(), #metadata{}) ->
+-spec(correct_redundancies_3(list(), list(), #metadata{}) ->
              ok | {error, any()}).
-correct_redundancies3([], _, _) ->
+correct_redundancies_3([], _, _) ->
     ok;
-correct_redundancies3(_, [], _) ->
+correct_redundancies_3(_, [], _) ->
     {error, 'could not fix inconsistency'};
-correct_redundancies3(InconsistentNodes, [Node|Rest], Metadata) ->
+correct_redundancies_3(InconsistentNodes, [Node|Rest], Metadata) ->
     RPCKey = rpc:async_call(Node, leo_storage_api, synchronize,
                             [InconsistentNodes, Metadata]),
     Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
@@ -513,7 +549,7 @@ correct_redundancies3(InconsistentNodes, [Node|Rest], Metadata) ->
         ok ->
             Ret;
         {error, _Why} ->
-            correct_redundancies3(InconsistentNodes, Rest, Metadata)
+            correct_redundancies_3(InconsistentNodes, Rest, Metadata)
     end.
 
 

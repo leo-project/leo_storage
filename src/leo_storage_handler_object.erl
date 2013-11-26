@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012 Rakuten, Inc.
+%% Copyright (c) 2012-2013 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -121,7 +121,8 @@ get(AddrId, Key, StartPos, EndPos, ReqId) ->
     _ = leo_statistics_req_counter:increment(?STAT_REQ_GET),
 
     Ret =  case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
-               {ok, #redundancies{nodes = Redundancies, r = ReadQuorum}} ->
+               {ok, #redundancies{nodes = Redundancies,
+                                  r = ReadQuorum}} ->
                    ReadParameter = #read_parameter{addr_id   = AddrId,
                                                    key       = Key,
                                                    start_pos = StartPos,

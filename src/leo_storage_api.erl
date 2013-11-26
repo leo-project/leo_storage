@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012 Rakuten, Inc.
+%% Copyright (c) 2012-2013 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -38,8 +38,9 @@
 -export([register_in_monitor/1, register_in_monitor/2,
          get_routing_table_chksum/0,
          update_manager_nodes/1,
-         start/1, start/2, stop/0, attach/1, synchronize/1, synchronize/2,
-         compact/1, compact/3, get_node_status/0, rebalance/1]).
+         start/1, start/2, start/3, stop/0, attach/1, synchronize/1, synchronize/2,
+         compact/1, compact/3, get_node_status/0,
+         rebalance/1, rebalance/3]).
 
 %% interval to notify to leo_manager
 -define(CHECK_INTERVAL, 3000).
@@ -103,7 +104,7 @@ register_in_monitor(Pid, RequestedTimes) ->
 -spec(get_routing_table_chksum() ->
              {ok, integer()}).
 get_routing_table_chksum() ->
-    leo_redundant_manager_api:checksum(ring).
+    leo_redundant_manager_api:checksum(?CHECKSUM_RING).
 
 %% @doc update manager nodes
 %%
@@ -117,31 +118,42 @@ update_manager_nodes(Managers) ->
 %%
 -spec(start(list()) ->
              {ok, {atom(), integer()}} | {error, {atom(), any()}}).
-start(Members) ->
-    start(Members, undefined).
-start(Members, SystemConf) ->
-    case leo_redundant_manager_api:create(Members) of
-        {ok, _NewMembers, [{?CHECKSUM_RING,   Chksums},
-                           {?CHECKSUM_MEMBER,_Chksum1}]} ->
-            case SystemConf of
-                undefined -> void;
-                _ ->
-                    #system_conf{n = NumOfReplicas,
-                                 r = ReadQuorum,
-                                 w = WriteQuorum,
-                                 d = DeleteQuorum,
-                                 bit_of_ring = BitOfRing,
-                                 level_1 = L1,
-                                 level_2 = L2} = SystemConf,
-                    ok = leo_redundant_manager_api:set_options([{n, NumOfReplicas},
-                                                                {r, ReadQuorum},
-                                                                {w, WriteQuorum},
-                                                                {d, DeleteQuorum},
-                                                                {bit_of_ring, BitOfRing},
-                                                                {level_1, L1},
-                                                                {level_2, L2}])
-            end,
-            {ok, {node(), Chksums}};
+start(MembersCur) ->
+    start(MembersCur, undefined).
+start([], _) ->
+    {error, 'empty_members'};
+start(MembersCur, SystemConf) ->
+    start(MembersCur, [], SystemConf).
+
+start(MembersCur, MembersPrev, SystemConf) ->
+    case SystemConf of
+        undefined -> ok;
+        [] -> ok;
+        _ ->
+            ok = leo_redundant_manager_api:set_options(
+                   [{n, SystemConf#system_conf.n},
+                    {r, SystemConf#system_conf.r},
+                    {w, SystemConf#system_conf.w},
+                    {d, SystemConf#system_conf.d},
+                    {bit_of_ring, SystemConf#system_conf.bit_of_ring},
+                    {level_1,     SystemConf#system_conf.level_1},
+                    {level_2,     SystemConf#system_conf.level_2}])
+    end,
+    start_1(MembersCur, MembersPrev).
+
+%% @private
+start_1(MembersCur, MembersPrev) ->
+    case leo_redundant_manager_api:synchronize(
+           ?SYNC_TARGET_MEMBER, [{?VER_CUR,  MembersCur },
+                                 {?VER_PREV, MembersPrev}]) of
+        {ok,_MembersChecksum} ->
+            case leo_redundant_manager_api:create() of
+                {ok,_,_} ->
+                    {ok, Chksums} = leo_redundant_manager_api:checksum(?CHECKSUM_RING),
+                    {ok, {node(), Chksums}};
+                {error, Cause} ->
+                    {error, {node(), Cause}}
+            end;
         {error, Cause} ->
             {error, {node(), Cause}}
     end.
@@ -166,16 +178,15 @@ stop() ->
 %%
 -spec(attach(#system_conf{}) ->
              ok | {error, any()}).
-attach(#system_conf{n = NumOfReplicas,
-                    r = ReadQuorum,
-                    w = WriteQuorum,
-                    d = DeleteQuorum,
-                    bit_of_ring = BitOfRing}) ->
-    leo_redundant_manager_api:set_options([{n, NumOfReplicas},
-                                           {r, ReadQuorum},
-                                           {w, WriteQuorum},
-                                           {d, DeleteQuorum},
-                                           {bit_of_ring, BitOfRing}]).
+attach(SystemConf) ->
+    ok = leo_redundant_manager_api:set_options(
+           [{n, SystemConf#system_conf.n},
+            {r, SystemConf#system_conf.r},
+            {w, SystemConf#system_conf.w},
+            {d, SystemConf#system_conf.d},
+            {bit_of_ring, SystemConf#system_conf.bit_of_ring},
+            {level_1,     SystemConf#system_conf.level_1},
+            {level_2,     SystemConf#system_conf.level_2}]).
 
 
 %%--------------------------------------------------------------------
@@ -249,7 +260,7 @@ get_node_status() ->
               end,
 
     {RingHashCur, RingHashPrev} =
-        case leo_redundant_manager_api:checksum(ring) of
+        case leo_redundant_manager_api:checksum(?CHECKSUM_RING) of
             {ok, {Chksum0, Chksum1}} -> {Chksum0, Chksum1};
             _ -> {[], []}
         end,
@@ -317,9 +328,28 @@ get_node_status() ->
 %%
 -spec(rebalance(list()) ->
              ok | {error, any()}).
-rebalance([]) ->
+rebalance(RebalanceList) ->
+    ok = leo_redundant_manager_api:force_sync_workers(),
+    rebalance_1(RebalanceList).
+
+-spec(rebalance(list(), list(#member{}), list(#member{})) ->
+             ok | {error, any()}).
+rebalance(RebalanceList, MembersCur, MembersPrev) ->
+    case leo_redundant_manager_api:synchronize(
+           ?SYNC_TARGET_BOTH, [{?VER_CUR,  MembersCur},
+                               {?VER_PREV, MembersPrev}]) of
+        {ok, Hashes} ->
+            ok = rebalance(RebalanceList),
+            {ok, Hashes};
+        Error ->
+            Error
+    end.
+
+
+%% @private
+rebalance_1([]) ->
     ok;
-rebalance([{VNodeId, Node}|T]) ->
+rebalance_1([{VNodeId, Node}|T]) ->
     ok = leo_storage_mq_client:publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, VNodeId, Node),
-    rebalance(T).
+    rebalance_1(T).
 

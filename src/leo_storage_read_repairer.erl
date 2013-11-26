@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012 Rakuten, Inc.
+%% Copyright (c) 2012-2013 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -31,6 +31,7 @@
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("leo_logger/include/leo_logger.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
+-include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 
 %% API
 -export([repair/5]).
@@ -59,18 +60,18 @@ repair(ReadQuorum, Nodes, Metadata, ReqId, Callback) ->
                          redundancies = Nodes,
                          metadata     = Metadata,
                          req_id       = ReqId},
-
     lists:foreach(
-      fun({Node, true}) ->
+      fun(#redundant_node{node = Node,
+                          available = true,
+                          can_read_repair = true}) ->
               spawn(fun() ->
                             RPCKey = rpc:async_call(
                                        Node, leo_storage_handler_object, head, [AddrId, Key]),
                             compare(From, RPCKey, Node, Params)
                     end);
-         ({_, false}) ->
+         (#redundant_node{}) ->
               void
       end, Nodes),
-
     loop(ReadQuorum, From, erlang:length(Nodes), {ReqId, Key, []}, Callback).
 
 

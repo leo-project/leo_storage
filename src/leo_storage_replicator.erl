@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012 Rakuten, Inc.
+%% Copyright (c) 2012-2013 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -30,6 +30,7 @@
 -include("leo_storage.hrl").
 -include_lib("leo_logger/include/leo_logger.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
+-include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 -export([replicate/4]).
@@ -57,7 +58,8 @@ replicate(Quorum, Nodes, Object, Callback) ->
     From = self(),
 
     lists:foreach(
-      fun({Node, true}) when Node == erlang:node() ->
+      fun(#redundant_node{node = Node,
+                          available = true}) when Node == erlang:node() ->
               spawn(fun() ->
                             replicate_fun(local, #req_params{pid     = From,
                                                              addr_id = AddrId,
@@ -65,9 +67,11 @@ replicate(Quorum, Nodes, Object, Callback) ->
                                                              object  = Object,
                                                              req_id  = ReqId})
                     end);
-         ({Node, true}) ->
+         (#redundant_node{node = Node,
+                          available = true}) ->
               true = rpc:cast(Node, leo_storage_handler_object, put, [From, Object, ReqId]);
-         ({Node, false}) ->
+         (#redundant_node{node = Node,
+                          available = false}) ->
               ok = enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
               erlang:send(From, {error, {Node, nodedown}})
       end, Nodes),
