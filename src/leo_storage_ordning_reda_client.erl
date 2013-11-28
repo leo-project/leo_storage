@@ -207,12 +207,21 @@ slice_and_store(Objects, Errors) ->
         {ok, #metadata{clock = Clock}} when Clock >= Metadata#metadata.clock ->
             slice_and_store(Rest4, Errors);
         _ ->
-            case leo_object_storage_api:store(Metadata, Object) of
-                ok ->
-                    slice_and_store(Rest4, Errors);
-                {error, Cause} ->
+            case leo_misc:get_env(leo_redundant_manager, ?PROP_RING_HASH) of
+                {ok, RingHashCur} ->
+                    case leo_object_storage_api:store(Metadata#metadata{ring_hash = RingHashCur},
+                                                      Object) of
+                        ok ->
+                            slice_and_store(Rest4, Errors);
+                        {error, Cause} ->
+                            ?warn("slice_and_store/2","key:~s, cause:~p",
+                                  [binary_to_list(Metadata#metadata.key), Cause]),
+                            slice_and_store(Rest4, [Metadata|Errors])
+                    end;
+                _ ->
                     ?warn("slice_and_store/2","key:~s, cause:~p",
-                          [binary_to_list(Metadata#metadata.key), Cause]),
+                          [binary_to_list(Metadata#metadata.key),
+                           "Current ring-hash is not found"]),
                     slice_and_store(Rest4, [Metadata|Errors])
             end
     end.

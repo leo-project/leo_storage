@@ -368,14 +368,15 @@ recover_node(Node) ->
 sync_vnodes(_, _, []) ->
     ok;
 sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
-    Fun = fun(K,_V, Acc) ->
+    Fun = fun(K, V, Acc) ->
                   {AddrId, Key} = binary_to_term(K),
+                  Metadata      = binary_to_term(V),
 
                   %% Note: An object of copy is NOT equal current ring-hash.
                   %%       Then a message in the rebalance-queue.
                   case (AddrId >= FromAddrId andalso
                         AddrId =< ToAddrId) of
-                      true ->
+                      true when Metadata#metadata.ring_hash =/= RingHash ->
                           case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
                               {ok, #redundancies{nodes = Redundancies}} ->
                                   Nodes = [N || #redundant_node{node = N} <- Redundancies],
@@ -390,6 +391,8 @@ sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
                               _ ->
                                   {ok, Acc}
                           end;
+                      true ->
+                          {ok, Acc};
                       false ->
                           {ok, Acc}
                   end

@@ -81,6 +81,11 @@ suite_regular_1_(Node) ->
                      fun(_Metadata, _Object) ->
                              ok
                      end),
+    ok = meck:new(leo_misc),
+    ok = meck:expect(leo_misc, get_env,
+                     fun(_,_) ->
+                             {ok, 12345}
+                     end),
     stack(Node),
 
     History = meck:history(leo_object_storage_api),
@@ -96,6 +101,12 @@ suite_regular_2_(Node) ->
                      fun(_Metadata, _Object) ->
                              ok
                      end),
+
+    ok = meck:new(leo_misc),
+    ok = meck:expect(leo_misc, get_env,
+                     fun(_,_) ->
+                             {ok, 12345}
+                     end),
     stack(Node),
 
     History = meck:history(leo_object_storage_api),
@@ -110,6 +121,12 @@ suite_error_(Node) ->
     ok = meck:expect(leo_object_storage_api, store,
                      fun(_Metadata, _Object) ->
                              {error, "Not stored"}
+                     end),
+
+    ok = meck:new(leo_misc),
+    ok = meck:expect(leo_misc, get_env,
+                     fun(_,_) ->
+                             {ok, 12345}
                      end),
     stack(Node),
     ok.
