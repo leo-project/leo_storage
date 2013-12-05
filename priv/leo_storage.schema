@@ -97,7 +97,7 @@
 %% @doc Nodes of manager
 {mapping,
  "manager.1",
- "storage.managers",
+ "leo_storage.managers",
  [
   {datatype, atom},
   {default, 'manager_0@127.0.0.1'}
@@ -105,13 +105,13 @@
 
 {mapping,
  "manager.2",
- "storage.managers",
+ "leo_storage.managers",
  [
   {datatype, atom},
   {default, 'manager_1@127.0.0.1'}
  ]}.
 
-{translation, "storage.managers",
+{translation, "leo_storage.managers",
  fun(Conf) ->
          Manager_1 = cuttlefish_util:conf_get_value("manager.1", Conf),
          Manager_2 = cuttlefish_util:conf_get_value("manager.2", Conf),
@@ -124,8 +124,8 @@
 %% --------------------------------------------------------------------
 %% @doc LeoFS version
 {mapping,
- "storage.system_version",
- "storage.system_version",
+ "leo_storage.system_version",
+ "leo_storage.system_version",
  [
   {default, "0.16.5"}
  ]}.
@@ -133,120 +133,120 @@
 %% @doc Path of object-container
 {mapping,
  "obj_containers.path.1",
- "storage.obj_containers",
+ "leo_storage.obj_containers",
  [
   {datatype, string},
   {default, "./avs"}
  ]}.
 {mapping,
  "obj_containers.path.2",
- "storage.obj_containers",
+ "leo_storage.obj_containers",
  [
   {datatype, string},
   {default, ""}
  ]}.
 {mapping,
  "obj_containers.path.3",
- "storage.obj_containers",
+ "leo_storage.obj_containers",
  [
   {datatype, string},
   {default, ""}
  ]}.
 {mapping,
  "obj_containers.path.4",
- "storage.obj_containers",
+ "leo_storage.obj_containers",
  [
   {datatype, string},
   {default, ""}
  ]}.
 {mapping,
  "obj_containers.path.5",
- "storage.obj_containers",
+ "leo_storage.obj_containers",
  [
   {datatype, string},
   {default, ""}
  ]}.
 {mapping,
  "obj_containers.path.6",
- "storage.obj_containers",
+ "leo_storage.obj_containers",
  [
   {datatype, string},
   {default, ""}
  ]}.
 {mapping,
  "obj_containers.path.7",
- "storage.obj_containers",
+ "leo_storage.obj_containers",
  [
   {datatype, string},
   {default, ""}
  ]}.
 {mapping,
  "obj_containers.path.8",
- "storage.obj_containers",
+ "leo_storage.obj_containers",
  [
   {datatype, string},
-  {default, []}
+  {default, ""}
  ]}.
 
 
 {mapping,
  "obj_containers.num_of_containers.1",
- "storage.obj_containers",
+ "leo_storage.obj_containers",
  [
   {datatype, integer},
   {default, 8}
  ]}.
 {mapping,
  "obj_containers.num_of_containers.2",
- "storage.obj_containers",
+ "leo_storage.obj_containers",
  [
   {datatype, integer},
   {default, 0}
  ]}.
 {mapping,
  "obj_containers.num_of_containers.3",
- "storage.obj_containers",
+ "leo_storage.obj_containers",
  [
   {datatype, integer},
   {default, 0}
  ]}.
 {mapping,
  "obj_containers.num_of_containers.4",
- "storage.obj_containers",
+ "leo_storage.obj_containers",
  [
   {datatype, integer},
   {default, 0}
  ]}.
 {mapping,
  "obj_containers.num_of_containers.5",
- "storage.obj_containers",
+ "leo_storage.obj_containers",
  [
   {datatype, integer},
   {default, 0}
  ]}.
 {mapping,
  "obj_containers.num_of_containers.6",
- "storage.obj_containers",
+ "leo_storage.obj_containers",
  [
   {datatype, integer},
   {default, 0}
  ]}.
 {mapping,
  "obj_containers.num_of_containers.7",
- "storage.obj_containers",
+ "leo_storage.obj_containers",
  [
   {datatype, integer},
   {default, 0}
  ]}.
 {mapping,
  "obj_containers.num_of_containers.8",
- "storage.obj_containers",
+ "leo_storage.obj_containers",
  [
   {datatype, integer},
   {default, 0}
  ]}.
 
-{translation, "storage.obj_containers",
+{translation, "leo_storage.obj_containers",
  fun(Conf) ->
          Ret = lists:foldl(
                  fun(Index, Acc) ->
@@ -269,7 +269,7 @@
 %% @doc A number of virtual-nodes for the redundant-manager
 {mapping,
  "num_of_vnodes",
- "storage.num_of_vnodes",
+ "leo_storage.num_of_vnodes",
  [
   {datatype, integer},
   {default, 168}
@@ -278,7 +278,7 @@
 %% @doc A number of virtual-nodes for the redundant-manager
 {mapping,
  "num_of_vnodes",
- "storage.num_of_vnodes",
+ "leo_storage.num_of_vnodes",
  [
   {datatype, integer},
   {default, 168}
@@ -291,7 +291,7 @@
 %% @doc A number of mq-server's processes
 {mapping,
  "mq.num_of_mq_procs",
- "storage.num_of_mq_procs",
+ "leo_storage.num_of_mq_procs",
  [
   {datatype, integer},
   {default, 8}
@@ -301,7 +301,7 @@
 %%
 {mapping,
  "mq.recover_per_object.num_of_batch_process",
- "storage.cns_num_of_batch_process_per_object",
+ "leo_storage.cns_num_of_batch_process_per_object",
  [
   {datatype, integer},
   {default, 1}
@@ -309,7 +309,7 @@
 
 {mapping,
  "mq.recover_per_object.interval_min",
- "storage.cns_interval_per_object_min",
+ "leo_storage.cns_interval_per_object_min",
  [
   {datatype, integer},
   {default, 1}
@@ -317,7 +317,7 @@
 
 {mapping,
  "mq.recover_per_object.interval_max",
- "storage.cns_interval_per_object_max",
+ "leo_storage.cns_interval_per_object_max",
  [
   {datatype, integer},
   {default, 1}
@@ -328,7 +328,7 @@
 %%
 {mapping,
  "mq.sync_by_vnode_id.num_of_batch_process",
- "storage.cns_num_of_batch_process_sync_by_vnode_id",
+ "leo_storage.cns_num_of_batch_process_sync_by_vnode_id",
  [
   {datatype, integer},
   {default, 1}
@@ -336,7 +336,7 @@
 
 {mapping,
  "mq.sync_by_vnode_id.interval_min",
- "storage.cns_interval_sync_by_vnode_id_min",
+ "leo_storage.cns_interval_sync_by_vnode_id_min",
  [
   {datatype, integer},
   {default, 8}
@@ -344,7 +344,7 @@
 
 {mapping,
  "mq.sync_by_vnode_id.interval_max",
- "storage.cns_interval_sync_by_vnode_id_max",
+ "leo_storage.cns_interval_sync_by_vnode_id_max",
  [
   {datatype, integer},
   {default, 32}
@@ -354,7 +354,7 @@
 %% @doc MQ rebalance objects
 {mapping,
  "mq.rebalance.num_of_batch_process",
- "storage.cns_num_of_batch_process_rebalance",
+ "leo_storage.cns_num_of_batch_process_rebalance",
  [
   {datatype, integer},
   {default, 1}
@@ -362,7 +362,7 @@
 
 {mapping,
  "mq.rebalance.interval_min",
- "storage.cns_interval_rebalance_min",
+ "leo_storage.cns_interval_rebalance_min",
  [
   {datatype, integer},
   {default, 1}
@@ -370,7 +370,7 @@
 
 {mapping,
  "mq.rebalance.interval_max",
- "storage.cns_interval_rebalance_max",
+ "leo_storage.cns_interval_rebalance_max",
  [
   {datatype, integer},
   {default, 1}
@@ -380,7 +380,7 @@
 %% @doc MQ delete objects
 {mapping,
  "mq.mq.delete_object.num_of_batch_process",
- "storage.cns_num_of_batch_process_async_deletion",
+ "leo_storage.cns_num_of_batch_process_async_deletion",
  [
   {datatype, integer},
   {default, 1}
@@ -388,7 +388,7 @@
 
 {mapping,
  "mq.mq.delete_object.interval_min",
- "storage.cns_interval_async_deletion_min",
+ "leo_storage.cns_interval_async_deletion_min",
  [
   {datatype, integer},
   {default, 1}
@@ -396,7 +396,7 @@
 
 {mapping,
  "mq.mq.delete_object.interval_max",
- "storage.cns_interval_async_deletion_max",
+ "leo_storage.cns_interval_async_deletion_max",
  [
   {datatype, integer},
   {default, 1}
@@ -406,7 +406,7 @@
 %% @doc MQ recover a node's object
 {mapping,
  "mq.recovery_node.num_of_batch_process",
- "storage.cns_num_of_batch_process_recovery_node",
+ "leo_storage.cns_num_of_batch_process_recovery_node",
  [
   {datatype, integer},
   {default, 1}
@@ -414,7 +414,7 @@
 
 {mapping,
  "mq.recovery_node.interval_min",
- "storage.cns_interval_recovery_node_min",
+ "leo_storage.cns_interval_recovery_node_min",
  [
   {datatype, integer},
   {default, 1}
@@ -422,7 +422,7 @@
 
 {mapping,
  "mq.recovery_node.interval_max",
- "storage.cns_interval_recovery_node_max",
+ "leo_storage.cns_interval_recovery_node_max",
  [
   {datatype, integer},
   {default, 1}
@@ -435,7 +435,7 @@
 %% @doc Rack-id for the rack-awareness replica placement
 {mapping,
  "replication.rack_awareness.rack_id",
- "storage.grp_level_2",
+ "leo_storage.grp_level_2",
  [
   {datatype, string},
   {default, ""}
@@ -445,7 +445,7 @@
 %% @doc Size of stacked objects (bytes)
 {mapping,
  "replication.recovery.size_of_stacked_objs",
- "storage.size_of_stacked_objs",
+ "leo_storage.size_of_stacked_objs",
  [
   {datatype, integer},
   {default, 67108864}
@@ -454,7 +454,7 @@
 %% @doc Stacking timeout (msec)
 {mapping,
  "replication.recovery.stacking_timeout",
- "storage.stacking_timeout",
+ "leo_storage.stacking_timeout",
  [
   {datatype, integer},
   {default, 5000}
@@ -466,8 +466,8 @@
 %% --------------------------------------------------------------------
 %% @doc Log level
 {mapping,
- "storage.log.log_level",
- "storage.log_level",
+ "leo_storage.log.log_level",
+ "leo_storage.log_level",
  [
   {datatype, integer}, %% >> enum
   {default, 1}
@@ -475,8 +475,8 @@
 
 %% @doc Output log file(s) - erlang
 {mapping,
- "storage.log.erlang",
- "storage.log_dir",
+ "leo_storage.log.erlang",
+ "leo_storage.log_dir",
  [
   {datatype, string},
   {default, "./log/erlang"}
@@ -484,22 +484,22 @@
 
 %% @doc Output log file(s) - app
 {mapping,
- "storage.log.app",
- "storage.log_appender",
+ "leo_storage.log.app",
+ "leo_storage.log_appender",
  [
   {datatype, string},
   {default, "./log/app"}
  ]}.
 
-{translation, "storage.log_appender",
+{translation, "leo_storage.log_appender",
  fun(Conf) ->
-         Path = cuttlefish_util:conf_get_value("storage.log.app", Conf),
-         {file, [{path, Path}]}
+         Path = cuttlefish_util:conf_get_value("leo_storage.log.app", Conf),
+         [ {file, [{path, Path}]} ]
  end}.
 
 %% @doc Output log file(s) - members of storage-cluster
 {mapping,
- "storage.log.member_dir",
+ "leo_storage.log.member_dir",
  "leo_redundant_manager.log_dir_member",
  [
   {datatype, string},
@@ -508,7 +508,7 @@
 
 %% @doc Output log file(s) - ring
 {mapping,
- "storage.log.ring_dir",
+ "leo_storage.log.ring_dir",
  "leo_redundant_manager.log_dir_ring",
  [
   {datatype, string},
@@ -521,18 +521,18 @@
 %% --------------------------------------------------------------------
 %% @doc Directory of queue for monitoring "RING"
 {mapping,
- "storage.queue_dir",
- "storage.queue_dir",
+ "leo_storage.queue_dir",
+ "leo_storage.queue_dir",
  [
   {default, "./work/queue"}
  ]}.
 
 %% @doc Directory of SNMP agent configuration
 {mapping,
- "storage.snmp_agent",
- "storage.snmp_agent",
+ "leo_storage.snmp_agent",
+ "leo_storage.snmp_agent",
  [
-  {default, "./snmp/snmpa_gateway_0/LEO-GATEWAY"}
+  {default, "./snmp/snmpa_storage_0/LEO-STORAGE"}
  ]}.
 
 
@@ -771,5 +771,5 @@
  "snmp_conf",
  "vm_args.-config",
  [
-  {default, "./snmp/snmpa_gateway_0/leo_gateway_snmp"}
+  {default, "./snmp/snmpa_storage_0/leo_storage_snmp"}
  ]}.
