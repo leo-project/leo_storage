@@ -91,9 +91,6 @@
 %% --------------------------------------------------------------------
 %% MANAGER
 %% --------------------------------------------------------------------
-%%
-%% Manager
-%%
 %% @doc Nodes of manager
 {mapping,
  "manager.1",
@@ -124,10 +121,10 @@
 %% --------------------------------------------------------------------
 %% @doc LeoFS version
 {mapping,
- "leo_storage.system_version",
+ "system_version",
  "leo_storage.system_version",
  [
-  {default, "0.16.5"}
+  {default, "0.16.8"}
  ]}.
 
 %% @doc Path of object-container
@@ -466,7 +463,7 @@
 %% --------------------------------------------------------------------
 %% @doc Log level
 {mapping,
- "leo_storage.log.log_level",
+ "log.log_level",
  "leo_storage.log_level",
  [
   {datatype, integer}, %% >> enum
@@ -475,7 +472,7 @@
 
 %% @doc Output log file(s) - erlang
 {mapping,
- "leo_storage.log.erlang",
+ "log.erlang",
  "leo_storage.log_dir",
  [
   {datatype, string},
@@ -484,7 +481,7 @@
 
 %% @doc Output log file(s) - app
 {mapping,
- "leo_storage.log.app",
+ "log.app",
  "leo_storage.log_appender",
  [
   {datatype, string},
@@ -493,13 +490,13 @@
 
 {translation, "leo_storage.log_appender",
  fun(Conf) ->
-         Path = cuttlefish_util:conf_get_value("leo_storage.log.app", Conf),
+         Path = cuttlefish_util:conf_get_value("log.app", Conf),
          [ {file, [{path, Path}]} ]
  end}.
 
 %% @doc Output log file(s) - members of storage-cluster
 {mapping,
- "leo_storage.log.member_dir",
+ "log.member_dir",
  "leo_redundant_manager.log_dir_member",
  [
   {datatype, string},
@@ -508,7 +505,7 @@
 
 %% @doc Output log file(s) - ring
 {mapping,
- "leo_storage.log.ring_dir",
+ "log.ring_dir",
  "leo_redundant_manager.log_dir_ring",
  [
   {datatype, string},
@@ -521,7 +518,7 @@
 %% --------------------------------------------------------------------
 %% @doc Directory of queue for monitoring "RING"
 {mapping,
- "leo_storage.queue_dir",
+ "queue_dir",
  "leo_storage.queue_dir",
  [
   {default, "./work/queue"}
@@ -529,7 +526,7 @@
 
 %% @doc Directory of SNMP agent configuration
 {mapping,
- "leo_storage.snmp_agent",
+ "snmp_agent",
  "leo_storage.snmp_agent",
  [
   {default, "./snmp/snmpa_storage_0/LEO-STORAGE"}
