@@ -1,0 +1,677 @@
+%% -*- mode: erlang;erlang-indent-level: 4;indent-tabs-mode: nil -*-
+%%======================================================================
+%%
+%% LeoFS
+%%
+%% Copyright (c) 2012-2013 Rakuten, Inc.
+%%
+%% This file is provided to you under the Apache License,
+%% Version 2.0 (the "License"); you may not use this file
+%% except in compliance with the License.  You may obtain
+%% a copy of the License at
+%%
+%%   http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing,
+%% software distributed under the License is distributed on an
+%% "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+%% KIND, either express or implied.  See the License for the
+%% specific language governing permissions and limitations
+%% under the License.
+%%
+%% @author: Yosuke Hara
+%%
+%%======================================================================
+%% --------------------------------------------------------------------
+%% SASL
+%% --------------------------------------------------------------------
+%% See: http://www.erlang.org/doc/man/sasl_app.html
+%%
+%% The following configuration parameters are defined for
+%% the SASL application. See app(4) for more information
+%% about configuration parameters
+%%
+%% @doc SASL error log path
+{mapping,
+ "sasl.sasl_error_log",
+ "sasl.sasl_error_logger",
+ [
+  {datatype, string},
+  {default, "./log/sasl/sasl-error.log"}
+ ]}.
+
+{translation, "sasl.sasl_error_logger",
+ fun(Conf) ->
+         Path = cuttlefish_util:conf_get_value("sasl.sasl_error_log", Conf),
+         {file, Path}
+ end}.
+
+%% @doc Restricts the error logging performed by the specified sasl_error_logger
+%%      to error reports, progress reports, or both.
+%%      errlog_type = [error | progress | all]
+{mapping,
+ "sasl.errlog_type",
+ "sasl.errlog_type",
+ [
+  {datatype, atom},
+  {default, error}
+ ]}.
+
+%% @doc Specifies in which directory the files are stored.
+%%      If this parameter is undefined or false, the error_logger_mf_h is not installed.
+{mapping,
+ "sasl.error_logger_mf_dir",
+ "sasl.error_logger_mf_dir",
+ [
+  {default, "./log/sasl"}
+ ]}.
+
+%% @doc Specifies how large each individual file can be.
+%%      If this parameter is undefined, the error_logger_mf_h is not installed.
+%%
+{mapping,
+ "sasl.error_logger_mf_maxbytes",
+ "sasl.error_logger_mf_maxbytes",
+ [
+  {datatype, bytesize},
+  {default, 10485760}
+ ]}.
+
+%% @doc Specifies how many files are used.
+%%      If this parameter is undefined, the error_logger_mf_h is not installed.
+{mapping,
+ "sasl.error_logger_mf_maxfiles",
+ "sasl.error_logger_mf_maxfiles",
+ [
+  {datatype, integer},
+  {default, 5}
+ ]}.
+
+
+%% --------------------------------------------------------------------
+%% MANAGER
+%% --------------------------------------------------------------------
+%% @doc Nodes of manager
+{mapping,
+ "managers",
+ "leo_storage.managers",
+ [
+  {datatype, string}
+ ]}.
+
+{translation, "leo_storage.managers",
+ fun(Conf) ->
+         Managers = cuttlefish_util:conf_get_value("managers", Conf),
+         case string:tokens(Managers, "[ , ]") of
+             [] ->
+                 ['manager_0@127.0.0.1', 'manager_1@127.0.0.1'];
+             Tokens ->
+                 lists:map(fun(X) ->
+                                   list_to_atom(X)
+                           end, Tokens)
+         end
+ end}.
+
+
+%% --------------------------------------------------------------------
+%% STORAGE
+%% --------------------------------------------------------------------
+%% @doc LeoFS version
+{mapping,
+ "system_version",
+ "leo_storage.system_version",
+ [
+  {default, "0.16.8"}
+ ]}.
+
+%% @doc Path of object-container
+{mapping,
+ "obj_containers.path",
+ "leo_storage.obj_containers",
+ [
+  {datatype, string}
+ ]}.
+
+{mapping,
+ "obj_containers.num_of_containers",
+ "leo_storage.obj_containers",
+ [
+  {datatype, string}
+ ]}.
+
+{translation, "leo_storage.obj_containers",
+ fun(Conf) ->
+         %% retrieve pathes
+         Pathes = cuttlefish_util:conf_get_value("obj_containers.path", Conf),
+         Pathes_1 = case string:tokens(Pathes, "[ , ]") of
+                        [] ->
+                            ["./avs"];
+                        Tokens_1 ->
+                            Tokens_1
+                    end,
+
+         %% retrieve num-of-containers
+         Containers = cuttlefish_util:conf_get_value(
+                        "obj_containers.num_of_containers", Conf),
+         Containers_1 =
+             case string:tokens(Containers, "[ , ]") of
+                 [] -> [];
+                 Tokens_2 ->
+                     lists:map(fun(X) ->
+                                       list_to_integer(X)
+                               end, Tokens_2)
+             end,
+
+         DefNumOfContainers = 8,
+         {_, Ret} = lists:foldl(
+                      fun(Path, {Index, Acc}) ->
+                              NumOfContainers =
+                                  case length(Containers_1) >= Index of
+                                      true  -> lists:nth(Index, Containers_1);
+                                      false -> DefNumOfContainers
+                                  end,
+                              {Index + 1, [[{path, Path},
+                                            {num_of_containers, NumOfContainers}]|Acc]}
+                      end, {1, []}, Pathes_1),
+         lists:reverse(Ret)
+ end}.
+
+
+%% @doc A number of virtual-nodes for the redundant-manager
+{mapping,
+ "num_of_vnodes",
+ "leo_storage.num_of_vnodes",
+ [
+  {datatype, integer},
+  {default, 168}
+ ]}.
+
+%% @doc A number of virtual-nodes for the redundant-manager
+{mapping,
+ "num_of_vnodes",
+ "leo_storage.num_of_vnodes",
+ [
+  {datatype, integer},
+  {default, 168}
+ ]}.
+
+
+%% --------------------------------------------------------------------
+%% STORAGE - MQ
+%% --------------------------------------------------------------------
+%% @doc A number of mq-server's processes
+{mapping,
+ "mq.num_of_mq_procs",
+ "leo_storage.num_of_mq_procs",
+ [
+  {datatype, integer},
+  {default, 8}
+ ]}.
+
+%% @doc MQ recover per_object
+%%
+{mapping,
+ "mq.recover_per_object.num_of_batch_process",
+ "leo_storage.cns_num_of_batch_process_per_object",
+ [
+  {datatype, integer},
+  {default, 1}
+ ]}.
+
+{mapping,
+ "mq.recover_per_object.interval_min",
+ "leo_storage.cns_interval_per_object_min",
+ [
+  {datatype, integer},
+  {default, 1}
+ ]}.
+
+{mapping,
+ "mq.recover_per_object.interval_max",
+ "leo_storage.cns_interval_per_object_max",
+ [
+  {datatype, integer},
+  {default, 1}
+ ]}.
+
+
+%% @doc MQ synchronize objects by vnode-id
+%%
+{mapping,
+ "mq.sync_by_vnode_id.num_of_batch_process",
+ "leo_storage.cns_num_of_batch_process_sync_by_vnode_id",
+ [
+  {datatype, integer},
+  {default, 1}
+ ]}.
+
+{mapping,
+ "mq.sync_by_vnode_id.interval_min",
+ "leo_storage.cns_interval_sync_by_vnode_id_min",
+ [
+  {datatype, integer},
+  {default, 8}
+ ]}.
+
+{mapping,
+ "mq.sync_by_vnode_id.interval_max",
+ "leo_storage.cns_interval_sync_by_vnode_id_max",
+ [
+  {datatype, integer},
+  {default, 32}
+ ]}.
+
+
+%% @doc MQ rebalance objects
+{mapping,
+ "mq.rebalance.num_of_batch_process",
+ "leo_storage.cns_num_of_batch_process_rebalance",
+ [
+  {datatype, integer},
+  {default, 1}
+ ]}.
+
+{mapping,
+ "mq.rebalance.interval_min",
+ "leo_storage.cns_interval_rebalance_min",
+ [
+  {datatype, integer},
+  {default, 1}
+ ]}.
+
+{mapping,
+ "mq.rebalance.interval_max",
+ "leo_storage.cns_interval_rebalance_max",
+ [
+  {datatype, integer},
+  {default, 1}
+ ]}.
+
+
+%% @doc MQ delete objects
+{mapping,
+ "mq.delete_object.num_of_batch_process",
+ "leo_storage.cns_num_of_batch_process_async_deletion",
+ [
+  {datatype, integer},
+  {default, 1}
+ ]}.
+
+{mapping,
+ "mq.delete_object.interval_min",
+ "leo_storage.cns_interval_async_deletion_min",
+ [
+  {datatype, integer},
+  {default, 1}
+ ]}.
+
+{mapping,
+ "mq.delete_object.interval_max",
+ "leo_storage.cns_interval_async_deletion_max",
+ [
+  {datatype, integer},
+  {default, 1}
+ ]}.
+
+
+%% @doc MQ recover a node's object
+{mapping,
+ "mq.recovery_node.num_of_batch_process",
+ "leo_storage.cns_num_of_batch_process_recovery_node",
+ [
+  {datatype, integer},
+  {default, 1}
+ ]}.
+
+{mapping,
+ "mq.recovery_node.interval_min",
+ "leo_storage.cns_interval_recovery_node_min",
+ [
+  {datatype, integer},
+  {default, 1}
+ ]}.
+
+{mapping,
+ "mq.recovery_node.interval_max",
+ "leo_storage.cns_interval_recovery_node_max",
+ [
+  {datatype, integer},
+  {default, 1}
+ ]}.
+
+
+%% --------------------------------------------------------------------
+%% STORAGE - Replication/Recover
+%% --------------------------------------------------------------------
+%% @doc Rack-id for the rack-awareness replica placement
+{mapping,
+ "replication.rack_awareness.rack_id",
+ "leo_storage.grp_level_2",
+ [
+  {datatype, string},
+  {default, ""}
+ ]}.
+
+
+%% @doc Size of stacked objects (bytes)
+{mapping,
+ "replication.recovery.size_of_stacked_objs",
+ "leo_storage.size_of_stacked_objs",
+ [
+  {datatype, integer},
+  {default, 67108864}
+ ]}.
+
+%% @doc Stacking timeout (msec)
+{mapping,
+ "replication.recovery.stacking_timeout",
+ "leo_storage.stacking_timeout",
+ [
+  {datatype, integer},
+  {default, 5000}
+ ]}.
+
+
+%% --------------------------------------------------------------------
+%% STORAGE - LOG
+%% --------------------------------------------------------------------
+%% @doc Log level
+{mapping,
+ "log.log_level",
+ "leo_storage.log_level",
+ [
+  {datatype, integer}, %% >> enum
+  {default, 1}
+ ]}.
+
+%% @doc Output log file(s) - erlang
+{mapping,
+ "log.erlang",
+ "leo_storage.log_dir",
+ [
+  {datatype, string},
+  {default, "./log/erlang"}
+ ]}.
+
+%% @doc Output log file(s) - app
+{mapping,
+ "log.app",
+ "leo_storage.log_appender",
+ [
+  {datatype, string},
+  {default, "./log/app"}
+ ]}.
+
+{translation, "leo_storage.log_appender",
+ fun(Conf) ->
+         Path = cuttlefish_util:conf_get_value("log.app", Conf),
+         [ {file, [{path, Path}]} ]
+ end}.
+
+%% @doc Output log file(s) - members of storage-cluster
+{mapping,
+ "log.member_dir",
+ "leo_redundant_manager.log_dir_member",
+ [
+  {datatype, string},
+  {default, "./log/ring"}
+ ]}.
+
+%% @doc Output log file(s) - ring
+{mapping,
+ "log.ring_dir",
+ "leo_redundant_manager.log_dir_ring",
+ [
+  {datatype, string},
+  {default, "./log/ring"}
+ ]}.
+
+
+%% --------------------------------------------------------------------
+%% STORAGE - DIR
+%% --------------------------------------------------------------------
+%% @doc Directory of queue for monitoring "RING"
+{mapping,
+ "queue_dir",
+ "leo_storage.queue_dir",
+ [
+  {default, "./work/queue"}
+ ]}.
+
+%% @doc Directory of SNMP agent configuration
+{mapping,
+ "snmp_agent",
+ "leo_storage.snmp_agent",
+ [
+  {default, "./snmp/snmpa_storage_0/LEO-STORAGE"}
+ ]}.
+
+
+
+%%======================================================================
+%% Other libs
+%%======================================================================
+%% @doc
+{mapping,
+ "leo_backend_db.profile",
+ "leo_backend_db.profile",
+ [
+  {datatype, {enum, [true, false]}},
+  {default, false}
+ ]}.
+
+%% @doc
+{mapping,
+ "leo_logger.profile",
+ "leo_logger.profile",
+ [
+  {datatype, {enum, [true, false]}},
+  {default, false}
+ ]}.
+
+%% @doc
+{mapping,
+ "leo_mq.profile",
+ "leo_mq.profile",
+ [
+  {datatype, {enum, [true, false]}},
+  {default, false}
+ ]}.
+
+%% @doc
+{mapping,
+ "leo_mq.backend_db",
+ "leo_mq.backend_db",
+ [
+  {datatype, atom},
+  {default, 'bitcask'}
+ ]}.
+
+%% @doc
+{mapping,
+ "leo_object_storage.profile",
+ "leo_object_storage.profile",
+ [
+  {datatype, {enum, [true, false]}},
+  {default, false}
+ ]}.
+
+%% @doc
+{mapping,
+ "leo_object_storage.metadata_storage",
+ "leo_object_storage.metadata_storage",
+ [
+  {datatype, atom},
+  {default, 'bitcask'}
+ ]}.
+
+%% @doc
+{mapping,
+ "leo_object_storage.is_strict_check",
+ "leo_object_storage.is_strict_check",
+ [
+  {datatype, {enum, [true, false]}},
+  {default, false}
+ ]}.
+
+%% @doc
+{mapping,
+ "leo_ordning_reda.profile",
+ "leo_ordning_reda.profile",
+ [
+  {datatype, {enum, [true, false]}},
+  {default, false}
+ ]}.
+
+%% @doc
+{mapping,
+ "leo_ordning_reda.send_after_interval",
+ "leo_ordning_reda.send_after_interval",
+ [
+  {datatype, integer},
+  {default, 100}
+ ]}.
+
+%% @doc
+{mapping,
+ "leo_redundant_manager.profile",
+ "leo_redundant_manager.profile",
+ [
+  {datatype, {enum, [true, false]}},
+  {default, false}
+ ]}.
+
+%% @doc
+{mapping,
+ "leo_redundant_manager.notify_mf",
+ "leo_redundant_manager.notify_mf",
+ [
+  {default, []}
+ ]}.
+
+{translation, "leo_redundant_manager.notify_mf",
+ fun(_Conf) ->
+         [leo_manager_api, notify]
+ end}.
+
+%% @doc
+{mapping,
+ "leo_redundant_manager.sync_mf",
+ "leo_redundant_manager.sync_mf",
+ [
+  {default, false}
+ ]}.
+
+{translation, "leo_redundant_manager.sync_mf",
+ fun(_Conf) ->
+         [leo_manager_api, synchronize]
+ end}.
+
+%% @doc
+{mapping,
+ "leo_statistics.profile",
+ "leo_statistics.profile",
+ [
+  {datatype, {enum, [true, false]}},
+  {default, false}
+ ]}.
+
+
+%%======================================================================
+%% For vm.args
+%%======================================================================
+%%%% Tunables
+%% @doc Name of the riak node
+{mapping,
+ "nodename",
+ "vm_args.-name",
+ [
+  {default, "storage_0@127.0.0.1"}
+ ]}.
+
+%% @doc Cookie for distributed node communication.  All nodes in the same cluster
+%% should use the same cookie or they will not be able to communicate.
+{mapping,
+ "distributed_cookie",
+ "vm_args.-setcookie",
+ [
+  {default, "leofs"}
+ ]}.
+
+{mapping,
+ "erlang.kernel_poll",
+ "vm_args.+K",
+ [
+  {default, "true"}
+ ]}.
+
+{mapping,
+ "erlang.asyc_threads",
+ "vm_args.+A",
+ [
+  {default, "32"}
+ ]}.
+
+%% @doc Increase number of concurrent ports/sockets
+{mapping,
+ "erlang.max_ports",
+ "vm_args.-env ERL_MAX_PORTS",
+ [
+  {default, "64000"}
+ ]}.
+
+%% @doc Tweak GC to run more often
+{mapping,
+ "erlang.fullsweep_after",
+ "vm_args.-env ERL_FULLSWEEP_AFTER",
+ [
+  {default, "0"},
+  {level, advanced}
+ ]}.
+
+%% @doc Set the location of crash dumps
+{mapping,
+ "erlang.crash_dump",
+ "vm_args.-env ERL_CRASH_DUMP",
+ [
+  {default, "./log/erl_crash.dump"}
+ ]}.
+
+%% @doc Raise the ETS table limit
+{mapping,
+ "erlang.max_ets_tables",
+ "vm_args.-env ERL_MAX_ETS_TABLES",
+ [
+  {default, "256000"}
+ ]}.
+
+%% @doc Raise the ETS table limit
+{mapping,
+ "erlang.hidden_flag",
+ "vm_args.-hidden",
+ [
+  {default, ""}
+ ]}.
+
+%% @doc Raise the default erlang process limit
+{mapping, "process_limit", "vm_args.+P",
+ [
+  {datatype, integer},
+  {default, 1048576}
+ ]}.
+
+{translation, "vm_args.+P",
+ fun(Conf) ->
+         Procs = cuttlefish_util:conf_get_value("process_limit", Conf),
+         integer_to_list(Procs)
+ end}.
+
+
+%% @doc configuration path of the leofs gateway's snmp-agent
+%% See: http://www.leofs.org/docs/configuration.html#snmpa-setup
+{mapping,
+ "snmp_conf",
+ "vm_args.-config",
+ [
+  {default, "./snmp/snmpa_storage_0/leo_storage_snmp"}
+ ]}.

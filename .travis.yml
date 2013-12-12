@@ -4,4 +4,4 @@ notifications:
   email: false
 otp_release:
   - R15B03
-  - R16B01
+  - R16B02

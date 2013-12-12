@@ -391,8 +391,10 @@ sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
                               _ ->
                                   {ok, Acc}
                           end;
-                      true  -> {ok, Acc};
-                      false -> {ok, Acc}
+                      true ->
+                          {ok, Acc};
+                      false ->
+                          {ok, Acc}
                   end
           end,
 
