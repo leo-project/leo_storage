@@ -299,6 +299,9 @@ handle_call({consume, ?QUEUE_ID_REBALANCE, MessageBin}) ->
                             ok
                     end;
                 _ ->
+                    ok = leo_storage_mq_client:publish(
+                        ?QUEUE_TYPE_PER_OBJECT, AddrId, Key,
+                        ?ERR_TYPE_REPLICATE_DATA),
                     {error, inactive}
             end
     end;
