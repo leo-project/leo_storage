@@ -253,6 +253,8 @@ handle_call({consume, ?QUEUE_ID_SYNC_BY_VNODE_ID, MessageBin}) ->
                     ok = sync_vnodes(Node, CurRingHash, Res),
                     notify_rebalance_message_to_manager(ToVNodeId);
                 Error ->
+                    ?error("handle_call/1 - QUEUE_ID_SYNC_BY_VNODE_ID", "error:~p", [Error]),
+                    ok = leo_storage_mq_client:publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, ToVNodeId, Node),
                     Error
             end
     end;
