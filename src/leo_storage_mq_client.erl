@@ -269,9 +269,6 @@ handle_call({consume, ?QUEUE_ID_REBALANCE, MessageBin}) ->
             ?error("handle_call/1 - QUEUE_ID_REBALANCE", "cause:~p", [Cause]),
             {error, Cause};
         #rebalance_message{} = Msg ->
-            %% NOTE:
-            %% If remote-node status is NOT 'running',
-            %%     this function cannot operate 'copy'.
             rebalance_1(Msg);
         _ ->
             {error, ?ERROR_COULD_MATCH}
@@ -530,7 +527,10 @@ correct_redundancies_3(InconsistentNodes, [Node|Rest], Metadata) ->
     end.
 
 
-%% @doc
+%% @doc Relocate an object because of executed "rebalance"
+%%      NOTE:
+%%          If remote-node status is NOT 'running',
+%%          this function cannot operate 'copy'.
 %% @private
 rebalance_1(#rebalance_message{node = Node,
                                vnode_id = VNodeId,
@@ -571,7 +571,6 @@ rebalance_2({ok, Redundancies}, #rebalance_message{node = Node,
     end;
 rebalance_2(_,_) ->
     ok.
-
 
 
 %% @doc Notify a rebalance-progress messages to manager.
