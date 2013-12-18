@@ -563,7 +563,10 @@ read_and_repair(#read_parameter{ref = Ref} = ReadParameter,
                  {badrpc, Cause} ->
                      {error, Ref, Cause}
              end,
-    read_and_repair_1(Reply, ReadParameter, []).
+    read_and_repair_1(Reply, ReadParameter, []);
+
+read_and_repair(ReadParameter, [_|T]) ->
+    read_and_repair(ReadParameter, T).
 
 
 %% @private
@@ -664,4 +667,3 @@ replicate(?REP_REMOTE, Method, Object) ->
     end;
 replicate(_,_,_) ->
     {error, badarg}.
-

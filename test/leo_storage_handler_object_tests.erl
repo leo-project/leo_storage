@@ -166,7 +166,7 @@ get_b0_({Node0, Node1}) ->
     Fun1 = fun(get, _AddrId) ->
                    {ok, #redundancies{id = 0,
                                       nodes = [#redundant_node{node = Node0,
-                                                               available = true},
+                                                               available = false},
                                                #redundant_node{node = Node1,
                                                                available = true}],
                                       n = 2, r = 1, w = 1, d = 1}}
