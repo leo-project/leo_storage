@@ -97,8 +97,6 @@ request(CompressedObjs) ->
 %% @doc Handle send object to a remote-node.
 %%
 handle_send(Node, CompressedObjs) ->
-    ?info("handle_send/2","node:~w, size:~w", [Node, byte_size(CompressedObjs)]),
-
     RPCKey = rpc:async_call(Node, ?MODULE, request, [CompressedObjs]),
     case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
         {value, ok} ->
@@ -225,4 +223,3 @@ slice_and_store(Objects, Errors) ->
                     slice_and_store(Rest4, [Metadata|Errors])
             end
     end.
-
