@@ -597,7 +597,7 @@ notify_rebalance_message_to_manager(VNodeId) ->
                                                "manager:~p, vnode_id:~w, ~ncause:~p",
                                                [Manager1, VNodeId, Cause]),
                                         Res;
-                                    timeout = Cause ->
+                                    timeout ->
                                         Res
                                 end
                         end, false, ?env_manager_nodes(leo_storage)),
