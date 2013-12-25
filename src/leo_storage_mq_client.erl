@@ -234,7 +234,6 @@ handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
                     ok;
                 {error, Cause} ->
                     publish(?QUEUE_TYPE_PER_OBJECT, AddrId, Key, ErrorType),
-                    ?warn("handle_call/1 - QUEUE_ID_PER_OBJECT", "cause:~p", [Cause]),
                     {error, Cause}
             end;
         _ ->
@@ -415,8 +414,6 @@ notify_message_to_manager([Manager|T], VNodeId, Node) ->
                         [VNodeId, Node, Cause]),
                   {error, Cause};
               timeout = Cause ->
-                  ?warn("notify_message_to_manager/3","vnode-id:~w, node:~w, cause:~p",
-                        [VNodeId, Node, Cause]),
                   {error, Cause}
           end,
 
@@ -601,9 +598,6 @@ notify_rebalance_message_to_manager(VNodeId) ->
                                                [Manager1, VNodeId, Cause]),
                                         Res;
                                     timeout = Cause ->
-                                        ?error("notify_rebalance_message_to_manager/1",
-                                               "manager:~p, vnode_id:~w, ~ncause:~p",
-                                               [Manager1, VNodeId, Cause]),
                                         Res
                                 end
                         end, false, ?env_manager_nodes(leo_storage)),
@@ -655,4 +649,3 @@ queue_id(?QUEUE_TYPE_REBALANCE) ->
     ?QUEUE_ID_REBALANCE;
 queue_id(?QUEUE_TYPE_RECOVERY_NODE) ->
     ?QUEUE_ID_RECOVERY_NODE.
-
