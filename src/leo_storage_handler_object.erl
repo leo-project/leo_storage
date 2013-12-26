@@ -552,8 +552,8 @@ read_and_repair(#read_parameter{ref = Ref} = ReadParameter,
                                  available = true}|_] = Redundancies) ->
     RPCKey = rpc:async_call(Node, ?MODULE, get, [ReadParameter, Redundancies]),
     Reply  = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
-                 {value, {ok, Ref,_,_} = Ret} ->
-                     Ret;
+                 {value, {ok, Meta, Object}} ->
+                     {ok, Ref, Meta, Object};
                  {value, {error, Cause}} ->
                      {error, Ref, Cause};
                  {value, {badrpc, Cause}} ->
