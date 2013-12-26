@@ -155,7 +155,7 @@ get_a1_({Node0, Node1}) ->
 
     Ref = make_ref(),
     Res = leo_storage_handler_object:get({Ref, ?TEST_KEY_0}),
-    ?assertEqual({ok, ?TEST_META_0, <<>>}, Res),
+    ?assertEqual({ok, Ref, ?TEST_META_0, <<>>}, Res),
     ok.
 
 
@@ -214,7 +214,7 @@ get_b1_({Node0, Node1}) ->
 
     %% leo_object_storage_api
     Fun2 = fun(_Key, _StartPos, _EndPos) ->
-                   {ok, ?TEST_META_0, []}
+                   not_found
            end,
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, get, Fun2),
@@ -237,9 +237,6 @@ get_b1_({Node0, Node1}) ->
     %% Execute
     Res = leo_storage_handler_object:get(0, ?TEST_KEY_0, 0),
     ?assertEqual({error,not_found}, Res),
-
-    His = meck:history(leo_storage_read_repairer),
-    ?assertEqual(1, length(His)),
     ok.
 
 %% @doc  get/3
@@ -259,7 +256,7 @@ get_b2_({Node0, _Node1}) ->
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, get,
                 fun(_Key, _StartPos, _EndPos) ->
-                        {ok, ?TEST_META_0, []}
+                        {ok, ?TEST_META_0, #object{data = <<"leofs">>}}
                 end),
 
     %% leo_storage_read_repairer
@@ -270,7 +267,7 @@ get_b2_({Node0, _Node1}) ->
                 end),
 
     Res = leo_storage_handler_object:get(0, ?TEST_KEY_0, 0),
-    ?assertEqual({ok, ?TEST_META_0, []}, Res),
+    ?assertEqual({ok, ?TEST_META_0, <<"leofs">>}, Res),
 
     His = meck:history(leo_storage_read_repairer),
     ?assertEqual(0, length(His)),
@@ -296,7 +293,7 @@ get_b3_({Node0, Node1}) ->
 
     %% leo_object_storage_api
     Fun2 = fun(_Key, _StartPos, _EndPos) ->
-                   {ok, ?TEST_META_0, []}
+                   {ok, ?TEST_META_0, #object{data = ?TEST_BIN}}
            end,
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, get, Fun2),
@@ -651,4 +648,3 @@ prefix_search_and_remove_objects_(_) ->
     ok.
 
 -endif.
-
