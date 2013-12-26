@@ -121,7 +121,8 @@
  "system_version",
  "leo_storage.system_version",
  [
-  {default, "0.16.8"}
+  {datatype, string},
+  {default, "undefined"}
  ]}.
 
 %% @doc Path of object-container
