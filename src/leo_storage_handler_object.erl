@@ -552,8 +552,8 @@ read_and_repair(#read_parameter{ref = Ref} = ReadParameter,
                                  available = true}|_] = Redundancies) ->
     RPCKey = rpc:async_call(Node, ?MODULE, get, [ReadParameter, Redundancies]),
     Reply  = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
-                 {value, {ok, Meta, Object}} ->
-                     {ok, Ref, Meta, Object};
+                 {value, {ok, Meta, Bin}} ->
+                     {ok, Ref, Meta, #object{data = Bin}};
                  {value, {error, Cause}} ->
                      {error, Ref, Cause};
                  {value, {badrpc, Cause}} ->
@@ -570,15 +570,15 @@ read_and_repair(ReadParameter, [_|T]) ->
 
 
 %% @private
-read_and_repair_1({ok, Ref, Metadata, Object},
+read_and_repair_1({ok, Ref, Metadata, #object{data = Bin}},
                   #read_parameter{ref = Ref}, []) ->
-    {ok, Metadata, Object};
+    {ok, Metadata, Bin};
 
-read_and_repair_1({ok, Ref, Metadata, Object},
+read_and_repair_1({ok, Ref, Metadata, #object{data = Bin}},
                   #read_parameter{ref = Ref,
                                   quorum = Quorum} = ReadParameter, Redundancies) ->
     Fun = fun(ok) ->
-                  {ok, Metadata, Object};
+                  {ok, Metadata, Bin};
              ({error,_Cause}) ->
                   {error, ?ERROR_RECOVER_FAILURE}
           end,
