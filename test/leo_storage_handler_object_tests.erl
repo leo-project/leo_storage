@@ -109,6 +109,7 @@ teardown({_, Node1}) ->
 %% @doc  get/1
 %% @private
 get_a0_({Node0, Node1}) ->
+    %% leo_redundant_manager_api
     meck:new(leo_redundant_manager_api),
     meck:expect(leo_redundant_manager_api, get_redundancies_by_key,
                 fun(get, _Key) ->
@@ -117,6 +118,7 @@ get_a0_({Node0, Node1}) ->
                                            n = 2, r = 1, w = 1, d = 1}}
                 end),
 
+    %% leo_object_storage_api
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, get,
                 fun(_Key, _StartPos, _EndPos) ->
@@ -135,6 +137,7 @@ get_a0_({Node0, Node1}) ->
 %% @doc  get/1
 %% @private
 get_a1_({Node0, Node1}) ->
+    %% leo_redundant_manager_api
     meck:new(leo_redundant_manager_api),
     meck:expect(leo_redundant_manager_api, get_redundancies_by_key,
                 fun(get, _AddrId) ->
@@ -143,6 +146,7 @@ get_a1_({Node0, Node1}) ->
                                            n = 2, r = 1, w = 1, d = 1}}
                 end),
 
+    %% leo_object_storage_api
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, get,
                 fun(_Key, _StartPos, _EndPos) ->
@@ -158,19 +162,32 @@ get_a1_({Node0, Node1}) ->
 %% @doc  get/3
 %% @private
 get_b0_({Node0, Node1}) ->
+    %% leo_redundant_manager_api
+    Fun1 = fun(get, _AddrId) ->
+                   {ok, #redundancies{id = 0,
+                                      nodes = [#redundant_node{node = Node0,
+                                                               available = false},
+                                               #redundant_node{node = Node1,
+                                                               available = true}],
+                                      n = 2, r = 1, w = 1, d = 1}}
+           end,
     meck:new(leo_redundant_manager_api),
-    meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id,
-                fun(get, _AddrId) ->
-                        {ok, #redundancies{id = 0,
-                                           nodes = [{Node0,true}, {Node1,true}],
-                                           n = 2, r = 1, w = 1, d = 1}}
-                end),
+    meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id, Fun1),
 
+    ok = rpc:call(Node1, meck, new,    [leo_redundant_manager_api, [no_link]]),
+    ok = rpc:call(Node1, meck, expect, [leo_redundant_manager_api, get_redundancies_by_addr_id, Fun1]),
+
+    %% leo_object_storage_api
+    Fun2 = fun(_Key, _StartPos, _EndPos) ->
+                   not_found
+           end,
     meck:new(leo_object_storage_api),
-    meck:expect(leo_object_storage_api, get,
-                fun(_Key, _StartPos, _EndPos) ->
-                        not_found
-                end),
+    meck:expect(leo_object_storage_api, get, Fun2),
+
+    ok = rpc:call(Node1, meck, new,    [leo_object_storage_api, [no_link]]),
+    ok = rpc:call(Node1, meck, expect, [leo_object_storage_api, get, Fun2]),
+    ok = rpc:call(Node1, meck, new,    [leo_statistics_req_counter, [no_link]]),
+    ok = rpc:call(Node1, meck, expect, [leo_statistics_req_counter, increment, fun(_) -> ok end]),
 
     Res = leo_storage_handler_object:get(0, ?TEST_KEY_0, 0),
     ?assertEqual({error,not_found}, Res),
@@ -180,26 +197,44 @@ get_b0_({Node0, Node1}) ->
 %% @doc  get/3
 %% @private
 get_b1_({Node0, Node1}) ->
+    %% leo_redundant_manager_api
+    Fun1 = fun(get, _AddrId) ->
+                   {ok, #redundancies{id = 0,
+                                      nodes = [#redundant_node{node = Node0,
+                                                               available = true},
+                                               #redundant_node{node = Node1,
+                                                               available = true}],
+                                      n = 2, r = 1, w = 1, d = 1}}
+           end,
     meck:new(leo_redundant_manager_api),
-    meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id,
-                fun(get, _AddrId) ->
-                        {ok, #redundancies{id = 0,
-                                           nodes = [{Node0,true}, {Node1,true}], %% two
-                                           n = 2, r = 1, w = 1, d = 1}}
-                end),
+    meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id, Fun1),
 
+    ok = rpc:call(Node1, meck, new,    [leo_redundant_manager_api, [no_link]]),
+    ok = rpc:call(Node1, meck, expect, [leo_redundant_manager_api, get_redundancies_by_addr_id, Fun1]),
+
+    %% leo_object_storage_api
+    Fun2 = fun(_Key, _StartPos, _EndPos) ->
+                   {ok, ?TEST_META_0, []}
+           end,
     meck:new(leo_object_storage_api),
-    meck:expect(leo_object_storage_api, get,
-                fun(_Key, _StartPos, _EndPos) ->
-                        {ok, ?TEST_META_0, []}
-                end),
+    meck:expect(leo_object_storage_api, get, Fun2),
 
+    ok = rpc:call(Node1, meck, new,    [leo_object_storage_api, [no_link]]),
+    ok = rpc:call(Node1, meck, expect, [leo_object_storage_api, get, Fun2]),
+    ok = rpc:call(Node1, meck, new,    [leo_statistics_req_counter, [no_link]]),
+    ok = rpc:call(Node1, meck, expect, [leo_statistics_req_counter, increment, fun(_) -> ok end]),
+
+
+    Fun3 = fun(_R,_Nodes,_Metadata,_Callback) ->
+                   {error,not_found}
+           end,
     meck:new(leo_storage_read_repairer),
-    meck:expect(leo_storage_read_repairer, repair,
-                fun(_R, _Node,_Metadata,_ReqId,_Callback) ->
-                        {error,not_found}
-                end),
+    meck:expect(leo_storage_read_repairer, repair, Fun3),
 
+    ok = rpc:call(Node1, meck, new,    [leo_storage_read_repairer, [no_link]]),
+    ok = rpc:call(Node1, meck, expect, [leo_storage_read_repairer, repair, Fun3]),
+
+    %% Execute
     Res = leo_storage_handler_object:get(0, ?TEST_KEY_0, 0),
     ?assertEqual({error,not_found}, Res),
 
@@ -210,20 +245,24 @@ get_b1_({Node0, Node1}) ->
 %% @doc  get/3
 %% @private
 get_b2_({Node0, _Node1}) ->
+    %% leo_redundant_manager_api
     meck:new(leo_redundant_manager_api),
     meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id,
                 fun(get, _AddrId) ->
                         {ok, #redundancies{id = 0,
-                                           nodes = [{Node0,true}], %% one
+                                           nodes = [#redundant_node{node = Node0,
+                                                                    available = true}],
                                            n = 2, r = 1, w = 1, d = 1}}
                 end),
 
+    %% leo_object_storage_api
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, get,
                 fun(_Key, _StartPos, _EndPos) ->
                         {ok, ?TEST_META_0, []}
                 end),
 
+    %% leo_storage_read_repairer
     meck:new(leo_storage_read_repairer),
     meck:expect(leo_storage_read_repairer, repair,
                 fun(_R, _Node,_Metadata,_ReqId,_Callback) ->
@@ -240,27 +279,45 @@ get_b2_({Node0, _Node1}) ->
 %% @doc  get/3
 %% @private
 get_b3_({Node0, Node1}) ->
+    %% leo_redundant_manager_api
+    Fun1 = fun(get, _AddrId) ->
+                   {ok, #redundancies{id = 0,
+                                      nodes = [#redundant_node{node = Node0,
+                                                               available = true},
+                                               #redundant_node{node = Node1,
+                                                               available = true}],
+                                      n = 2, r = 1, w = 1, d = 1}}
+           end,
     meck:new(leo_redundant_manager_api),
-    meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id,
-                fun(get, _AddrId) ->
-                        {ok, #redundancies{id = 0,
-                                           nodes = [{Node0,true}, {Node1,true}], %% two
-                                           n = 2, r = 1, w = 1, d = 1}}
-                end),
+    meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id, Fun1),
 
+    ok = rpc:call(Node1, meck, new,    [leo_redundant_manager_api, [no_link]]),
+    ok = rpc:call(Node1, meck, expect, [leo_redundant_manager_api, get_redundancies_by_addr_id, Fun1]),
+
+    %% leo_object_storage_api
+    Fun2 = fun(_Key, _StartPos, _EndPos) ->
+                   {ok, ?TEST_META_0, []}
+           end,
     meck:new(leo_object_storage_api),
-    meck:expect(leo_object_storage_api, get,
-                fun(_Key, _StartPos, _EndPos) ->
-                        {ok, ?TEST_META_0, []}
-                end),
+    meck:expect(leo_object_storage_api, get, Fun2),
 
+    ok = rpc:call(Node1, meck, new,    [leo_object_storage_api, [no_link]]),
+    ok = rpc:call(Node1, meck, expect, [leo_object_storage_api, get, Fun2]),
+    ok = rpc:call(Node1, meck, new,    [leo_statistics_req_counter, [no_link]]),
+    ok = rpc:call(Node1, meck, expect, [leo_statistics_req_counter, increment, fun(_) -> ok end]),
+
+    %% leo_storage_read_repairer
+    Fun3 = fun(_R, _Nodes, _Metadata,_Callback) ->
+                   {ok, ?TEST_META_0, ?TEST_BIN}
+           end,
     meck:new(leo_storage_read_repairer),
-    meck:expect(leo_storage_read_repairer, repair,
-                fun(_R, _Node, _Metadata, _ReqId,_Callback) ->
-                        {ok, ?TEST_META_0, ?TEST_BIN}
-                end),
+    meck:expect(leo_storage_read_repairer, repair, Fun3),
+
+    ok = rpc:call(Node1, meck, new,    [leo_storage_read_repairer, [no_link]]),
+    ok = rpc:call(Node1, meck, expect, [leo_storage_read_repairer, repair, Fun3]),
 
 
+    %% Execute
     Res = leo_storage_handler_object:get(0, ?TEST_KEY_0, 0),
     ?assertEqual({ok, ?TEST_META_0, ?TEST_BIN}, Res),
 
@@ -275,24 +332,39 @@ get_c0_({Node0, Node1}) ->
     Checksum0 = 12345,
     Checksum1 = 12340,
 
+    %% leo_redundant_manager_api
+    Fun1 = fun(get, _AddrId) ->
+                   {ok, #redundancies{id = 0,
+                                      nodes = [#redundant_node{node = Node0,
+                                                               available = true},
+                                               #redundant_node{node = Node1,
+                                                               available = true}],
+                                      n = 2, r = 1, w = 1, d = 1}}
+           end,
     meck:new(leo_redundant_manager_api),
-    meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id,
-                fun(get, _AddrId) ->
-                        {ok, #redundancies{id = 0,
-                                           nodes = [{Node0,true}, {Node1,true}],
-                                           n = 2, r = 1, w = 1, d = 1}}
-                end),
+    meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id, Fun1),
 
+    ok = rpc:call(Node1, meck, new,    [leo_redundant_manager_api, [no_link]]),
+    ok = rpc:call(Node1, meck, expect, [leo_redundant_manager_api, get_redundancies_by_addr_id, Fun1]),
+
+    %% leo_object_storage_api
+    Fun2 = fun(_Key, _StartPos, _EndPos) ->
+                   not_found
+           end,
+    Fun3 = fun(_Key) ->
+                   {ok, term_to_binary(#metadata{checksum = Checksum0})}
+           end,
     meck:new(leo_object_storage_api),
-    meck:expect(leo_object_storage_api, get,
-                fun(_Key, _StartPos, _EndPos) ->
-                        not_found
-                end),
-    meck:expect(leo_object_storage_api, head,
-                fun(_Key) ->
-                        {ok, term_to_binary(#metadata{checksum = Checksum0})}
-                end),
+    meck:expect(leo_object_storage_api, get,  Fun2),
+    meck:expect(leo_object_storage_api, head, Fun3),
 
+    ok = rpc:call(Node1, meck, new,    [leo_object_storage_api, [no_link]]),
+    ok = rpc:call(Node1, meck, expect, [leo_object_storage_api, get,  Fun2]),
+    ok = rpc:call(Node1, meck, expect, [leo_object_storage_api, head, Fun3]),
+    ok = rpc:call(Node1, meck, new,    [leo_statistics_req_counter, [no_link]]),
+    ok = rpc:call(Node1, meck, expect, [leo_statistics_req_counter, increment, fun(_) -> ok end]),
+
+    %% Execute
     Res0 = leo_storage_handler_object:get(0, ?TEST_KEY_0, Checksum0, 0),
     ?assertEqual({ok,match}, Res0),
 
@@ -317,7 +389,10 @@ put_0_({Node0, Node1}) ->
     meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id,
                 fun(put, _AddrId) ->
                         {ok, #redundancies{id = 0,
-                                           nodes = [{Node0,true}, {Node1,true}],
+                                           nodes = [#redundant_node{node = Node0,
+                                                                    available = true},
+                                                    #redundant_node{node = Node1,
+                                                                    available = true}],
                                            n = 2, r = 1, w = 1, d = 1}}
                 end),
 
@@ -382,7 +457,10 @@ delete_0_({Node0, Node1}) ->
     meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id,
                 fun(put, _AddrId) ->
                         {ok, #redundancies{id = 0,
-                                           nodes = [{Node0,true}, {Node1,true}],
+                                           nodes = [#redundant_node{node = Node0,
+                                                                    available = true},
+                                                    #redundant_node{node = Node1,
+                                                                    available = true}],
                                            n = 2, r = 1, w = 1, d = 1}}
                 end),
 

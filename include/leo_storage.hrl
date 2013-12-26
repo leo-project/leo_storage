@@ -81,6 +81,19 @@
 -define(ERROR_COULD_MATCH,              "Could not match").
 
 
+%% @doc request parameter for READ
+%%
+-record(read_parameter, {
+          ref           :: reference(),
+          addr_id       :: integer(),
+          key           :: string(),
+          etag = []     :: string(),
+          start_pos = 0 :: integer(),
+          end_pos   = 0 :: integer(),
+          quorum        :: integer(),
+          req_id        :: integer()
+         }).
+
 %% @doc Queue's Message.
 %%
 -record(inconsistent_data_message, {
