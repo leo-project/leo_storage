@@ -356,21 +356,22 @@ sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
                                   case lists:member(Node, Nodes) of
                                       true ->
                                           VNodeId = ToAddrId,
-                                          ?MODULE:publish(?QUEUE_TYPE_REBALANCE, Node, VNodeId, AddrId, Key);
+                                          ?MODULE:publish(?QUEUE_TYPE_REBALANCE, Node, VNodeId, AddrId, Key),
+                                          Acc;
                                       false ->
-                                          void
+                                          Acc
                                   end,
-                                  {ok, Acc};
+                                  Acc;
                               _ ->
-                                  {ok, Acc}
+                                  Acc
                           end;
                       false ->
-                          {ok, Acc}
+                          Acc
                   end
           end,
 
-    _ = leo_object_storage_api:fetch_by_addr_id(FromAddrId, Fun),
-    _ = notify_message_to_manager(?env_manager_nodes(leo_storage), ToAddrId, erlang:node()),
+    catch leo_object_storage_api:fetch_by_addr_id(FromAddrId, Fun),
+    catch notify_message_to_manager(?env_manager_nodes(leo_storage), ToAddrId, erlang:node()),
     sync_vnodes(Node, RingHash, T).
 
 
