@@ -234,9 +234,10 @@ handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
                     ok;
                 {error, Cause} ->
                     publish(?QUEUE_TYPE_PER_OBJECT, AddrId, Key, ErrorType),
-                    ?warn("handle_call/1 - QUEUE_ID_PER_OBJECT", "cause:~p", [Cause]),
                     {error, Cause}
-            end
+            end;
+        _ ->
+            {error, ?ERROR_COULD_MATCH}
     end;
 
 handle_call({consume, ?QUEUE_ID_SYNC_BY_VNODE_ID, MessageBin}) ->
@@ -253,8 +254,12 @@ handle_call({consume, ?QUEUE_ID_SYNC_BY_VNODE_ID, MessageBin}) ->
                     ok = sync_vnodes(Node, CurRingHash, Res),
                     notify_rebalance_message_to_manager(ToVNodeId);
                 Error ->
+                    ?error("handle_call/1 - QUEUE_ID_SYNC_BY_VNODE_ID", "error:~p", [Error]),
+                    ok = leo_storage_mq_client:publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, ToVNodeId, Node),
                     Error
-            end
+            end;
+        _ ->
+            {error, ?ERROR_COULD_MATCH}
     end;
 
 handle_call({consume, ?QUEUE_ID_REBALANCE, MessageBin}) ->
@@ -262,45 +267,10 @@ handle_call({consume, ?QUEUE_ID_REBALANCE, MessageBin}) ->
         {'EXIT', Cause} ->
             ?error("handle_call/1 - QUEUE_ID_REBALANCE", "cause:~p", [Cause]),
             {error, Cause};
-        #rebalance_message{node     = Node,
-                           vnode_id = VNodeId,
-                           addr_id  = AddrId,
-                           key      = Key} ->
-            %% NOTE:
-            %% If remote-node status is NOT 'running',
-            %%     this function cannot operate 'copy'.
-            case leo_redundant_manager_api:get_member_by_node(Node) of
-                {ok, #member{state = ?STATE_RUNNING}} ->
-                    %% Copy objects to a remote-node
-                    ok = decrement_counter(?TBL_REBALANCE_COUNTER, VNodeId),
-
-                    case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
-                        {ok, #redundancies{nodes = Redundancies}} ->
-                            case delete_node_from_redundancies(Redundancies, Node, []) of
-                                {ok, Redundancies_1} ->
-                                    case find_node_from_redundancies(Redundancies_1, erlang:node()) of
-                                        true ->
-                                            case leo_storage_handler_object:copy([Node], AddrId, Key) of
-                                                ok ->
-                                                    ok;
-                                                Error ->
-                                                    ok = leo_storage_mq_client:publish(
-                                                           ?QUEUE_TYPE_PER_OBJECT, AddrId, Key,
-                                                           ?ERR_TYPE_REPLICATE_DATA),
-                                                    Error
-                                            end;
-                                        false ->
-                                            ok
-                                    end;
-                                _ ->
-                                    ok
-                            end;
-                        _ ->
-                            ok
-                    end;
-                _ ->
-                    {error, inactive}
-            end
+        #rebalance_message{} = Msg ->
+            rebalance_1(Msg);
+        _ ->
+            {error, ?ERROR_COULD_MATCH}
     end;
 
 handle_call({consume, ?QUEUE_ID_ASYNC_DELETION, MessageBin}) ->
@@ -319,7 +289,9 @@ handle_call({consume, ?QUEUE_ID_ASYNC_DELETION, MessageBin}) ->
                     ok;
                 {error, _Cause} ->
                     publish(?QUEUE_TYPE_ASYNC_DELETION, AddrId, Key)
-            end
+            end;
+        _ ->
+            {error, ?ERROR_COULD_MATCH}
     end;
 
 handle_call({consume, ?QUEUE_ID_RECOVERY_NODE, MessageBin}) ->
@@ -328,7 +300,9 @@ handle_call({consume, ?QUEUE_ID_RECOVERY_NODE, MessageBin}) ->
             ?error("handle_call/1 - QUEUE_ID_RECOVERY_NODE", "cause:~p", [Cause]),
             {error, Cause};
         #recovery_node_message{node = Node} ->
-            recover_node(Node)
+            recover_node(Node);
+        _ ->
+            {error, ?ERROR_COULD_MATCH}
     end.
 
 
@@ -368,38 +342,36 @@ recover_node(Node) ->
 sync_vnodes(_, _, []) ->
     ok;
 sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
-    Fun = fun(K, V, Acc) ->
-                  {AddrId, Key} = binary_to_term(K),
-                  Metadata      = binary_to_term(V),
-
+    Fun = fun(K,_V, Acc) ->
                   %% Note: An object of copy is NOT equal current ring-hash.
                   %%       Then a message in the rebalance-queue.
+                  {AddrId, Key} = binary_to_term(K),
+
                   case (AddrId >= FromAddrId andalso
                         AddrId =< ToAddrId) of
-                      true when Metadata#metadata.ring_hash =/= RingHash ->
+                      true ->
                           case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
                               {ok, #redundancies{nodes = Redundancies}} ->
                                   Nodes = [N || #redundant_node{node = N} <- Redundancies],
                                   case lists:member(Node, Nodes) of
                                       true ->
                                           VNodeId = ToAddrId,
-                                          ?MODULE:publish(?QUEUE_TYPE_REBALANCE, Node, VNodeId, AddrId, Key);
+                                          ?MODULE:publish(?QUEUE_TYPE_REBALANCE, Node, VNodeId, AddrId, Key),
+                                          Acc;
                                       false ->
-                                          void
+                                          Acc
                                   end,
-                                  {ok, Acc};
+                                  Acc;
                               _ ->
-                                  {ok, Acc}
+                                  Acc
                           end;
-                      true ->
-                          {ok, Acc};
                       false ->
-                          {ok, Acc}
+                          Acc
                   end
           end,
 
-    _ = leo_object_storage_api:fetch_by_addr_id(FromAddrId, Fun),
-    _ = notify_message_to_manager(?env_manager_nodes(leo_storage), ToAddrId, erlang:node()),
+    catch leo_object_storage_api:fetch_by_addr_id(FromAddrId, Fun),
+    catch notify_message_to_manager(?env_manager_nodes(leo_storage), ToAddrId, erlang:node()),
     sync_vnodes(Node, RingHash, T).
 
 
@@ -443,8 +415,6 @@ notify_message_to_manager([Manager|T], VNodeId, Node) ->
                         [VNodeId, Node, Cause]),
                   {error, Cause};
               timeout = Cause ->
-                  ?warn("notify_message_to_manager/3","vnode-id:~w, node:~w, cause:~p",
-                        [VNodeId, Node, Cause]),
                   {error, Cause}
           end,
 
@@ -555,6 +525,52 @@ correct_redundancies_3(InconsistentNodes, [Node|Rest], Metadata) ->
     end.
 
 
+%% @doc Relocate an object because of executed "rebalance"
+%%      NOTE:
+%%          If remote-node status is NOT 'running',
+%%          this function cannot operate 'copy'.
+%% @private
+rebalance_1(#rebalance_message{node = Node,
+                               vnode_id = VNodeId,
+                               addr_id  = AddrId,
+                               key      = Key} = Msg) ->
+    case leo_redundant_manager_api:get_member_by_node(Node) of
+        {ok, #member{state = ?STATE_RUNNING}} ->
+            ok = decrement_counter(?TBL_REBALANCE_COUNTER, VNodeId),
+            case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
+                {ok, #redundancies{nodes = Redundancies}} ->
+                    Ret = delete_node_from_redundancies(Redundancies, Node, []),
+                    rebalance_2(Ret, Msg);
+                _ ->
+                    ok
+            end;
+        _ ->
+            ok = leo_storage_mq_client:publish(
+                   ?QUEUE_TYPE_PER_OBJECT, AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
+            {error, inactive}
+    end.
+
+%% @private
+rebalance_2({ok, Redundancies}, #rebalance_message{node = Node,
+                                                   addr_id = AddrId,
+                                                   key     = Key}) ->
+    case find_node_from_redundancies(Redundancies, erlang:node()) of
+        true ->
+            case leo_storage_handler_object:copy([Node], AddrId, Key) of
+                ok ->
+                    ok;
+                Error ->
+                    ok = leo_storage_mq_client:publish(
+                           ?QUEUE_TYPE_PER_OBJECT, AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
+                    Error
+            end;
+        false ->
+            ok
+    end;
+rebalance_2(_,_) ->
+    ok.
+
+
 %% @doc Notify a rebalance-progress messages to manager.
 %%      - Retrieve # of published messages for rebalance,
 %%        after notify a message to manager.
@@ -582,10 +598,7 @@ notify_rebalance_message_to_manager(VNodeId) ->
                                                "manager:~p, vnode_id:~w, ~ncause:~p",
                                                [Manager1, VNodeId, Cause]),
                                         Res;
-                                    timeout = Cause ->
-                                        ?error("notify_rebalance_message_to_manager/1",
-                                               "manager:~p, vnode_id:~w, ~ncause:~p",
-                                               [Manager1, VNodeId, Cause]),
+                                    timeout ->
                                         Res
                                 end
                         end, false, ?env_manager_nodes(leo_storage)),
@@ -637,4 +650,3 @@ queue_id(?QUEUE_TYPE_REBALANCE) ->
     ?QUEUE_ID_REBALANCE;
 queue_id(?QUEUE_TYPE_RECOVERY_NODE) ->
     ?QUEUE_ID_RECOVERY_NODE.
-

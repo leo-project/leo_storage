@@ -71,14 +71,28 @@
 
 %% @doc error messages.
 %%
--define(ERROR_COULD_NOT_GET_DATA,       "could not get data").
--define(ERROR_COULD_NOT_GET_META,       "could not get metadata").
--define(ERROR_RECOVER_FAILURE,          "recover failure").
--define(ERROR_REPLICATE_FAILURE,        "replicate failure").
--define(ERROR_META_NOT_FOUND,           "metadata not found").
--define(ERROR_COULD_NOT_GET_REDUNDANCY, "could not get redundancy").
--define(ERROR_COULD_NOT_CONNECT,        "could not connect").
+-define(ERROR_COULD_NOT_GET_DATA,       "Could not get data").
+-define(ERROR_COULD_NOT_GET_META,       "Could not get metadata").
+-define(ERROR_RECOVER_FAILURE,          "Recover failure").
+-define(ERROR_REPLICATE_FAILURE,        "Replicate failure").
+-define(ERROR_META_NOT_FOUND,           "Metadata not found").
+-define(ERROR_COULD_NOT_GET_REDUNDANCY, "Could not get redundancy").
+-define(ERROR_COULD_NOT_CONNECT,        "Could not connect").
+-define(ERROR_COULD_MATCH,              "Could not match").
 
+
+%% @doc request parameter for READ
+%%
+-record(read_parameter, {
+          ref           :: reference(),
+          addr_id       :: integer(),
+          key           :: string(),
+          etag = []     :: string(),
+          start_pos = 0 :: integer(),
+          end_pos   = 0 :: integer(),
+          quorum        :: integer(),
+          req_id        :: integer()
+         }).
 
 %% @doc Queue's Message.
 %%

@@ -34,32 +34,37 @@
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 
 %% API
--export([repair/5]).
+-export([repair/4]).
 
--record(req_params, {addr_id = 0       :: integer(),
-                     key               :: string(),
-                     read_quorum = 0   :: integer(),
-                     redundancies = [] :: list(),
-                     metadata          :: #metadata{},
-                     rpc_key           :: rpc:key(),
-                     req_id = 0        :: integer()
-                    }).
+-record(state, {addr_id = 0       :: integer(),
+                key               :: string(),
+                read_quorum = 0   :: integer(),
+                redundancies = [] :: list(),
+                metadata          :: #metadata{},
+                rpc_key           :: rpc:key(),
+                req_id = 0        :: integer()
+               }).
 
 %%--------------------------------------------------------------------
 %% API
 %%--------------------------------------------------------------------
 %% @doc Repair an object.
 %% @end
--spec(repair(pos_integer(), list(), #metadata{}, integer(), function()) ->
+-spec(repair(#read_parameter{}, #redundant_node{}, #metadata{}, function()) ->
              {ok, reference()} | {error, reference(),  any()}).
-repair(ReadQuorum, Nodes, Metadata, ReqId, Callback) ->
+repair(#read_parameter{quorum = ReadQuorum,
+                       req_id = ReqId}, Redundancies, Metadata, Callback) ->
     From   = self(),
     AddrId = Metadata#metadata.addr_id,
     Key    = Metadata#metadata.key,
-    Params = #req_params{read_quorum  = ReadQuorum,
-                         redundancies = Nodes,
-                         metadata     = Metadata,
-                         req_id       = ReqId},
+    Params = #state{read_quorum  = ReadQuorum,
+                    redundancies = Redundancies,
+                    metadata     = Metadata,
+                    req_id       = ReqId},
+    NumOfNodes = erlang:length(
+                   [N || #redundant_node{node = N,
+                                         can_read_repair = true}
+                             <- Redundancies]),
     lists:foreach(
       fun(#redundant_node{node = Node,
                           available = true,
@@ -71,8 +76,8 @@ repair(ReadQuorum, Nodes, Metadata, ReqId, Callback) ->
                     end);
          (#redundant_node{}) ->
               void
-      end, Nodes),
-    loop(ReadQuorum, From, erlang:length(Nodes), {ReqId, Key, []}, Callback).
+      end, Redundancies),
+    loop(ReadQuorum, From, NumOfNodes, {ReqId, Key, []}, Callback).
 
 
 %% @doc Waiting for messages (compare a metadata)
@@ -106,11 +111,11 @@ loop(R, From, NumOfNodes, {ReqId, Key, Errors} = Args, Callback) ->
 %%--------------------------------------------------------------------
 %% @doc Compare local-metadata with remote-metadata
 %% @private
--spec(compare(pid(), pid(), atom(), #req_params{}) ->
+-spec(compare(pid(), pid(), atom(), #state{}) ->
              ok).
-compare(Pid, RPCKey, Node, #req_params{metadata = #metadata{addr_id = AddrId,
-                                                            key     = Key,
-                                                            clock   = Clock}}) ->
+compare(Pid, RPCKey, Node, #state{metadata = #metadata{addr_id = AddrId,
+                                                       key     = Key,
+                                                       clock   = Clock}}) ->
     Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
               {value, {ok, #metadata{clock = RemoteClock}}} when Clock == RemoteClock ->
                   ok;

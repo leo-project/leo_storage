@@ -74,7 +74,6 @@ setup() ->
     true = rpc:call(Test1Node, code, add_path, ["../deps/meck/ebin"]),
 
     timer:sleep(100),
-    %% {ok, _Pid} = leo_storage_replicate_server:start_link(?TEST_SERVER_ID),
     {Test0Node, Test1Node}.
 
 teardown({_Test0Node, Test1Node}) ->

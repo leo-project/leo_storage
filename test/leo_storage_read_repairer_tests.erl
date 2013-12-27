@@ -24,8 +24,9 @@
 %% @end
 %%====================================================================
 -module(leo_storage_read_repairer_tests).
--author('yosuke hara').
+-author('Yosuke Hara').
 
+-include("leo_storage.hrl").
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
@@ -99,7 +100,9 @@ regular_({Test0Node, Test1Node}) ->
     Nodes = [#redundant_node{node = Test0Node, available = true},
              #redundant_node{node = Test1Node, available = true}],
     F = fun(_) -> ok end,
-    ok = leo_storage_read_repairer:repair(1, Nodes, ?TEST_META_1, 0, F),
+    ok = leo_storage_read_repairer:repair(
+           #read_parameter{quorum = 1,
+                           req_id = 0}, Nodes, ?TEST_META_1, F),
     ok.
 
 fail_1_({Test0Node, Test1Node}) ->
@@ -120,7 +123,9 @@ fail_1_({Test0Node, Test1Node}) ->
     Nodes = [#redundant_node{node = Test0Node, available = true},
              #redundant_node{node = Test1Node, available = true}],
     F = fun(_) -> ok end,
-    ok = leo_storage_read_repairer:repair(1, Nodes, ?TEST_META_1, 0, F),
+    ok = leo_storage_read_repairer:repair(
+           #read_parameter{quorum = 1,
+                           req_id = 0}, Nodes, ?TEST_META_1, F),
     ok.
 
 fail_2_({Test0Node, Test1Node}) ->
@@ -141,7 +146,9 @@ fail_2_({Test0Node, Test1Node}) ->
     Nodes = [#redundant_node{node = Test0Node, available = true},
              #redundant_node{node = Test1Node, available = true}],
     F = fun(_) -> ok end,
-    ok = leo_storage_read_repairer:repair(1, Nodes, ?TEST_META_2, 0, F),
+    ok = leo_storage_read_repairer:repair(
+           #read_parameter{quorum = 1,
+                           req_id = 0}, Nodes, ?TEST_META_2, F),
     ok.
 
 -endif.
