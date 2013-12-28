@@ -251,8 +251,7 @@ handle_call({consume, ?QUEUE_ID_SYNC_BY_VNODE_ID, MessageBin}) ->
                 {ok, Res} ->
                     {ok, {CurRingHash, _PrevRingHash}} =
                         leo_redundant_manager_api:checksum(?CHECKSUM_RING),
-                    ok = sync_vnodes(Node, CurRingHash, Res),
-                    notify_rebalance_message_to_manager(ToVNodeId);
+                    sync_vnodes(Node, CurRingHash, Res);
                 Error ->
                     ?error("handle_call/1 - QUEUE_ID_SYNC_BY_VNODE_ID", "error:~p", [Error]),
                     ok = leo_storage_mq_client:publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, ToVNodeId, Node),
@@ -356,12 +355,11 @@ sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
                                   case lists:member(Node, Nodes) of
                                       true ->
                                           VNodeId = ToAddrId,
-                                          ?MODULE:publish(?QUEUE_TYPE_REBALANCE, Node, VNodeId, AddrId, Key),
+                                          ok = ?MODULE:publish(?QUEUE_TYPE_REBALANCE, Node, VNodeId, AddrId, Key),
                                           Acc;
                                       false ->
                                           Acc
-                                  end,
-                                  Acc;
+                                  end;
                               _ ->
                                   Acc
                           end;
@@ -371,7 +369,6 @@ sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
           end,
 
     catch leo_object_storage_api:fetch_by_addr_id(FromAddrId, Fun),
-    catch notify_message_to_manager(?env_manager_nodes(leo_storage), ToAddrId, erlang:node()),
     sync_vnodes(Node, RingHash, T).
 
 
@@ -397,33 +394,6 @@ find_node_from_redundancies([#redundant_node{node = Node}|_], Node) ->
     true;
 find_node_from_redundancies([_|Rest], Node) ->
     find_node_from_redundancies(Rest, Node).
-
-
-%% @doc Notify a message to manager node(s)
-%%
--spec(notify_message_to_manager(list(), integer(), atom()) ->
-             ok | {error, any()}).
-notify_message_to_manager([],_VNodeId,_Node) ->
-    {error, 'fail_notification'};
-notify_message_to_manager([Manager|T], VNodeId, Node) ->
-    Res = case rpc:call(list_to_atom(Manager), leo_manager_api, notify,
-                        [synchronized, VNodeId, Node], ?DEF_REQ_TIMEOUT) of
-              ok ->
-                  ok;
-              {_, Cause} ->
-                  ?warn("notify_message_to_manager/3","vnode-id:~w, node:~w, cause:~p",
-                        [VNodeId, Node, Cause]),
-                  {error, Cause};
-              timeout = Cause ->
-                  {error, Cause}
-          end,
-
-    case Res of
-        ok ->
-            ok;
-        _Error ->
-            notify_message_to_manager(T, VNodeId, Node)
-    end.
 
 
 %% @doc correct_redundancies/1 - first.
@@ -569,43 +539,6 @@ rebalance_2({ok, Redundancies}, #rebalance_message{node = Node,
     end;
 rebalance_2(_,_) ->
     ok.
-
-
-%% @doc Notify a rebalance-progress messages to manager.
-%%      - Retrieve # of published messages for rebalance,
-%%        after notify a message to manager.
-%%
--spec(notify_rebalance_message_to_manager(integer()) ->
-             ok | {error, any()}).
-notify_rebalance_message_to_manager(VNodeId) ->
-    case ets_lookup(?TBL_REBALANCE_COUNTER, VNodeId) of
-        {ok, NumOfMessages} ->
-            lists:foldl(fun(_Manager, true) ->
-                                void;
-                           (Manager0, false = Res) ->
-                                Manager1 = case is_atom(Manager0) of
-                                               true  -> Manager0;
-                                               false -> list_to_atom(Manager0)
-                                           end,
-
-                                case catch rpc:call(Manager1, leo_manager_api, notify,
-                                                    [rebalance, VNodeId, erlang:node(), NumOfMessages],
-                                                    ?DEF_REQ_TIMEOUT) of
-                                    ok ->
-                                        true;
-                                    {_, Cause} ->
-                                        ?error("notify_rebalance_message_to_manager/1",
-                                               "manager:~p, vnode_id:~w, ~ncause:~p",
-                                               [Manager1, VNodeId, Cause]),
-                                        Res;
-                                    timeout ->
-                                        Res
-                                end
-                        end, false, ?env_manager_nodes(leo_storage)),
-            ok;
-        Error ->
-            Error
-    end.
 
 
 %% @doc Lookup rebalance counter
