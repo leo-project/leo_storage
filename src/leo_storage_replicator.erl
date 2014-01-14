@@ -72,7 +72,6 @@ replicate(Quorum, Nodes, Object, Callback) ->
               true = rpc:cast(Node, leo_storage_handler_object, put, [From, Object, ReqId]);
          (#redundant_node{node = Node,
                           available = false}) ->
-              ok = enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
               erlang:send(From, {error, {Node, nodedown}})
       end, Nodes),
 
@@ -125,7 +124,6 @@ replicate_fun(local, #req_params{pid     = Pid,
                {error, Ref, Cause} ->
                    ?warn("replicate_fun/2", "key:~s, node:~w, reqid:~w, cause:~p",
                          [Key, local, ReqId, Cause]),
-                   ok = enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
                    {error, {node(), Cause}}
            end,
     erlang:send(Pid, Ret).
