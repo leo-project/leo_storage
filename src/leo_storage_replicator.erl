@@ -113,7 +113,6 @@ loop(W, From, AddrId, Key, { NumOfNodes, ResL, Errors}, Callback) ->
 -spec(replicate_fun(local | atom(), #req_params{}) ->
              {ok, atom()} | {error, atom(), any()}).
 replicate_fun(local, #req_params{pid     = Pid,
-                                 addr_id = AddrId,
                                  key     = Key,
                                  object  = Object,
                                  req_id  = ReqId}) ->
