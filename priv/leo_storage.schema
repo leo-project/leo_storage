@@ -646,13 +646,13 @@
   {default, "256000"}
  ]}.
 
-%% @doc Raise the ETS table limit
-{mapping,
- "erlang.hidden_flag",
- "vm_args.-hidden",
- [
-  {default, ""}
- ]}.
+%% %% @doc Raise the ETS table limit
+%% {mapping,
+%%  "erlang.hidden_flag",
+%%  "vm_args.-hidden",
+%%  [
+%%   {default, ""}
+%%  ]}.
 
 %% @doc Raise the default erlang process limit
 {mapping, "process_limit", "vm_args.+P",
