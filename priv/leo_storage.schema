@@ -503,7 +503,7 @@
  "leo_object_storage.metadata_storage",
  [
   {datatype, atom},
-  {default, 'bitcask'}
+  {default, 'leveldb'}
  ]}.
 
 %% @doc
