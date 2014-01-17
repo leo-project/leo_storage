@@ -215,8 +215,11 @@ put(From, Object, ReqId) ->
     case replicate(?REP_REMOTE, ?CMD_PUT, Object) of
         {ok, ETag} ->
             erlang:send(From, {ok, ETag});
+
+        %% not found an object (during rebalance and delete-operation)
+        {error, not_found} when ReqId == 0 ->
+            erlang:send(From, {ok, 0});
         {error, Cause} ->
-            ?warn("put/3", "req-id:~w, cause:~p", [ReqId, Cause]),
             erlang:send(From, {error, {node(), Cause}})
     end.
 
