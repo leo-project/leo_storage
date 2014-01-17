@@ -501,7 +501,7 @@ find_uploaded_objects_by_key(OriginalKey) ->
              {ok, #metadata{}, binary()} |
              {error, any()}).
 read_and_repair(_, []) ->
-    {error, ?ERROR_COULD_NOT_GET_DATA};
+    {error, not_found};
 
 read_and_repair(#read_parameter{addr_id   = AddrId,
                                 key       = Key,
