@@ -112,7 +112,7 @@ get_routing_table_chksum() ->
              ok).
 update_manager_nodes(Managers) ->
     ?update_env_manager_nodes(leo_storage, Managers),
-    leo_membership:update_manager_nodes(Managers).
+    leo_membership_cluster_local:update_manager_nodes(Managers).
 
 %% @doc start storage-server.
 %%
