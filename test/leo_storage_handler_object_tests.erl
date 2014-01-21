@@ -622,7 +622,8 @@ copy_({Node0, Node1}) ->
 prefix_search_({_Node0, _Node1}) ->
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, fetch_by_key,
-                fun(_ParentDir, Fun, _MaxKeys) ->
+                %fun(_ParentDir, Fun, _MaxKeys) ->
+                fun(_ParentDir, Fun) ->
                         Fun(?TEST_KEY_0, term_to_binary(#metadata{}), []),
                         Fun(?TEST_DIR_0, term_to_binary(#metadata{}), [#metadata{key=?TEST_KEY_0}]),
                         Fun(?TEST_KEY_1, term_to_binary(#metadata{}), [#metadata{key=?TEST_KEY_0}])
