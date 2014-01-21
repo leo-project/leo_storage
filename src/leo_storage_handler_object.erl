@@ -354,8 +354,7 @@ copy(DestNodes, AddrId, Key) ->
 %% API - Prefix Search (Fetch)
 %%--------------------------------------------------------------------
 prefix_search(ParentDir, Marker, MaxKeys) ->
-    Fun = fun(K, V, Acc0) when length(Acc0) =< MaxKeys ->
-                  {_AddrId, Key} = binary_to_term(K),
+    Fun = fun(Key, V, Acc0) when length(Acc0) =< MaxKeys ->
                   Meta0   = binary_to_term(V),
                   InRange = case Marker of
                                 [] -> true;
@@ -378,7 +377,6 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
                              {Pos0, _} ->
                                  Pos0
                          end,
-
                   case (InRange == true andalso Pos1 == 0) of
                       true ->
                           case (Length2 -1) of
@@ -441,9 +439,9 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
 -spec(prefix_search_and_remove_objects(binary()) ->
              ok).
 prefix_search_and_remove_objects(ParentDir) ->
-    Fun = fun(K, V,_Acc) ->
-                  {AddrId, Key} = binary_to_term(K),
-                  Metadata      = binary_to_term(V),
+    Fun = fun(Key, V,_Acc) ->
+                  Metadata = binary_to_term(V),
+                  AddrId   = Metadata#metadata.addr_id,
 
                   Pos1 = case binary:match(Key, [ParentDir]) of
                              nomatch ->
@@ -469,8 +467,7 @@ prefix_search_and_remove_objects(ParentDir) ->
 -spec(find_uploaded_objects_by_key(binary()) ->
              ok).
 find_uploaded_objects_by_key(OriginalKey) ->
-    Fun = fun(K, V, Acc) ->
-                  {_AddrId, Key} = binary_to_term(K),
+    Fun = fun(Key, V, Acc) ->
                   Metadata       = binary_to_term(V),
 
                   case (nomatch /= binary:match(Key, <<"\n">>)) of
