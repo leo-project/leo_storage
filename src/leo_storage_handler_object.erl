@@ -433,7 +433,7 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
              (_, _, Acc0) ->
                   Acc0
           end,
-    leo_object_storage_api:fetch_by_key(ParentDir, Fun).
+    leo_object_storage_api:fetch_by_key(ParentDir, Fun, MaxKeys).
 
 
 %% @doc Retrieve object of deletion from object-storage by key
