@@ -72,7 +72,6 @@ replicate(Quorum, Nodes, Object, Callback) ->
               true = rpc:cast(Node, leo_storage_handler_object, put, [From, Object, ReqId]);
          (#redundant_node{node = Node,
                           available = false}) ->
-              ok = enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
               erlang:send(From, {error, {Node, nodedown}})
       end, Nodes),
 
@@ -114,7 +113,6 @@ loop(W, From, AddrId, Key, { NumOfNodes, ResL, Errors}, Callback) ->
 -spec(replicate_fun(local | atom(), #req_params{}) ->
              {ok, atom()} | {error, atom(), any()}).
 replicate_fun(local, #req_params{pid     = Pid,
-                                 addr_id = AddrId,
                                  key     = Key,
                                  object  = Object,
                                  req_id  = ReqId}) ->
@@ -125,7 +123,6 @@ replicate_fun(local, #req_params{pid     = Pid,
                {error, Ref, Cause} ->
                    ?warn("replicate_fun/2", "key:~s, node:~w, reqid:~w, cause:~p",
                          [Key, local, ReqId, Cause]),
-                   ok = enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
                    {error, {node(), Cause}}
            end,
     erlang:send(Pid, Ret).
@@ -141,4 +138,3 @@ enqueue(?ERR_TYPE_DELETE_DATA = Type,     AddrId, Key) ->
     leo_storage_mq_client:publish(?QUEUE_TYPE_PER_OBJECT, AddrId, Key, Type);
 enqueue(_,_,_) ->
     void.
-

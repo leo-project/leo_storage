@@ -180,7 +180,7 @@ attach_(_) ->
                         ok
                 end),
 
-    ok = leo_storage_api:attach(#system_conf{n = 3,
+    ok = leo_storage_api:attach(#?SYSTEM_CONF{n = 3,
                                              r = 1,
                                              w = 2,
                                              d = 2,

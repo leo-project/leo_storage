@@ -98,4 +98,3 @@ handle_call({sync, ?STAT_INTERVAL_1M}) ->
 
 handle_call({sync, ?STAT_INTERVAL_5M}) ->
     ok.
-

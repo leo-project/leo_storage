@@ -112,7 +112,7 @@ get_routing_table_chksum() ->
              ok).
 update_manager_nodes(Managers) ->
     ?update_env_manager_nodes(leo_storage, Managers),
-    leo_membership:update_manager_nodes(Managers).
+    leo_membership_cluster_local:update_manager_nodes(Managers).
 
 %% @doc start storage-server.
 %%
@@ -131,13 +131,15 @@ start(MembersCur, MembersPrev, SystemConf) ->
         [] -> ok;
         _ ->
             ok = leo_redundant_manager_api:set_options(
-                   [{n, SystemConf#system_conf.n},
-                    {r, SystemConf#system_conf.r},
-                    {w, SystemConf#system_conf.w},
-                    {d, SystemConf#system_conf.d},
-                    {bit_of_ring, SystemConf#system_conf.bit_of_ring},
-                    {level_1,     SystemConf#system_conf.level_1},
-                    {level_2,     SystemConf#system_conf.level_2}])
+                   [{cluster_id, SystemConf#?SYSTEM_CONF.cluster_id},
+                    {dc_id,      SystemConf#?SYSTEM_CONF.dc_id},
+                    {n, SystemConf#?SYSTEM_CONF.n},
+                    {r, SystemConf#?SYSTEM_CONF.r},
+                    {w, SystemConf#?SYSTEM_CONF.w},
+                    {d, SystemConf#?SYSTEM_CONF.d},
+                    {bit_of_ring, SystemConf#?SYSTEM_CONF.bit_of_ring},
+                    {num_of_dc_replicas,   SystemConf#?SYSTEM_CONF.num_of_dc_replicas},
+                    {num_of_rack_replicas, SystemConf#?SYSTEM_CONF.num_of_rack_replicas}])
     end,
     start_1(MembersCur, MembersPrev).
 
@@ -176,17 +178,19 @@ stop() ->
 
 %% @doc attach a cluster.
 %%
--spec(attach(#system_conf{}) ->
+-spec(attach(#?SYSTEM_CONF{}) ->
              ok | {error, any()}).
 attach(SystemConf) ->
     ok = leo_redundant_manager_api:set_options(
-           [{n, SystemConf#system_conf.n},
-            {r, SystemConf#system_conf.r},
-            {w, SystemConf#system_conf.w},
-            {d, SystemConf#system_conf.d},
-            {bit_of_ring, SystemConf#system_conf.bit_of_ring},
-            {level_1,     SystemConf#system_conf.level_1},
-            {level_2,     SystemConf#system_conf.level_2}]).
+           [{cluster_id, SystemConf#?SYSTEM_CONF.cluster_id},
+            {dc_id,      SystemConf#?SYSTEM_CONF.dc_id},
+            {n, SystemConf#?SYSTEM_CONF.n},
+            {r, SystemConf#?SYSTEM_CONF.r},
+            {w, SystemConf#?SYSTEM_CONF.w},
+            {d, SystemConf#?SYSTEM_CONF.d},
+            {bit_of_ring, SystemConf#?SYSTEM_CONF.bit_of_ring},
+            {num_of_dc_replicas,   SystemConf#?SYSTEM_CONF.num_of_dc_replicas},
+            {num_of_rack_replicas, SystemConf#?SYSTEM_CONF.num_of_rack_replicas}]).
 
 
 %%--------------------------------------------------------------------
@@ -352,4 +356,3 @@ rebalance_1([]) ->
 rebalance_1([{VNodeId, Node}|T]) ->
     ok = leo_storage_mq_client:publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, VNodeId, Node),
     rebalance_1(T).
-

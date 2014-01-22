@@ -215,8 +215,11 @@ put(From, Object, ReqId) ->
     case replicate(?REP_REMOTE, ?CMD_PUT, Object) of
         {ok, ETag} ->
             erlang:send(From, {ok, ETag});
+
+        %% not found an object (during rebalance and delete-operation)
+        {error, not_found} when ReqId == 0 ->
+            erlang:send(From, {ok, 0});
         {error, Cause} ->
-            ?warn("put/3", "req-id:~w, cause:~p", [ReqId, Cause]),
             erlang:send(From, {error, {node(), Cause}})
     end.
 
@@ -351,11 +354,11 @@ copy(DestNodes, AddrId, Key) ->
 %% API - Prefix Search (Fetch)
 %%--------------------------------------------------------------------
 prefix_search(ParentDir, Marker, MaxKeys) ->
-    Fun = fun(K, V, Acc0) when length(Acc0) =< MaxKeys ->
-                  {_AddrId, Key} = binary_to_term(K),
+    Fun = fun(Key, V, Acc0) when length(Acc0) =< MaxKeys ->
                   Meta0   = binary_to_term(V),
                   InRange = case Marker of
                                 [] -> true;
+                                Key -> false;
                                 _  ->
                                     (Marker == hd(lists:sort([Marker, Key])))
                             end,
@@ -375,7 +378,6 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
                              {Pos0, _} ->
                                  Pos0
                          end,
-
                   case (InRange == true andalso Pos1 == 0) of
                       true ->
                           case (Length2 -1) of
@@ -438,9 +440,9 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
 -spec(prefix_search_and_remove_objects(binary()) ->
              ok).
 prefix_search_and_remove_objects(ParentDir) ->
-    Fun = fun(K, V,_Acc) ->
-                  {AddrId, Key} = binary_to_term(K),
-                  Metadata      = binary_to_term(V),
+    Fun = fun(Key, V,_Acc) ->
+                  Metadata = binary_to_term(V),
+                  AddrId   = Metadata#metadata.addr_id,
 
                   Pos1 = case binary:match(Key, [ParentDir]) of
                              nomatch ->
@@ -466,8 +468,7 @@ prefix_search_and_remove_objects(ParentDir) ->
 -spec(find_uploaded_objects_by_key(binary()) ->
              ok).
 find_uploaded_objects_by_key(OriginalKey) ->
-    Fun = fun(K, V, Acc) ->
-                  {_AddrId, Key} = binary_to_term(K),
+    Fun = fun(Key, V, Acc) ->
                   Metadata       = binary_to_term(V),
 
                   case (nomatch /= binary:match(Key, <<"\n">>)) of
@@ -498,7 +499,7 @@ find_uploaded_objects_by_key(OriginalKey) ->
              {ok, #metadata{}, binary()} |
              {error, any()}).
 read_and_repair(_, []) ->
-    {error, ?ERROR_COULD_NOT_GET_DATA};
+    {error, not_found};
 
 read_and_repair(#read_parameter{addr_id   = AddrId,
                                 key       = Key,

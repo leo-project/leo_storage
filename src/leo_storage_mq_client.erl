@@ -314,9 +314,8 @@ handle_call({consume, ?QUEUE_ID_RECOVERY_NODE, MessageBin}) ->
 -spec(recover_node(atom()) ->
              ok).
 recover_node(Node) ->
-    Fun = fun(K, _V, Acc) ->
-                  {AddrId, Key} = binary_to_term(K),
-
+    Fun = fun(Key, V, Acc) ->
+                  #metadata{addr_id = AddrId} = binary_to_term(V),
                   case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
                       {ok, #redundancies{nodes = Redundancies}} ->
                           Nodes = [N || #redundant_node{node = N} <- Redundancies],
@@ -342,10 +341,10 @@ recover_node(Node) ->
 sync_vnodes(_, _, []) ->
     ok;
 sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
-    Fun = fun(K,_V, Acc) ->
+    Fun = fun(Key, V, Acc) ->
                   %% Note: An object of copy is NOT equal current ring-hash.
                   %%       Then a message in the rebalance-queue.
-                  {AddrId, Key} = binary_to_term(K),
+                  #metadata{addr_id = AddrId} = binary_to_term(V),
 
                   case (AddrId >= FromAddrId andalso
                         AddrId =< ToAddrId) of

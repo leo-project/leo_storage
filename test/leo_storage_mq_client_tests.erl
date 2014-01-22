@@ -279,7 +279,7 @@ subscribe_3_({_Test0Node, _Test1Node}) ->
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, fetch_by_addr_id,
                 fun(_FromVNodeId, Fun) ->
-                        Fun(term_to_binary({1, "key"}), term_to_binary(#metadata{ring_hash = 0}), []),
+                        Fun(<<"key">>, term_to_binary(#metadata{ring_hash = 0}), []),
                         ok
                 end),
     meck:expect(leo_redundant_manager_api, get_member_by_node,
