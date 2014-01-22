@@ -138,4 +138,3 @@ enqueue(?ERR_TYPE_DELETE_DATA = Type,     AddrId, Key) ->
     leo_storage_mq_client:publish(?QUEUE_TYPE_PER_OBJECT, AddrId, Key, Type);
 enqueue(_,_,_) ->
     void.
-

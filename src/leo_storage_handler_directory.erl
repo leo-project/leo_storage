@@ -95,4 +95,3 @@ find_by_parent_dir(ParentDir, _Delimiter, Marker, MaxKeys) ->
              ok | {error, any()}).
 delete_objects_in_parent_dir(ParentDir) ->
     leo_storage_handler_object:prefix_search_and_remove_objects(ParentDir).
-

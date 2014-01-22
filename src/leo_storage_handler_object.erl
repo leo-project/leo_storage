@@ -431,7 +431,6 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
              (_, _, Acc0) ->
                   Acc0
           end,
-    %leo_object_storage_api:fetch_by_key(ParentDir, Fun, MaxKeys).
     leo_object_storage_api:fetch_by_key(ParentDir, Fun).
 
 

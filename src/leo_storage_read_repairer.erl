@@ -149,4 +149,3 @@ compare(Pid, RPCKey, Node, #state{metadata = #metadata{addr_id = AddrId,
 enqueue(AddrId, Key) ->
     leo_storage_mq_client:publish(
       ?QUEUE_TYPE_PER_OBJECT, AddrId, Key, ?ERR_TYPE_RECOVER_DATA).
-
