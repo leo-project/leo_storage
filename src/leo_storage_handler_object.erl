@@ -358,6 +358,7 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
                   Meta0   = binary_to_term(V),
                   InRange = case Marker of
                                 [] -> true;
+                                Key -> false;
                                 _  ->
                                     (Marker == hd(lists:sort([Marker, Key])))
                             end,
