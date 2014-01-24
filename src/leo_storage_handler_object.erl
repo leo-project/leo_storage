@@ -440,7 +440,7 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
 -spec(prefix_search_and_remove_objects(binary()) ->
              ok).
 prefix_search_and_remove_objects(ParentDir) ->
-    Fun = fun(Key, V,_Acc) ->
+    Fun = fun(Key, V, Acc) ->
                   Metadata = binary_to_term(V),
                   AddrId   = Metadata#metadata.addr_id,
 
@@ -456,9 +456,9 @@ prefix_search_and_remove_objects(ParentDir) ->
                           leo_storage_mq_client:publish(
                             ?QUEUE_TYPE_ASYNC_DELETION, AddrId, Key);
                       _ ->
-                          void
+                          Acc
                   end,
-                  ok
+                  Acc 
           end,
     leo_object_storage_api:fetch_by_key(ParentDir, Fun).
 

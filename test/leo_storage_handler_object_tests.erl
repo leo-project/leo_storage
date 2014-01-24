@@ -644,7 +644,7 @@ prefix_search_and_remove_objects_(_) ->
                 end),
 
     Res = leo_storage_handler_object:prefix_search_and_remove_objects(?TEST_BUCKET),
-    ?assertEqual(ok, Res),
+    ?assertEqual(true, is_list(Res)),
     ok.
 
 -endif.
