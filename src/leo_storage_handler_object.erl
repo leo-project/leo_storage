@@ -51,10 +51,10 @@
 -define(DEF_DELIMITER, <<"/">>).
 
 -ifdef(EUNIT).
--define(output_warn(Fun, _MSG), ok).
+-define(output_warn(Fun, _Key, _MSG), ok).
 -else.
--define(output_warn(Fun, _MSG),
-        ?warn(Fun, "cause:~p", [_MSG])).
+-define(output_warn(Fun, _Key, _MSG),
+        ?warn(Fun, "key:~p, cause:~p", [_Key, _MSG])).
 -endif.
 
 
@@ -593,15 +593,16 @@ read_and_repair_1({ok, Metadata, #object{data = Bin}},
     ReadParameter_1 = ReadParameter#read_parameter{quorum = Quorum - 1},
     leo_storage_read_repairer:repair(ReadParameter_1, Redundancies, Metadata, Fun);
 
-read_and_repair_1({error, timeout = Cause}, #read_parameter{}, _Redundancies) ->
-    ?output_warn("read_and_repair_1/3", Cause),
+read_and_repair_1({error, timeout = Cause}, #read_parameter{key = Key}, _Redundancies) ->
+    ?output_warn("read_and_repair_1/3", Key, Cause),
     {error, Cause};
-read_and_repair_1({error, Cause}, #read_parameter{}, []) ->
-    ?output_warn("read_and_repair_1/3", Cause),
+read_and_repair_1({error, Cause}, #read_parameter{key = Key}, []) ->
+    ?output_warn("read_and_repair_1/3", Key, Cause),
     {error, Cause};
 
-read_and_repair_1({error,_Cause},
-                  #read_parameter{quorum = ReadQuorum} = ReadParameter, Redundancies) ->
+read_and_repair_1({error, Cause},
+                  #read_parameter{key = Key,
+                                  quorum = ReadQuorum} = ReadParameter, Redundancies) ->
     NumOfNodes = erlang:length([N || #redundant_node{node = N,
                                                      can_read_repair = true}
                                          <- Redundancies]),
@@ -609,7 +610,7 @@ read_and_repair_1({error,_Cause},
         true ->
             read_and_repair(ReadParameter, Redundancies);
         false ->
-            ?output_warn("read_and_repair_1/3",_Cause),
+            ?output_warn("read_and_repair_1/3", Key, Cause),
             {error, ?ERROR_COULD_NOT_GET_DATA}
     end;
 read_and_repair_1(_,_,_) ->
