@@ -50,6 +50,14 @@
 
 -define(DEF_DELIMITER, <<"/">>).
 
+-ifdef(EUNIT).
+-define(output_warn(Fun, _MSG), ok).
+-else.
+-define(output_warn(Fun, _MSG),
+        ?warn(Fun, "cause:~p", [_MSG])).
+-endif.
+
+
 %%--------------------------------------------------------------------
 %% API - GET
 %%--------------------------------------------------------------------
@@ -458,7 +466,7 @@ prefix_search_and_remove_objects(ParentDir) ->
                       _ ->
                           Acc
                   end,
-                  Acc 
+                  Acc
           end,
     leo_object_storage_api:fetch_by_key(ParentDir, Fun).
 
@@ -582,11 +590,11 @@ read_and_repair_1({ok, Metadata, #object{data = Bin}},
     ReadParameter_1 = ReadParameter#read_parameter{quorum = Quorum - 1},
     leo_storage_read_repairer:repair(ReadParameter_1, Redundancies, Metadata, Fun);
 
-read_and_repair_1({error, timeout = Cause},
-                  #read_parameter{}, _Redundancies) ->
+read_and_repair_1({error, timeout = Cause}, #read_parameter{}, _Redundancies) ->
+    ?output_warn("read_and_repair_1/3", Cause),
     {error, Cause};
-read_and_repair_1({error, Cause},
-                  #read_parameter{}, []) ->
+read_and_repair_1({error, Cause}, #read_parameter{}, []) ->
+    ?output_warn("read_and_repair_1/3", Cause),
     {error, Cause};
 
 read_and_repair_1({error,_Cause},
@@ -598,6 +606,7 @@ read_and_repair_1({error,_Cause},
         true ->
             read_and_repair(ReadParameter, Redundancies);
         false ->
+            ?output_warn("read_and_repair_1/3",_Cause),
             {error, ?ERROR_COULD_NOT_GET_DATA}
     end;
 read_and_repair_1(_,_,_) ->
@@ -659,6 +668,7 @@ replicate(?REP_REMOTE, Method, Object) ->
         {error, Ref, not_found} ->
             {error, not_found};
         {error, Ref, Cause} ->
+            ?warn("replicate/3", "cause:~p", [Cause]),
             {error, Cause}
     end;
 replicate(_,_,_) ->
