@@ -79,14 +79,8 @@ after_proc({ok, Pid}) ->
     ok = leo_storage_mq_client:start(Pid, Intervals, QueueDir),
 
     ok = leo_statistics_api:start_link(leo_storage),
-    ok = leo_statistics_metrics_vm:start_link(?STATISTICS_SYNC_INTERVAL),
-    ok = leo_statistics_metrics_vm:start_link(?SNMP_SYNC_INTERVAL_S),
-    ok = leo_statistics_metrics_vm:start_link(?SNMP_SYNC_INTERVAL_L),
-    ok = leo_statistics_metrics_req:start_link(?SNMP_SYNC_INTERVAL_S),
-    ok = leo_statistics_metrics_req:start_link(?SNMP_SYNC_INTERVAL_L),
-    ok = leo_storage_statistics:start_link(?SNMP_SYNC_INTERVAL_S),
-    ok = leo_storage_statistics:start_link(?SNMP_SYNC_INTERVAL_L),
-
+    ok = leo_metrics_vm:start_link(timer:seconds(5)),
+    ok = leo_metrics_req:start_link(timer:seconds(60)),
     ensure_started(rex, rpc, start_link, worker, 2000),
 
     ok = leo_storage_api:register_in_monitor(first),

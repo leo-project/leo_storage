@@ -34,40 +34,34 @@
 -include_lib("leo_statistics/include/leo_statistics.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
+%% api
 -export([start_link/1]).
--export([init/0, handle_call/1]).
+
+%% callback
+-export([handle_notify/0]).
 
 -define(SNMP_MSG_REPLICATE,  'num-of-msg-replicate').
 -define(SNMP_MSG_SYNC_VNODE, 'num-of-msg-sync-vnode').
 -define(SNMP_MSG_REBALANCE,  'num-of-msg-rebalance').
-
 -define(SNMP_MSG_ACTIVE_SIZE, 'storage-active-objects-sizes').
 -define(SNMP_MSG_ACTIVE_OBJS, 'storage-active-objects').
 -define(SNMP_MSG_TOTAL_SIZE,  'storage-total-objects-sizes').
 -define(SNMP_MSG_TOTAL_OBJS,  'storage-total-objects').
 
+
 %%--------------------------------------------------------------------
 %% API
 %%--------------------------------------------------------------------
-start_link(Interval) ->
-    ok = leo_statistics_api:start_link(?MODULE, Interval),
+start_link(Window) ->
+    ok = leo_statistics_sup:start_child(?MODULE, Window),
     ok.
+
 
 %%--------------------------------------------------------------------
 %% Callbacks
 %%--------------------------------------------------------------------
-%% @doc Initialize metrics.
-%%
--spec(init() -> ok).
-init() ->
-    ok.
-
-
-%% @doc Synchronize values.
-%%
--spec(handle_call({sync, ?STAT_INTERVAL_1M | ?STAT_INTERVAL_5M}) ->
-             ok).
-handle_call({sync, ?STAT_INTERVAL_1M}) ->
+handle_notify() ->
+    ?debugVal('handle_notify'),
     {ok, {Res1, _}} = leo_mq_api:status(?QUEUE_ID_PER_OBJECT),
     {ok, {Res2, _}} = leo_mq_api:status(?QUEUE_ID_SYNC_BY_VNODE_ID),
     {ok, {Res3, _}} = leo_mq_api:status(?QUEUE_ID_REBALANCE),
@@ -94,7 +88,4 @@ handle_call({sync, ?STAT_INTERVAL_1M}) ->
     catch snmp_generic:variable_set(?SNMP_MSG_ACTIVE_SIZE, erlang:round(ASize2)),
     catch snmp_generic:variable_set(?SNMP_MSG_TOTAL_OBJS,  TObjs2),
     catch snmp_generic:variable_set(?SNMP_MSG_ACTIVE_OBJS, AObjs2),
-    ok;
-
-handle_call({sync, ?STAT_INTERVAL_5M}) ->
     ok.

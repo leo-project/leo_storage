@@ -87,13 +87,6 @@ setup() ->
     true = rpc:call(Node0, code, add_path, ["../deps/meck/ebin"]),
     true = rpc:call(Node1, code, add_path, ["../deps/meck/ebin"]),
 
-    meck:new(leo_logger_api),
-    meck:expect(leo_logger_api, new,          fun(_,_,_) -> ok end),
-    meck:expect(leo_logger_api, new,          fun(_,_,_,_,_) -> ok end),
-    meck:expect(leo_logger_api, new,          fun(_,_,_,_,_,_) -> ok end),
-    meck:expect(leo_logger_api, add_appender, fun(_,_) -> ok end),
-    meck:expect(leo_logger_api, append,       fun(_,_) -> ok end),
-    meck:expect(leo_logger_api, append,       fun(_,_,_) -> ok end),
     {Node0, Node1}.
 
 teardown({_, Node1}) ->
@@ -129,6 +122,9 @@ get_a0_({Node0, Node1}) ->
     meck:expect(leo_statistics_req_counter, increment,
                 fun(_) -> ok end),
 
+    meck:new(leo_metrics_req),
+    meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
+
     Ref = make_ref(),
     Res = leo_storage_handler_object:get({Ref, ?TEST_KEY_0}),
     ?assertEqual({error, Ref, not_found}, Res),
@@ -153,6 +149,9 @@ get_a1_({Node0, Node1}) ->
                         {ok, ?TEST_META_0, #object{}}
                 end),
 
+    meck:new(leo_metrics_req),
+    meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
+
     Ref = make_ref(),
     Res = leo_storage_handler_object:get({Ref, ?TEST_KEY_0}),
     ?assertEqual({ok, Ref, ?TEST_META_0, <<>>}, Res),
@@ -173,6 +172,8 @@ get_b0_({Node0, Node1}) ->
            end,
     meck:new(leo_redundant_manager_api),
     meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id, Fun1),
+    meck:new(leo_metrics_req),
+    meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
     ok = rpc:call(Node1, meck, new,    [leo_redundant_manager_api, [no_link]]),
     ok = rpc:call(Node1, meck, expect, [leo_redundant_manager_api, get_redundancies_by_addr_id, Fun1]),
@@ -186,8 +187,8 @@ get_b0_({Node0, Node1}) ->
 
     ok = rpc:call(Node1, meck, new,    [leo_object_storage_api, [no_link]]),
     ok = rpc:call(Node1, meck, expect, [leo_object_storage_api, get, Fun2]),
-    ok = rpc:call(Node1, meck, new,    [leo_statistics_req_counter, [no_link]]),
-    ok = rpc:call(Node1, meck, expect, [leo_statistics_req_counter, increment, fun(_) -> ok end]),
+    ok = rpc:call(Node1, meck, new,    [leo_metrics_req, [no_link]]),
+    ok = rpc:call(Node1, meck, expect, [leo_metrics_req, notify, fun(_) -> ok end]),
 
     Res = leo_storage_handler_object:get(0, ?TEST_KEY_0, 0),
     ?assertEqual({error,not_found}, Res),
@@ -221,9 +222,9 @@ get_b1_({Node0, Node1}) ->
 
     ok = rpc:call(Node1, meck, new,    [leo_object_storage_api, [no_link]]),
     ok = rpc:call(Node1, meck, expect, [leo_object_storage_api, get, Fun2]),
-    ok = rpc:call(Node1, meck, new,    [leo_statistics_req_counter, [no_link]]),
-    ok = rpc:call(Node1, meck, expect, [leo_statistics_req_counter, increment, fun(_) -> ok end]),
 
+    %% meck:new(leo_metrics_req),
+    %% meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
     Fun3 = fun(_R,_Nodes,_Metadata,_Callback) ->
                    {error,not_found}
@@ -233,6 +234,11 @@ get_b1_({Node0, Node1}) ->
 
     ok = rpc:call(Node1, meck, new,    [leo_storage_read_repairer, [no_link]]),
     ok = rpc:call(Node1, meck, expect, [leo_storage_read_repairer, repair, Fun3]),
+    ok = rpc:call(Node1, meck, new,    [leo_metrics_req, [no_link]]),
+    ok = rpc:call(Node1, meck, expect, [leo_metrics_req, notify, fun(_) -> ok end]),
+
+    meck:new(leo_metrics_req),
+    meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
     %% Execute
     Res = leo_storage_handler_object:get(0, ?TEST_KEY_0, 0),
@@ -265,6 +271,9 @@ get_b2_({Node0, _Node1}) ->
                 fun(_R, _Node,_Metadata,_ReqId,_Callback) ->
                         ok
                 end),
+
+    meck:new(leo_metrics_req),
+    meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
     Res = leo_storage_handler_object:get(0, ?TEST_KEY_0, 0),
     ?assertEqual({ok, ?TEST_META_0, <<"leofs">>}, Res),
@@ -300,8 +309,6 @@ get_b3_({Node0, Node1}) ->
 
     ok = rpc:call(Node1, meck, new,    [leo_object_storage_api, [no_link]]),
     ok = rpc:call(Node1, meck, expect, [leo_object_storage_api, get, Fun2]),
-    ok = rpc:call(Node1, meck, new,    [leo_statistics_req_counter, [no_link]]),
-    ok = rpc:call(Node1, meck, expect, [leo_statistics_req_counter, increment, fun(_) -> ok end]),
 
     %% leo_storage_read_repairer
     Fun3 = fun(_R, _Nodes, _Metadata,_Callback) ->
@@ -312,6 +319,11 @@ get_b3_({Node0, Node1}) ->
 
     ok = rpc:call(Node1, meck, new,    [leo_storage_read_repairer, [no_link]]),
     ok = rpc:call(Node1, meck, expect, [leo_storage_read_repairer, repair, Fun3]),
+    ok = rpc:call(Node1, meck, new,    [leo_metrics_req, [no_link]]),
+    ok = rpc:call(Node1, meck, expect, [leo_metrics_req, notify, fun(_) -> ok end]),
+
+    meck:new(leo_metrics_req),
+    meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
 
     %% Execute
@@ -358,8 +370,11 @@ get_c0_({Node0, Node1}) ->
     ok = rpc:call(Node1, meck, new,    [leo_object_storage_api, [no_link]]),
     ok = rpc:call(Node1, meck, expect, [leo_object_storage_api, get,  Fun2]),
     ok = rpc:call(Node1, meck, expect, [leo_object_storage_api, head, Fun3]),
-    ok = rpc:call(Node1, meck, new,    [leo_statistics_req_counter, [no_link]]),
-    ok = rpc:call(Node1, meck, expect, [leo_statistics_req_counter, increment, fun(_) -> ok end]),
+    ok = rpc:call(Node1, meck, new,    [leo_metrics_req, [no_link]]),
+    ok = rpc:call(Node1, meck, expect, [leo_metrics_req, notify, fun(_) -> ok end]),
+
+    meck:new(leo_metrics_req),
+    meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
     %% Execute
     Res0 = leo_storage_handler_object:get(0, ?TEST_KEY_0, Checksum0, 0),
@@ -399,6 +414,12 @@ put_0_({Node0, Node1}) ->
                         {ok, {etag, 1}}
                 end),
 
+    ok = rpc:call(Node1, meck, new,    [leo_metrics_req, [no_link]]),
+    ok = rpc:call(Node1, meck, expect, [leo_metrics_req, notify, fun(_) -> ok end]),
+
+    meck:new(leo_metrics_req),
+    meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
+
     Object = #object{method    = ?CMD_PUT,
                      addr_id   = AddrId,
                      key       = Key,
@@ -434,6 +455,9 @@ put_2_(_) ->
                         {ok, 1}
                 end),
 
+    meck:new(leo_metrics_req),
+    meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
+
     Object = #object{key = ?TEST_KEY_0},
     Res = leo_storage_handler_object:put(Object),
     ?assertEqual({ok, {etag, 1}}, Res),
@@ -466,6 +490,11 @@ delete_0_({Node0, Node1}) ->
                 fun(_Quorum,_Redundancies,_ObjectPool,_Callback) ->
                         ok
                 end),
+    ok = rpc:call(Node1, meck, new,    [leo_metrics_req, [no_link]]),
+    ok = rpc:call(Node1, meck, expect, [leo_metrics_req, notify, fun(_) -> ok end]),
+
+    meck:new(leo_metrics_req),
+    meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
     Object = #object{method    = ?CMD_DELETE,
                      addr_id   = AddrId,
@@ -493,6 +522,8 @@ delete_1_({_Node0, _Node1}) ->
                 fun(_Key, _) ->
                         ok
                 end),
+    meck:new(leo_metrics_req),
+    meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
     Res = leo_storage_handler_object:delete(#object{key      = ?TEST_KEY_0,
                                                     addr_id  = 0,
@@ -516,6 +547,8 @@ delete_2_({_Node0, _Node1}) ->
                 fun(_Key, _ObjPool) ->
                         ok
                 end),
+    meck:new(leo_metrics_req),
+    meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
     Res = leo_storage_handler_object:delete(#object{key      = ?TEST_KEY_0,
                                                     addr_id  = 0,
@@ -597,6 +630,8 @@ copy_({Node0, Node1}) ->
                 fun(_,_,_,_) ->
                         ok
                 end),
+    meck:new(leo_metrics_req),
+    meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
     Res1 = leo_storage_handler_object:copy([Node1, Node1], 0, ?TEST_KEY_0),
     ?assertEqual(ok, Res1),

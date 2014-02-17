@@ -67,8 +67,7 @@
              {ok, reference(), binary(), binary(), binary()} |
              {error, reference(), any()}).
 get({Ref, Key}) ->
-    _ = leo_statistics_req_counter:increment(?STAT_REQ_GET),
-
+    ok = leo_metrics_req:notify(?STAT_COUNT_GET),
     case leo_redundant_manager_api:get_redundancies_by_key(get, Key) of
         {ok, #redundancies{id = AddrId}} ->
             case get_fun(AddrId, Key) of
@@ -96,7 +95,7 @@ get(#read_parameter{addr_id = AddrId} = ReadParameter, []) ->
             {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
     end;
 get(ReadParameter, Redundancies) ->
-    _ = leo_statistics_req_counter:increment(?STAT_REQ_GET),
+    ok = leo_metrics_req:notify(?STAT_COUNT_GET),
     read_and_repair(ReadParameter, Redundancies).
 
 %% @doc Retrieve an object which is requested from gateway.
@@ -165,7 +164,7 @@ get_fun(AddrId, Key, StartPos, EndPos) ->
 -spec(put(#object{}) ->
              {ok, atom()} | {error, any()}).
 put(Object) ->
-    _ = leo_statistics_req_counter:increment(?STAT_REQ_PUT),
+    ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
     replicate(?REP_REMOTE, ?CMD_PUT, Object).
 
 %% @doc Insert an object (request from gateway).
@@ -173,8 +172,7 @@ put(Object) ->
 -spec(put(#object{}, integer()|reference()) ->
              ok | {error, any()}).
 put(Object, ReqId) when is_integer(ReqId)  ->
-    _ = leo_statistics_req_counter:increment(?STAT_REQ_PUT),
-
+    ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
     replicate(?REP_LOCAL, ?CMD_PUT, Object#object.addr_id,
               Object#object{method = ?CMD_PUT,
                             clock  = leo_date:clock(),
@@ -218,8 +216,7 @@ put(_,_) ->
 -spec(put(pid(), #object{}, integer()) ->
              {ok, atom()} | {error, any()}).
 put(From, Object, ReqId) ->
-    _ = leo_statistics_req_counter:increment(?STAT_REQ_PUT),
-
+    ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
     case replicate(?REP_REMOTE, ?CMD_PUT, Object) of
         {ok, ETag} ->
             erlang:send(From, {ok, ETag});
@@ -275,7 +272,7 @@ delete_chunked_objects(CIndex, ParentKey) ->
 -spec(delete(#object{}) ->
              ok | {error, any()}).
 delete(Object) ->
-    _ = leo_statistics_req_counter:increment(?STAT_REQ_DEL),
+    ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
     replicate(?REP_REMOTE, ?CMD_DELETE, Object).
 
 %% @doc Remova an object (request from gateway)
@@ -283,7 +280,7 @@ delete(Object) ->
 -spec(delete(#object{}, integer()|reference()) ->
              ok | {error, any()}).
 delete(Object, ReqId) when is_integer(ReqId) ->
-    _ = leo_statistics_req_counter:increment(?STAT_REQ_DEL),
+    ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
     replicate(?REP_LOCAL, ?CMD_DELETE,
               Object#object.addr_id, Object#object{method   = ?CMD_DELETE,
                                                    data     = <<>>,
@@ -593,15 +590,15 @@ read_and_repair_1({ok, Metadata, #object{data = Bin}},
     ReadParameter_1 = ReadParameter#read_parameter{quorum = Quorum - 1},
     leo_storage_read_repairer:repair(ReadParameter_1, Redundancies, Metadata, Fun);
 
-read_and_repair_1({error, timeout = Cause}, #read_parameter{key = Key}, _Redundancies) ->
-    ?output_warn("read_and_repair_1/3", Key, Cause),
+read_and_repair_1({error, timeout = Cause}, #read_parameter{key = _K}, _Redundancies) ->
+    ?output_warn("read_and_repair_1/3", _K, Cause),
     {error, Cause};
-read_and_repair_1({error, Cause}, #read_parameter{key = Key}, []) ->
-    ?output_warn("read_and_repair_1/3", Key, Cause),
+read_and_repair_1({error, Cause}, #read_parameter{key = _K}, []) ->
+    ?output_warn("read_and_repair_1/3", _K, Cause),
     {error, Cause};
 
-read_and_repair_1({error, Cause},
-                  #read_parameter{key = Key,
+read_and_repair_1({error, _Reason},
+                  #read_parameter{key = _K,
                                   quorum = ReadQuorum} = ReadParameter, Redundancies) ->
     NumOfNodes = erlang:length([N || #redundant_node{node = N,
                                                      can_read_repair = true}
@@ -610,7 +607,7 @@ read_and_repair_1({error, Cause},
         true ->
             read_and_repair(ReadParameter, Redundancies);
         false ->
-            ?output_warn("read_and_repair_1/3", Key, Cause),
+            ?output_warn("read_and_repair_1/3", _K, _Reason),
             {error, ?ERROR_COULD_NOT_GET_DATA}
     end;
 read_and_repair_1(_,_,_) ->

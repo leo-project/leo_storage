@@ -87,13 +87,13 @@ setup() ->
     true = rpc:call(Test1Node, code, add_path, ["../deps/meck/ebin"]),
 
     %% gen mock.
-    meck:new(leo_logger_api),
-    meck:expect(leo_logger_api, new,          fun(_,_,_) -> ok end),
-    meck:expect(leo_logger_api, new,          fun(_,_,_,_,_) -> ok end),
-    meck:expect(leo_logger_api, new,          fun(_,_,_,_,_,_) -> ok end),
-    meck:expect(leo_logger_api, add_appender, fun(_,_) -> ok end),
-    meck:expect(leo_logger_api, append,       fun(_,_) -> ok end),
-    meck:expect(leo_logger_api, append,       fun(_,_,_) -> ok end),
+    %% meck:new(leo_logger_api),
+    %% meck:expect(leo_logger_api, new,          fun(_,_,_) -> ok end),
+    %% meck:expect(leo_logger_api, new,          fun(_,_,_,_,_) -> ok end),
+    %% meck:expect(leo_logger_api, new,          fun(_,_,_,_,_,_) -> ok end),
+    %% meck:expect(leo_logger_api, add_appender, fun(_,_) -> ok end),
+    %% meck:expect(leo_logger_api, append,       fun(_,_) -> ok end),
+    %% meck:expect(leo_logger_api, append,       fun(_,_,_) -> ok end),
 
     meck:new(leo_mq_api),
     meck:expect(leo_mq_api, new,     fun(_,_,_) -> ok end),
