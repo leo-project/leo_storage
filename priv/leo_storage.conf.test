@@ -43,9 +43,6 @@ managers = [manager_0@192.168.1.2, manager_1@192.168.1.3]
 ## --------------------------------------------------------------------
 ## STORAGE
 ## --------------------------------------------------------------------
-## LeoFS version
-system_version = 0.16.8.1
-
 ## Object container
 obj_containers.path = [/var/leofs/avs/1, /var/leofs/avs/2]
 obj_containers.num_of_containers = [8, 16]
