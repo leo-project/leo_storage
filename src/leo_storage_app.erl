@@ -81,9 +81,9 @@ after_proc({ok, Pid}) ->
     %% Launch metric-servers
     ok = leo_statistics_api:start_link(leo_storage),
     ok = leo_statistics_api:create_tables(ram_copies, [node()]),
-    ok = leo_metrics_vm:start_link(timer:seconds(10)),
-    ok = leo_metrics_req:start_link(timer:seconds(60)),
-    ok = leo_storage_statistics:start_link(timer:seconds(10)),
+    ok = leo_metrics_vm:start_link(?SNMP_SYNC_INTERVAL_10S),
+    ok = leo_metrics_req:start_link(?SNMP_SYNC_INTERVAL_60S),
+    ok = leo_storage_statistics:start_link(?SNMP_SYNC_INTERVAL_10S),
 
     %% After processing
     ensure_started(rex, rpc, start_link, worker, 2000),
