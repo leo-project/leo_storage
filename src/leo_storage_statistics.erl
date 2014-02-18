@@ -40,9 +40,9 @@
 %% callback
 -export([handle_notify/0]).
 
--define(SNMP_MSG_REPLICATE,  'num-of-msg-replicate').
--define(SNMP_MSG_SYNC_VNODE, 'num-of-msg-sync-vnode').
--define(SNMP_MSG_REBALANCE,  'num-of-msg-rebalance').
+-define(SNMP_MSG_REPLICATE,   'num-of-msg-replicate').
+-define(SNMP_MSG_SYNC_VNODE,  'num-of-msg-sync-vnode').
+-define(SNMP_MSG_REBALANCE,   'num-of-msg-rebalance').
 -define(SNMP_MSG_ACTIVE_SIZE, 'storage-active-objects-sizes').
 -define(SNMP_MSG_ACTIVE_OBJS, 'storage-active-objects').
 -define(SNMP_MSG_TOTAL_SIZE,  'storage-total-objects-sizes').
@@ -61,15 +61,25 @@ start_link(Window) ->
 %% Callbacks
 %%--------------------------------------------------------------------
 handle_notify() ->
-    ?debugVal('handle_notify'),
-    {ok, {Res1, _}} = leo_mq_api:status(?QUEUE_ID_PER_OBJECT),
-    {ok, {Res2, _}} = leo_mq_api:status(?QUEUE_ID_SYNC_BY_VNODE_ID),
-    {ok, {Res3, _}} = leo_mq_api:status(?QUEUE_ID_REBALANCE),
+    %% set number of queues
+    Num_1 = case catch leo_mq_api:status(?QUEUE_ID_PER_OBJECT) of
+                {ok, {Res1, _}} -> Res1;
+                _ -> 0
+            end,
+    Num_2 = case catch leo_mq_api:status(?QUEUE_ID_SYNC_BY_VNODE_ID) of
+                {ok, {Res2, _}} -> Res2;
+                _ -> 0
+            end,
+    Num_3 = case catch leo_mq_api:status(?QUEUE_ID_REBALANCE) of
+                {ok, {Res3, _}} -> Res3;
+                _ -> 0
+            end,
 
-    catch snmp_generic:variable_set(?SNMP_MSG_REPLICATE,  Res1),
-    catch snmp_generic:variable_set(?SNMP_MSG_SYNC_VNODE, Res2),
-    catch snmp_generic:variable_set(?SNMP_MSG_REBALANCE,  Res3),
+    catch snmp_generic:variable_set(?SNMP_MSG_REPLICATE,  Num_1),
+    catch snmp_generic:variable_set(?SNMP_MSG_SYNC_VNODE, Num_2),
+    catch snmp_generic:variable_set(?SNMP_MSG_REBALANCE,  Num_3),
 
+    %% set size of stored data
     {ok, Ret4} = leo_object_storage_api:stats(),
     {TSize2, ASize2, TObjs2, AObjs2} =
         lists:foldl(fun({ok, #storage_stats{total_sizes  = TSize0,
@@ -84,8 +94,18 @@ handle_notify() ->
                             Acc
                     end, {0,0,0,0}, Ret4),
 
-    catch snmp_generic:variable_set(?SNMP_MSG_TOTAL_SIZE,  erlang:round(TSize2)),
-    catch snmp_generic:variable_set(?SNMP_MSG_ACTIVE_SIZE, erlang:round(ASize2)),
-    catch snmp_generic:variable_set(?SNMP_MSG_TOTAL_OBJS,  TObjs2),
-    catch snmp_generic:variable_set(?SNMP_MSG_ACTIVE_OBJS, AObjs2),
+    TObjs3 = check_number(TObjs2),
+    AObjs3 = check_number(AObjs2),
+
+    catch snmp_generic:variable_set(?SNMP_MSG_TOTAL_SIZE,  erlang:round(TSize2/1024/1024)),
+    catch snmp_generic:variable_set(?SNMP_MSG_ACTIVE_SIZE, erlang:round(ASize2/1024/1024)),
+    catch snmp_generic:variable_set(?SNMP_MSG_TOTAL_OBJS,  TObjs3),
+    catch snmp_generic:variable_set(?SNMP_MSG_ACTIVE_OBJS, AObjs3),
     ok.
+
+%% @private
+check_number(Value) ->
+    case (leo_math:power(2,32) =< Value) of
+        true  -> 4294967296;
+        false -> Value
+    end.
