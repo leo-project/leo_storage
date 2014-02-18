@@ -67,9 +67,9 @@ after_proc({ok, Pid}) ->
     ensure_started(inet_db, inet_db, start_link, worker, 2000),
     ensure_started(net_sup, erl_distribution, start_link, supervisor, infinity),
 
+    %% Launch servers
     QueueDir = ?env_queue_dir(leo_storage),
     Managers = ?env_manager_nodes(leo_storage),
-
     ok = launch_logger(),
     ok = launch_object_storage(Pid),
     ok = launch_redundant_manager(Pid, Managers, QueueDir),
@@ -78,11 +78,15 @@ after_proc({ok, Pid}) ->
     Intervals = ?env_mq_consumption_intervals(),
     ok = leo_storage_mq_client:start(Pid, Intervals, QueueDir),
 
+    %% Launch metric-servers
     ok = leo_statistics_api:start_link(leo_storage),
-    ok = leo_metrics_vm:start_link(timer:seconds(5)),
+    ok = leo_statistics_api:create_tables(ram_copies, [node()]),
+    ok = leo_metrics_vm:start_link(timer:seconds(10)),
     ok = leo_metrics_req:start_link(timer:seconds(60)),
-    ensure_started(rex, rpc, start_link, worker, 2000),
+    ok = leo_storage_statistics:start_link(timer:seconds(10)),
 
+    %% After processing
+    ensure_started(rex, rpc, start_link, worker, 2000),
     ok = leo_storage_api:register_in_monitor(first),
     {ok, Pid};
 
