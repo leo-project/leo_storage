@@ -590,6 +590,8 @@ read_and_repair_1({ok, Metadata, #object{data = Bin}},
     ReadParameter_1 = ReadParameter#read_parameter{quorum = Quorum - 1},
     leo_storage_read_repairer:repair(ReadParameter_1, Redundancies, Metadata, Fun);
 
+read_and_repair_1({error, not_found = Cause}, #read_parameter{key = _K}, []) ->
+    {error, Cause};
 read_and_repair_1({error, timeout = Cause}, #read_parameter{key = _K}, _Redundancies) ->
     ?output_warn("read_and_repair_1/3", _K, Cause),
     {error, Cause};
