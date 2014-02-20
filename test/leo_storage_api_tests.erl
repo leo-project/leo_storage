@@ -62,13 +62,13 @@ setup() ->
     true = rpc:call(Node0, code, add_path, ["../deps/meck/ebin"]),
     true = rpc:call(Node1, code, add_path, ["../deps/meck/ebin"]),
 
-    meck:new(leo_logger_api),
-    meck:expect(leo_logger_api, new,          fun(_,_,_) -> ok end),
-    meck:expect(leo_logger_api, new,          fun(_,_,_,_,_) -> ok end),
-    meck:expect(leo_logger_api, new,          fun(_,_,_,_,_,_) -> ok end),
-    meck:expect(leo_logger_api, add_appender, fun(_,_) -> ok end),
-    meck:expect(leo_logger_api, append,       fun(_,_) -> ok end),
-    meck:expect(leo_logger_api, append,       fun(_,_,_) -> ok end),
+    %% meck:new(leo_logger_api),
+    %% meck:expect(leo_logger_api, new,          fun(_,_,_) -> ok end),
+    %% meck:expect(leo_logger_api, new,          fun(_,_,_,_,_) -> ok end),
+    %% meck:expect(leo_logger_api, new,          fun(_,_,_,_,_,_) -> ok end),
+    %% meck:expect(leo_logger_api, add_appender, fun(_,_) -> ok end),
+    %% meck:expect(leo_logger_api, append,       fun(_,_) -> ok end),
+    %% meck:expect(leo_logger_api, append,       fun(_,_,_) -> ok end),
     [Node0, Node1].
 
 teardown([_, Node1]) ->

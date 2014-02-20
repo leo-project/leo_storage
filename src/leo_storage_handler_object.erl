@@ -50,6 +50,14 @@
 
 -define(DEF_DELIMITER, <<"/">>).
 
+-ifdef(EUNIT).
+-define(output_warn(Fun, _Key, _MSG), ok).
+-else.
+-define(output_warn(Fun, _Key, _MSG),
+        ?warn(Fun, "key:~p, cause:~p", [_Key, _MSG])).
+-endif.
+
+
 %%--------------------------------------------------------------------
 %% API - GET
 %%--------------------------------------------------------------------
@@ -59,8 +67,7 @@
              {ok, reference(), binary(), binary(), binary()} |
              {error, reference(), any()}).
 get({Ref, Key}) ->
-    _ = leo_statistics_req_counter:increment(?STAT_REQ_GET),
-
+    ok = leo_metrics_req:notify(?STAT_COUNT_GET),
     case leo_redundant_manager_api:get_redundancies_by_key(get, Key) of
         {ok, #redundancies{id = AddrId}} ->
             case get_fun(AddrId, Key) of
@@ -88,7 +95,7 @@ get(#read_parameter{addr_id = AddrId} = ReadParameter, []) ->
             {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
     end;
 get(ReadParameter, Redundancies) ->
-    _ = leo_statistics_req_counter:increment(?STAT_REQ_GET),
+    ok = leo_metrics_req:notify(?STAT_COUNT_GET),
     read_and_repair(ReadParameter, Redundancies).
 
 %% @doc Retrieve an object which is requested from gateway.
@@ -157,7 +164,7 @@ get_fun(AddrId, Key, StartPos, EndPos) ->
 -spec(put(#object{}) ->
              {ok, atom()} | {error, any()}).
 put(Object) ->
-    _ = leo_statistics_req_counter:increment(?STAT_REQ_PUT),
+    ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
     replicate(?REP_REMOTE, ?CMD_PUT, Object).
 
 %% @doc Insert an object (request from gateway).
@@ -165,8 +172,7 @@ put(Object) ->
 -spec(put(#object{}, integer()|reference()) ->
              ok | {error, any()}).
 put(Object, ReqId) when is_integer(ReqId)  ->
-    _ = leo_statistics_req_counter:increment(?STAT_REQ_PUT),
-
+    ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
     replicate(?REP_LOCAL, ?CMD_PUT, Object#object.addr_id,
               Object#object{method = ?CMD_PUT,
                             clock  = leo_date:clock(),
@@ -210,8 +216,7 @@ put(_,_) ->
 -spec(put(pid(), #object{}, integer()) ->
              {ok, atom()} | {error, any()}).
 put(From, Object, ReqId) ->
-    _ = leo_statistics_req_counter:increment(?STAT_REQ_PUT),
-
+    ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
     case replicate(?REP_REMOTE, ?CMD_PUT, Object) of
         {ok, ETag} ->
             erlang:send(From, {ok, ETag});
@@ -267,7 +272,7 @@ delete_chunked_objects(CIndex, ParentKey) ->
 -spec(delete(#object{}) ->
              ok | {error, any()}).
 delete(Object) ->
-    _ = leo_statistics_req_counter:increment(?STAT_REQ_DEL),
+    ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
     replicate(?REP_REMOTE, ?CMD_DELETE, Object).
 
 %% @doc Remova an object (request from gateway)
@@ -275,7 +280,7 @@ delete(Object) ->
 -spec(delete(#object{}, integer()|reference()) ->
              ok | {error, any()}).
 delete(Object, ReqId) when is_integer(ReqId) ->
-    _ = leo_statistics_req_counter:increment(?STAT_REQ_DEL),
+    ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
     replicate(?REP_LOCAL, ?CMD_DELETE,
               Object#object.addr_id, Object#object{method   = ?CMD_DELETE,
                                                    data     = <<>>,
@@ -440,7 +445,7 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
 -spec(prefix_search_and_remove_objects(binary()) ->
              ok).
 prefix_search_and_remove_objects(ParentDir) ->
-    Fun = fun(Key, V,_Acc) ->
+    Fun = fun(Key, V, Acc) ->
                   Metadata = binary_to_term(V),
                   AddrId   = Metadata#metadata.addr_id,
 
@@ -456,9 +461,9 @@ prefix_search_and_remove_objects(ParentDir) ->
                           leo_storage_mq_client:publish(
                             ?QUEUE_TYPE_ASYNC_DELETION, AddrId, Key);
                       _ ->
-                          void
+                          Acc
                   end,
-                  ok
+                  Acc
           end,
     leo_object_storage_api:fetch_by_key(ParentDir, Fun).
 
@@ -552,6 +557,8 @@ read_and_repair(ReadParameter, [#redundant_node{node = Node,
     Reply  = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
                  {value, {ok, Meta, Bin}} ->
                      {ok, Meta, #object{data = Bin}};
+                 {value, {ok, match} = Ret} ->
+                     Ret;
                  {value, {error, Cause}} ->
                      {error, Cause};
                  {value, {badrpc, Cause}} ->
@@ -571,7 +578,8 @@ read_and_repair(ReadParameter, [_|T]) ->
 read_and_repair_1({ok, Metadata, #object{data = Bin}},
                   #read_parameter{}, []) ->
     {ok, Metadata, Bin};
-
+read_and_repair_1({ok, match} = Reply, #read_parameter{}, []) ->
+    Reply;
 read_and_repair_1({ok, Metadata, #object{data = Bin}},
                   #read_parameter{quorum = Quorum} = ReadParameter, Redundancies) ->
     Fun = fun(ok) ->
@@ -582,15 +590,18 @@ read_and_repair_1({ok, Metadata, #object{data = Bin}},
     ReadParameter_1 = ReadParameter#read_parameter{quorum = Quorum - 1},
     leo_storage_read_repairer:repair(ReadParameter_1, Redundancies, Metadata, Fun);
 
-read_and_repair_1({error, timeout = Cause},
-                  #read_parameter{}, _Redundancies) ->
+read_and_repair_1({error, not_found = Cause}, #read_parameter{key = _K}, []) ->
     {error, Cause};
-read_and_repair_1({error, Cause},
-                  #read_parameter{}, []) ->
+read_and_repair_1({error, timeout = Cause}, #read_parameter{key = _K}, _Redundancies) ->
+    ?output_warn("read_and_repair_1/3", _K, Cause),
+    {error, Cause};
+read_and_repair_1({error, Cause}, #read_parameter{key = _K}, []) ->
+    ?output_warn("read_and_repair_1/3", _K, Cause),
     {error, Cause};
 
-read_and_repair_1({error,_Cause},
-                  #read_parameter{quorum = ReadQuorum} = ReadParameter, Redundancies) ->
+read_and_repair_1({error, _Reason},
+                  #read_parameter{key = _K,
+                                  quorum = ReadQuorum} = ReadParameter, Redundancies) ->
     NumOfNodes = erlang:length([N || #redundant_node{node = N,
                                                      can_read_repair = true}
                                          <- Redundancies]),
@@ -598,6 +609,7 @@ read_and_repair_1({error,_Cause},
         true ->
             read_and_repair(ReadParameter, Redundancies);
         false ->
+            ?output_warn("read_and_repair_1/3", _K, _Reason),
             {error, ?ERROR_COULD_NOT_GET_DATA}
     end;
 read_and_repair_1(_,_,_) ->
@@ -659,6 +671,7 @@ replicate(?REP_REMOTE, Method, Object) ->
         {error, Ref, not_found} ->
             {error, not_found};
         {error, Ref, Cause} ->
+            ?warn("replicate/3", "cause:~p", [Cause]),
             {error, Cause}
     end;
 replicate(_,_,_) ->
