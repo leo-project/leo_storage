@@ -88,7 +88,7 @@ after_proc({ok, Pid}) ->
     ok = leo_statistics_api:create_tables(ram_copies, [node()]),
     ok = leo_metrics_vm:start_link(?SNMP_SYNC_INTERVAL_10S),
     ok = leo_metrics_req:start_link(?SNMP_SYNC_INTERVAL_60S),
-    ok = leo_storage_statistics:start_link(?SNMP_SYNC_INTERVAL_10S),
+    ok = leo_storage_statistics:start_link(?SNMP_SYNC_INTERVAL_60S),
     {ok, Pid};
 
 after_proc(Error) ->
