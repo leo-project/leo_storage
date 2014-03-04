@@ -321,13 +321,32 @@ delete(_,_) ->
              {ok, #metadata{}} |
              {error, any}).
 head(AddrId, Key) ->
+    case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
+        {ok, #redundancies{nodes = Redundancies}} ->
+            head_1(Redundancies, AddrId, Key);
+        _ ->
+            {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
+    end.
+
+%% @private
+head_1([],_,_) ->
+    {error, not_found};
+head_1([#redundant_node{node = Node,
+                        available = true}|Rest], AddrId, Key) when Node == erlang:node() ->
     case leo_object_storage_api:head({AddrId, Key}) of
         {ok, MetaBin} ->
             {ok, binary_to_term(MetaBin)};
-        not_found = Cause ->
-            {error, Cause};
-        {error, Why} ->
-            {error, Why}
+        _Other ->
+            head_1(Rest, AddrId, Key)
+    end;
+head_1([#redundant_node{node = Node,
+                        available = true}|Rest], AddrId, Key) ->
+    RPCKey = rpc:async_call(Node, ?MODULE, head, [{AddrId, Key}]),
+    case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
+        {value, {ok, MetaBin}} ->
+            {ok, binary_to_term(MetaBin)};
+        _ ->
+            head_1(Rest, AddrId, Key)
     end.
 
 
@@ -340,16 +359,22 @@ head(AddrId, Key) ->
              ok | not_found | {error, any()}).
 copy(DestNodes, AddrId, Key) ->
     Ref = make_ref(),
-    case ?MODULE:head(AddrId, Key) of
-        {ok, #metadata{del = ?DEL_FALSE} = Metadata} ->
-            case ?MODULE:get({Ref, Key}) of
-                {ok, Ref, Metadata, Bin} ->
-                    leo_storage_ordning_reda_client:stack(DestNodes, AddrId, Key, Metadata, Bin);
-                {error, Ref, Cause} ->
-                    {error, Cause}
+
+    case leo_object_storage_api:head({AddrId, Key}) of
+        {ok, MetaBin} ->
+            case binary_to_term(MetaBin) of
+                #metadata{del = ?DEL_FALSE} = Metadata ->
+                    case ?MODULE:get({Ref, Key}) of
+                        {ok, Ref, Metadata, Bin} ->
+                            leo_storage_ordning_reda_client:stack(DestNodes, AddrId, Key, Metadata, Bin);
+                        {error, Ref, Cause} ->
+                            {error, Cause}
+                    end;
+                #metadata{del = ?DEL_TRUE} = Metadata ->
+                    leo_storage_ordning_reda_client:stack(DestNodes, AddrId, Key, Metadata, <<>>);
+                _ ->
+                    {error, invalid_data_type}
             end;
-        {ok, #metadata{del = ?DEL_TRUE} = Metadata} ->
-            leo_storage_ordning_reda_client:stack(DestNodes, AddrId, Key, Metadata, <<>>);
         Error ->
             Error
     end.
