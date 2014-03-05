@@ -38,7 +38,8 @@
 
 -export([get/1, get/2, get/3, get/4, get/5,
          put/1, put/2, put/3,
-         delete/1, delete/2, head/2,
+         delete/1, delete/2,
+         head/2,
          copy/3,
          prefix_search/3, prefix_search_and_remove_objects/1,
          find_uploaded_objects_by_key/1
@@ -318,8 +319,7 @@ delete(_,_) ->
 %% @doc retrieve a meta-data from mata-data-server (file).
 %%
 -spec(head(integer(), string()) ->
-             {ok, #metadata{}} |
-             {error, any}).
+             {ok, #metadata{}} | {error, any}).
 head(AddrId, Key) ->
     case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
         {ok, #redundancies{nodes = Redundancies}} ->
@@ -341,13 +341,17 @@ head_1([#redundant_node{node = Node,
     end;
 head_1([#redundant_node{node = Node,
                         available = true}|Rest], AddrId, Key) ->
-    RPCKey = rpc:async_call(Node, ?MODULE, head, [{AddrId, Key}]),
+    RPCKey = rpc:async_call(Node, leo_object_storage_api, head, [{AddrId, Key}]),
     case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
         {value, {ok, MetaBin}} ->
             {ok, binary_to_term(MetaBin)};
         _ ->
             head_1(Rest, AddrId, Key)
-    end.
+    end;
+head_1([_|Rest], AddrId, Key) ->
+    head_1(Rest, AddrId, Key).
+
+
 
 
 %%--------------------------------------------------------------------

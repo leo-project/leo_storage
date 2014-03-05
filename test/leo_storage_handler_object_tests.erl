@@ -605,24 +605,25 @@ head_({Node0, Node1}) ->
 
     %% 2.
     meck:unload(),
-    meck:new(leo_object_storage_api),
-    meck:expect(leo_object_storage_api, head,
-                fun(_Key) ->
-                        {error, []}
-                end),
     meck:new(leo_redundant_manager_api),
     meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id,
                 fun(get, _AddrId) ->
                         {ok, #redundancies{id = 0,
                                            nodes = [#redundant_node{node = Node0,
-                                                                     available = true},
+                                                                     available = false},
                                                     #redundant_node{node = Node1,
                                                                     available = true}],
                                            n = 2, r = 1, w = 1, d = 1}}
                 end),
 
-    Res2 = leo_storage_handler_object:head(0, ?TEST_KEY_0),
-    ?assertEqual({error, not_found}, Res2),
+    ok = rpc:call(Node1, meck, new,    [leo_object_storage_api, [no_link]]),
+    ok = rpc:call(Node1, meck, expect, [leo_object_storage_api, head,
+                                        fun(_Arg) ->
+                                                {ok, term_to_binary(?TEST_META_0)}
+                                        end]),
+
+    {ok, Res2} = leo_storage_handler_object:head(0, ?TEST_KEY_0),
+    ?assertEqual(?TEST_META_0, Res2),
     ok.
 
 
