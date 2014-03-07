@@ -53,16 +53,16 @@
 -spec(start_link(atom(), integer(), integer()) ->
              ok | {error, any()}).
 start_link(Node, BufSize, Timeout) ->
-    leo_ordning_reda_api:add_container(stack, Node, [{module,      ?MODULE},
-                                                     {buffer_size, BufSize},
-                                                     {timeout,     Timeout}]).
+    leo_ordning_reda_api:add_container(Node, [{module,      ?MODULE},
+                                              {buffer_size, BufSize},
+                                              {timeout,     Timeout}]).
 
 %% @doc Remove a container from the supervisor
 %%
 -spec(stop(atom()) ->
              ok | {error, any()}).
 stop(Node) ->
-    leo_ordning_reda_api:remove_container(stack, Node).
+    leo_ordning_reda_api:remove_container(Node).
 
 
 %% @doc Stack a object into the ordning&reda
