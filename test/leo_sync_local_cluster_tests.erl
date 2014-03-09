@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012
+%% Copyright (c) 2012-2014 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -17,13 +17,8 @@
 %% KIND, either express or implied.  See the License for the
 %% specific language governing permissions and limitations
 %% under the License.
-%%
-%% -------------------------------------------------------------------
-%% LeoFS Storage - EUnit
-%% @doc
-%% @end
 %%====================================================================
--module(leo_storage_ordning_reda_client_tests).
+-module(leo_sync_local_cluster_tests).
 -author('yosuke hara').
 
 -include("leo_storage.hrl").
@@ -55,7 +50,7 @@ setup() ->
 
     %% launch ordning-reda
     leo_ordning_reda_api:start(),
-    leo_storage_ordning_reda_client:start_link(Node, 1024, 5000),
+    leo_sync_local_cluster:start_link(Node, 1024, 5000),
 
     %% mock
     ok = meck:new(leo_redundant_manager_api),
@@ -66,7 +61,7 @@ setup() ->
     Node.
 
 teardown(Node) ->
-    leo_storage_ordning_reda_client:stop(Node),
+    leo_sync_local_cluster:stop(Node),
 
     net_kernel:stop(),
     meck:unload(),
@@ -145,10 +140,10 @@ stack(Node) ->
     Meta4  = #metadata{addr_id = AddrId, key = Key4, dsize = Size, ksize = 18},
     Object = crypto:rand_bytes(Size),
 
-    _ = leo_storage_ordning_reda_client:stack([Node], AddrId, Key1, Meta1, Object),
-    _ = leo_storage_ordning_reda_client:stack([Node], AddrId, Key2, Meta2, Object),
-    _ = leo_storage_ordning_reda_client:stack([Node], AddrId, Key3, Meta3, Object),
-    _ = leo_storage_ordning_reda_client:stack([Node], AddrId, Key4, Meta4, Object),
+    _ = leo_sync_local_cluster:stack([Node], AddrId, Key1, Meta1, Object),
+    _ = leo_sync_local_cluster:stack([Node], AddrId, Key2, Meta2, Object),
+    _ = leo_sync_local_cluster:stack([Node], AddrId, Key3, Meta3, Object),
+    _ = leo_sync_local_cluster:stack([Node], AddrId, Key4, Meta4, Object),
     ok.
 
 -endif.

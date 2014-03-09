@@ -368,12 +368,12 @@ copy(DestNodes, AddrId, Key) ->
                 #metadata{del = ?DEL_FALSE} = Metadata ->
                     case ?MODULE:get({Ref, Key}) of
                         {ok, Ref, Metadata, Bin} ->
-                            leo_storage_ordning_reda_client:stack(DestNodes, AddrId, Key, Metadata, Bin);
+                            leo_sync_local_cluster:stack(DestNodes, AddrId, Key, Metadata, Bin);
                         {error, Ref, Cause} ->
                             {error, Cause}
                     end;
                 #metadata{del = ?DEL_TRUE} = Metadata ->
-                    leo_storage_ordning_reda_client:stack(DestNodes, AddrId, Key, Metadata, <<>>);
+                    leo_sync_local_cluster:stack(DestNodes, AddrId, Key, Metadata, <<>>);
                 _ ->
                     {error, invalid_data_type}
             end;

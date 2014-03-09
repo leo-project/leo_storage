@@ -2,7 +2,7 @@
 %%
 %% Leo Storage
 %%
-%% Copyright (c) 2012-2013 Rakuten, Inc.
+%% Copyright (c) 2012-2014 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -17,14 +17,8 @@
 %% KIND, either express or implied.  See the License for the
 %% specific language governing permissions and limitations
 %% under the License.
-%%
-%% ---------------------------------------------------------------------
-%% Leo Storage - OrdningReda Client
-%% @doc
-%% @end
 %%======================================================================
--module(leo_storage_ordning_reda_client).
-
+-module(leo_sync_local_cluster).
 -author('Yosuke Hara').
 
 -behaviour(leo_ordning_reda_behaviour).
