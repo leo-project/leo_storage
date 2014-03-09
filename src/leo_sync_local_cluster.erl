@@ -179,41 +179,53 @@ slice_and_store(<<>>, []) ->
 slice_and_store(<<>>, Errors) ->
     {error, Errors};
 slice_and_store(Objects, Errors) ->
-    %% metadata
-    <<MetaSize:?BIN_META_SIZE, Rest0/binary>> = Objects,
-    MetaBin  = binary:part(Rest0, {0, MetaSize}),
-    Rest1    = binary:part(Rest0, {MetaSize, byte_size(Rest0) - MetaSize}),
-    Metadata = binary_to_term(MetaBin),
-
-    %% object
-    <<ObjSize:?BIN_OBJ_SIZE, Rest2/binary>> = Rest1,
-    Object = binary:part(Rest2, {0, ObjSize}),
-    Rest3  = binary:part(Rest2, {ObjSize, byte_size(Rest2) - ObjSize}),
-
-    %% footer
-    <<_Fotter:64, Rest4/binary>> = Rest3,
+    %% Retrieve metadata, object and pending objects
+    {ok, Metadata, Object, Rest_5} = slice(Objects),
 
     %% store an object to object-storage
     case leo_storage_handler_object:head(Metadata#metadata.addr_id,
                                          Metadata#metadata.key) of
         {ok, #metadata{clock = Clock}} when Clock >= Metadata#metadata.clock ->
-            slice_and_store(Rest4, Errors);
+            slice_and_store(Rest_5, Errors);
         _ ->
             case leo_misc:get_env(leo_redundant_manager, ?PROP_RING_HASH) of
                 {ok, RingHashCur} ->
                     case leo_object_storage_api:store(Metadata#metadata{ring_hash = RingHashCur},
                                                       Object) of
                         ok ->
-                            slice_and_store(Rest4, Errors);
+                            slice_and_store(Rest_5, Errors);
                         {error, Cause} ->
                             ?warn("slice_and_store/2","key:~s, cause:~p",
                                   [binary_to_list(Metadata#metadata.key), Cause]),
-                            slice_and_store(Rest4, [Metadata|Errors])
+                            slice_and_store(Rest_5, [Metadata|Errors])
                     end;
                 _ ->
                     ?warn("slice_and_store/2","key:~s, cause:~p",
                           [binary_to_list(Metadata#metadata.key),
                            "Current ring-hash is not found"]),
-                    slice_and_store(Rest4, [Metadata|Errors])
+                    slice_and_store(Rest_5, [Metadata|Errors])
             end
+    end.
+
+
+slice(Objects) ->
+    try
+        %% Retrieve metadata
+        <<MetaSize:?BIN_META_SIZE, Rest_1/binary>> = Objects,
+        MetaBin  = binary:part(Rest_1, {0, MetaSize}),
+        Rest_2   = binary:part(Rest_1, {MetaSize, byte_size(Rest_1) - MetaSize}),
+        Metadata = binary_to_term(MetaBin),
+
+        %% Retrieve object
+        <<ObjSize:?BIN_OBJ_SIZE, Rest_3/binary>> = Rest_2,
+        Object = binary:part(Rest_3, {0, ObjSize}),
+        Rest_4  = binary:part(Rest_3, {ObjSize, byte_size(Rest_3) - ObjSize}),
+
+        %% Retrieve footer
+        <<_Fotter:64, Rest_5/binary>> = Rest_4,
+        {ok, Metadata, Object, Rest_5}
+    catch
+        _:Cause ->
+            ?error("slice/1","cause:~p",[Cause]),
+            {error, invalid_format}
     end.
