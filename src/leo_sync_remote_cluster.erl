@@ -27,10 +27,11 @@
 -include_lib("leo_logger/include/leo_logger.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
 -include_lib("leo_ordning_reda/include/leo_ordning_reda.hrl").
+-include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 -export([start_link/3, stop/1, stack/2,  request/1]).
--export([handle_send/2,
+-export([handle_send/3,
          handle_fail/2]).
 
 -define(DEF_TIMEOUT_REMOTE_CLUSTER, timer:seconds(30)).
@@ -92,18 +93,13 @@ request(CompressedObjs) ->
 %%--------------------------------------------------------------------
 %% @doc Handle send object to a remote-node.
 %%
-handle_send(Node, CompressedObjs) ->
-    %% @TODO Retrieve remote-members from
-    %% @TODO Send stacked objects to remote-members with leo-rpc
-    case leo_rpc:call(Node, ?MODULE, request, [CompressedObjs], ?DEF_TIMEOUT_REMOTE_CLUSTER) of
-        ok ->
-            ok;
-        {error, Cause} ->
-            {error, Cause};
-        {badrpc, Cause} ->
-            {error, Cause};
-        timeout = Cause ->
-            {error, Cause}
+handle_send(_UId, StackedInfo, CompressedObjs) ->
+    %% Retrieve remote-members from
+    case get_cluster_members() of
+        {ok, ListMembers} ->
+            send(ListMembers, StackedInfo, CompressedObjs);
+        {error,_Reason} ->
+            {error,_Reason}
     end.
 
 
@@ -111,14 +107,14 @@ handle_send(Node, CompressedObjs) ->
 %%
 -spec(handle_fail(atom(), list({integer(), string()})) ->
              ok | {error, any()}).
-handle_fail(_Node, _) ->
-    %% @TODO
-    %% ?warn("handle_fail/2","node:~w, addr-id:~w, key:~s", [Node, AddrId, Key]),
-    %% ok = leo_storage_mq_client:publish(
-    %%        ?QUEUE_TYPE_SYNC_REMOTE_CLUSTER, ClusterId, Metadata, ?ERR_TYPE_REPLICATE_DATA),
-    %% handle_fail(Node, Rest).
-    ok.
+handle_fail(_, []) ->
+    ok;
+handle_fail(UId, [{AddrId, Key}|Rest] = _StackInfo) ->
+    ?warn("handle_fail/2","uid:~w, addr-id:~w, key:~s", [UId, AddrId, Key]),
 
+    ok = leo_storage_mq_client:publish(
+           ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, AddrId, Key),
+    handle_fail(UId, Rest).
 
 
 %%--------------------------------------------------------------------
@@ -128,16 +124,17 @@ handle_fail(_Node, _) ->
 %% @private
 -spec(stack_fun(#metadata{}, binary()) ->
              ok | {error, any()}).
-stack_fun(Metadata, Object) ->
+stack_fun(#metadata{addr_id = AddrId,
+                    key = Key} = Metadata, Object) ->
     MetaBin  = term_to_binary(Metadata),
     MetaSize = byte_size(MetaBin),
     ObjSize  = byte_size(Object),
     Data = << MetaSize:?BIN_META_SIZE, MetaBin/binary,
               ObjSize:?BIN_OBJ_SIZE, Object/binary, ?BIN_PADDING/binary >>,
-    %% @TODO
+
+    %% @TODO - Retrieve a synchronizer for mdc-replication
     Id  = [],
-    Key = [],
-    case leo_ordning_reda_api:stack(Id, Key, Data) of
+    case leo_ordning_reda_api:stack(Id, {AddrId, Key}, Data) of
         ok ->
             ok;
         {error, Cause} ->
@@ -182,3 +179,86 @@ slice_and_store(Objects) ->
             ?error("slice_and_store/1","cause:~p",[Cause]),
             {error, invalid_format}
     end.
+
+
+%% @doc Retrieve cluster members
+%% @private
+get_cluster_members() ->
+    case leo_mdcr_tbl_cluster_info:all() of
+        {ok, ClusterInfoList} ->
+            case leo_cluster_tbl_conf:get() of
+                {ok, #?SYSTEM_CONF{num_of_dc_replicas =  NumOfReplicas}} ->
+                    case get_cluster_members_1(ClusterInfoList, NumOfReplicas, []) of
+                        {ok, MDCR_Info} ->
+                            {ok,  MDCR_Info};
+                        {error, Cause} ->
+                            {error, Cause}
+                    end;
+                {error, Cause} ->
+                    {error, Cause}
+            end;
+        {error, Cause} ->
+            {error, Cause}
+    end.
+
+%% @private
+get_cluster_members_1([],_NumOfReplicas, Acc) ->
+    {ok, Acc};
+get_cluster_members_1([#?CLUSTER_INFO{cluster_id = ClusterId}|Rest],
+                      NumOfReplicas, Acc) ->
+    case leo_mdcr_tbl_cluster_member:find_by_limit(
+           ClusterId, ?DEF_NUM_OF_REMOTE_MEMBERS) of
+        {ok, ClusterMembers} ->
+            get_cluster_members_1(Rest, NumOfReplicas,
+                                  [#mdc_replication_info{cluster_id = ClusterId,
+                                                         num_of_replicas = NumOfReplicas,
+                                                         cluster_members = ClusterMembers}
+                                   |Acc]);
+        not_found = Cause ->
+            {error, Cause};
+        {error, Cause} ->
+            {error, Cause}
+    end.
+
+
+%% Send stacked objects to remote-members with leo-rpc
+%% @private
+send([],_StackedInfo,_CompressedObjs) ->
+    ok;
+send([{ClusterId, Members}|Rest], StackedInfo, CompressedObjs) ->
+    ok = send_1(Members, ClusterId, StackedInfo, CompressedObjs),
+    send(Rest, StackedInfo, CompressedObjs).
+
+%% @private
+send_1([], ClusterId, StackedInfo,_CompressedObjs) ->
+    ok = enqueue_fail_replication(StackedInfo, ClusterId);
+send_1([Node|Rest], ClusterId, StackedInfo, CompressedObjs) ->
+    Ret = case leo_rpc:call(Node, ?MODULE, request,
+                            [CompressedObjs], ?DEF_TIMEOUT_REMOTE_CLUSTER) of
+              ok ->
+                  ok;
+              {error, Cause} ->
+                  {error, Cause};
+              {badrpc, Cause} ->
+                  {error, Cause};
+              timeout = Cause ->
+                  {error, Cause}
+          end,
+
+    case Ret of
+        ok ->
+            ok;
+        {error, Reason} ->
+            ?warn("sned_1/2","node:~w, cause:~p", [Node, Reason]),
+            send_1(Rest, ClusterId, StackedInfo, CompressedObjs)
+    end.
+
+
+%% @doc Put messages of fail replication into the queue
+%% @private
+enqueue_fail_replication([],_ClusterId) ->
+    ok;
+enqueue_fail_replication([{AddrId, Key}|Rest], ClusterId) ->
+    ok = leo_storage_mq_client:publish(
+           ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key),
+    enqueue_fail_replication(Rest, ClusterId).

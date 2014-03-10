@@ -53,12 +53,14 @@
 -define(QUEUE_ID_REBALANCE,           'leo_rebalance_queue').
 -define(QUEUE_ID_ASYNC_DELETION,      'leo_async_deletion_queue').
 -define(QUEUE_ID_RECOVERY_NODE,       'leo_recovery_node_queue').
+-define(QUEUE_ID_SYNC_OBJ_WITH_DC,    'leo_sync_obj_with_dc_queue').
 
 -define(QUEUE_TYPE_PER_OBJECT,        'queue_type_per_object').
 -define(QUEUE_TYPE_SYNC_BY_VNODE_ID,  'queue_type_sync_by_vnode_id').
 -define(QUEUE_TYPE_REBALANCE,         'queue_type_rebalance').
 -define(QUEUE_TYPE_ASYNC_DELETION,    'queue_type_async_deletion').
 -define(QUEUE_TYPE_RECOVERY_NODE,     'queue_type_recovery_node').
+-define(QUEUE_TYPE_SYNC_OBJ_WITH_DC,  'queue_type_sync_obj_with_dc').
 
 -define(ERR_TYPE_REPLICATE_DATA,      'error_msg_replicate_data').
 -define(ERR_TYPE_RECOVER_DATA,        'error_msg_recover_data').
@@ -143,6 +145,15 @@
           node                  :: atom(),
           timestamp = 0         :: integer(),
           times = 0             :: integer()}).
+
+-record(inconsistent_data_with_dc, {
+          id = 0                :: integer(),
+          cluster_id            :: string(),
+          addr_id = 0           :: integer(),
+          key                   :: any(),
+          timestamp = 0         :: integer(),
+          times = 0             :: integer()}).
+
 
 
 %% @doc macros.

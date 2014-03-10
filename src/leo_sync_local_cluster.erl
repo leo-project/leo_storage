@@ -31,7 +31,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -export([start_link/3, stop/1, stack/5,  request/1]).
--export([handle_send/2,
+-export([handle_send/3,
          handle_fail/2]).
 
 -define(BIN_META_SIZE, 16). %% metadata-size
@@ -90,7 +90,7 @@ request(CompressedObjs) ->
 %%--------------------------------------------------------------------
 %% @doc Handle send object to a remote-node.
 %%
-handle_send(Node, CompressedObjs) ->
+handle_send(Node,_StackedInfo, CompressedObjs) ->
     RPCKey = rpc:async_call(Node, ?MODULE, request, [CompressedObjs]),
     case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
         {value, ok} ->
