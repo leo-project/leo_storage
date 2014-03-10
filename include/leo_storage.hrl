@@ -217,6 +217,7 @@
 -define(DEF_MQ_NUM_OF_BATCH_PROC,  1).
 -define(DEF_MQ_INTERVAL_MAX, 32).
 -define(DEF_MQ_INTERVAL_MIN,  8).
+
 -define(env_mq_consumption_intervals(),
         [
          %% per_object
@@ -300,3 +301,26 @@
               _ -> ?DEF_MQ_INTERVAL_MAX
           end}
         ]).
+
+
+%% For Multi-DC Replication
+-define(DEF_PREDIX_MDCR_SYNC_PROC,  "leo_mdcr_sync_worker_").
+-define(DEF_MDCR_SYNC_PROC_BUFSIZE, 1024 * 1024 * 64).  %% 64MB
+-define(DEF_MDCR_SYNC_PROC_TIMEOUT, timer:minutes(5)). %% 5min
+-define(DEF_MDCR_SYNC_PROCS, 8).
+
+-define(env_mdcr_sync_proc_buf_size(),
+        case application:get_env(leo_storage, mdcr_sync_proc_buf_size) of
+            {ok, _MDCRSyncProcBufSize} -> _MDCRSyncProcBufSize;
+            _ -> ?DEF_MDCR_SYNC_PROC_BUFSIZE
+        end).
+-define(env_mdcr_sync_proc_timeout(),
+        case application:get_env(leo_storage, mdcr_sync_proc_timeout) of
+            {ok, _MDCRSyncProcTimeout} -> _MDCRSyncProcTimeout;
+            _ -> ?DEF_MDCR_SYNC_PROC_TIMEOUT
+        end).
+-define(env_num_of_mdcr_sync_procs(),
+        case application:get_env(leo_storage, num_of_mdcr_sync_procs) of
+            {ok, _NumOfMDCRSyncProcs} -> _NumOfMDCRSyncProcs;
+            _ -> ?DEF_MDCR_SYNC_PROCS
+        end).

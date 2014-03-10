@@ -30,7 +30,9 @@
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
--export([start_link/3, stop/1, stack/2,  request/1]).
+-export([start_link/0, start_link/3, stop/1,
+         stack/2, request/1,
+         gen_id/0, gen_id/1]).
 -export([handle_send/3,
          handle_fail/2]).
 
@@ -47,6 +49,13 @@
 %%--------------------------------------------------------------------
 %% @doc Add a container into the supervisor
 %%
+-spec(start_link() ->
+             ok | {error, any()}).
+start_link() ->
+    BufSize = ?env_mdcr_sync_proc_buf_size(),
+    Timeout = ?env_mdcr_sync_proc_timeout(),
+    start_link(gen_id(), BufSize, Timeout).
+
 -spec(start_link(atom(), integer(), integer()) ->
              ok | {error, any()}).
 start_link(Id, BufSize, Timeout) ->
@@ -86,6 +95,19 @@ request(CompressedObjs) ->
         {_, Cause} ->
             {error, Cause}
     end.
+
+
+%% Generate a sync-proc of ID
+%%
+-spec(gen_id() ->
+             atom()).
+gen_id() ->
+    gen_id(erlang:phash2(leo_date:clock(),
+                         ?env_num_of_mdcr_sync_procs()) + 1).
+-spec(gen_id(pos_integer()) ->
+             atom()).
+gen_id(Id) ->
+    list_to_atom(lists:append([?DEF_PREDIX_MDCR_SYNC_PROC, Id])).
 
 
 %%--------------------------------------------------------------------
@@ -132,9 +154,7 @@ stack_fun(#metadata{addr_id = AddrId,
     Data = << MetaSize:?BIN_META_SIZE, MetaBin/binary,
               ObjSize:?BIN_OBJ_SIZE, Object/binary, ?BIN_PADDING/binary >>,
 
-    %% @TODO - Retrieve a synchronizer for mdc-replication
-    Id  = [],
-    case leo_ordning_reda_api:stack(Id, {AddrId, Key}, Data) of
+    case leo_ordning_reda_api:stack(gen_id(), {AddrId, Key}, Data) of
         ok ->
             ok;
         {error, Cause} ->
