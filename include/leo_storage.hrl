@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012-2013 Rakuten, Inc.
+%% Copyright (c) 2012-2014 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -22,7 +22,7 @@
 %% LeoFS Storage - Constant/Macro/Record
 %%
 %%====================================================================
--author('yosuke hara').
+-author('Yosuke Hara').
 
 %% @doc default-values.
 %%
@@ -299,16 +299,42 @@
           case application:get_env(leo_storage, cns_interval_recovery_node_max) of
               {ok, _CnsInterval4_Max} -> _CnsInterval4_Max;
               _ -> ?DEF_MQ_INTERVAL_MAX
+          end},
+         %% sync obj with dc
+         {cns_num_of_batch_process_sync_obj_with_dc,
+          case application:get_env(leo_storage, cns_num_of_batch_process_sync_obj_with_dc) of
+              {ok, _CnsNumofBatchProc6} -> _CnsNumofBatchProc6;
+              _ -> ?DEF_MQ_INTERVAL_MIN
+          end},
+         {cns_interval_sync_obj_with_dc_min,
+          case application:get_env(leo_storage, cns_interval_sync_obj_with_dc_min) of
+              {ok, _CnsInterval5_Min} -> _CnsInterval5_Min;
+              _ -> ?DEF_MQ_INTERVAL_MIN
+          end},
+         {cns_interval_sync_obj_with_dc_max,
+          case application:get_env(leo_storage, cns_interval_sync_obj_with_dc_max) of
+              {ok, _CnsInterval5_Max} -> _CnsInterval5_Max;
+              _ -> ?DEF_MQ_INTERVAL_MAX
           end}
         ]).
 
 
 %% For Multi-DC Replication
 -define(DEF_PREDIX_MDCR_SYNC_PROC,  "leo_mdcr_sync_worker_").
--define(DEF_MDCR_SYNC_PROC_BUFSIZE, 1024 * 1024 * 64).  %% 64MB
+-define(DEF_MDCR_SYNC_PROC_BUFSIZE, 1024 * 1024 * 64). %% 64MB
 -define(DEF_MDCR_SYNC_PROC_TIMEOUT, timer:minutes(5)). %% 5min
 -define(DEF_MDCR_SYNC_PROCS, 8).
 
+-define(DEF_BIN_META_SIZE, 16).     %% metadata-size
+-define(DEF_BIN_OBJ_SIZE,  32).     %% object-size
+-define(DEF_BIN_PADDING, <<0:64>>). %% footer
+
+-ifdef(TEST).
+-define(env_mdcr_sync_proc_buf_size(), 1024).
+-define(env_mdcr_sync_proc_timeout(),    30).
+-define(env_num_of_mdcr_sync_procs(),     1).
+
+-else.
 -define(env_mdcr_sync_proc_buf_size(),
         case application:get_env(leo_storage, mdcr_sync_proc_buf_size) of
             {ok, _MDCRSyncProcBufSize} -> _MDCRSyncProcBufSize;
@@ -324,3 +350,4 @@
             {ok, _NumOfMDCRSyncProcs} -> _NumOfMDCRSyncProcs;
             _ -> ?DEF_MDCR_SYNC_PROCS
         end).
+-endif.

@@ -37,7 +37,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -export([get/1, get/2, get/3, get/4, get/5,
-         put/1, put/2, put/3,
+         put/1, put/2, put/3, put/4,
          delete/1, delete/2,
          head/2,
          copy/3,
@@ -228,6 +228,19 @@ put(From, Object, ReqId) ->
         {error, Cause} ->
             erlang:send(From, {error, {node(), Cause}})
     end.
+
+
+%% @doc Replicate an object, which is requested from remote-cluster
+%%
+-spec(put(#redundancies{}, #metadata{}, binary(), binary()) ->
+             {ok, atom()} | {error, any()}).
+put(Redundancies, Metadata, CustomMetaBin, Bin) ->
+    %% @TODO
+    ?debugVal({Redundancies#redundancies.n,
+               Metadata#metadata.msize,
+               erlang:byte_size(CustomMetaBin),
+               erlang:byte_size(Bin)}),
+    ok.
 
 
 %% Input an object into the object-storage

@@ -33,7 +33,7 @@
 %%--------------------------------------------------------------------
 -ifdef(EUNIT).
 
-ordning_reda_test_() ->
+sync_local_cluster_test_() ->
     {foreach, fun setup/0, fun teardown/1,
      [{with, [T]} || T <- [fun suite_regular_1_/1,
                            fun suite_regular_2_/1,
