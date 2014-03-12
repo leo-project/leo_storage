@@ -148,7 +148,7 @@
 
 -record(inconsistent_data_with_dc, {
           id = 0                :: integer(),
-          cluster_id            :: string(),
+          cluster_id = []       :: string(),
           addr_id = 0           :: integer(),
           key                   :: any(),
           timestamp = 0         :: integer(),

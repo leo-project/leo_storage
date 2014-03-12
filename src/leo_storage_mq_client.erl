@@ -337,11 +337,9 @@ handle_call({consume, ?QUEUE_ID_SYNC_OBJ_WITH_DC, MessageBin}) ->
                                    key = Key} ->
             Ret = case leo_storage_handler_object:get(AddrId, Key, -1) of
                       {ok, Metadata, ObjBin} ->
-                          case leo_sync_remote_cluster:stack(ClusterId,  Metadata, ObjBin) of
-                              ok ->
-                                  ok;
-                              {error,_Cause} ->
-                                  {error,_Cause}
+                          case ClusterId of
+                              [] -> leo_sync_remote_cluster:stack(Metadata, ObjBin);
+                              _  -> leo_sync_remote_cluster:stack(ClusterId, Metadata, ObjBin)
                           end;
                       not_found ->
                           ok;
@@ -355,7 +353,7 @@ handle_call({consume, ?QUEUE_ID_SYNC_OBJ_WITH_DC, MessageBin}) ->
                 {error,_Reason} ->
                     ok = leo_storage_mq_client:publish(
                            ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key)
-            end;                    
+            end;
         _ ->
             {error, ?ERROR_COULD_MATCH}
     end.

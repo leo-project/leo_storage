@@ -143,9 +143,14 @@ handle_fail(_, []) ->
     ok;
 handle_fail(UId, [{AddrId, Key}|Rest] = _StackInfo) ->
     ?warn("handle_fail/2","uid:~w, addr-id:~w, key:~s", [UId, AddrId, Key]),
-
-    ok = leo_storage_mq_client:publish(
-           ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, AddrId, Key),
+    case get_cluster_id_from_uid(UId) of
+        [] ->
+            ok = leo_storage_mq_client:publish(
+                   ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, AddrId, Key);
+        ClusterId ->
+            ok = leo_storage_mq_client:publish(
+                   ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key)
+    end,
     handle_fail(UId, Rest).
 
 
