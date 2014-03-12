@@ -89,6 +89,9 @@ after_proc({ok, Pid}) ->
     ok = leo_metrics_vm:start_link(?SNMP_SYNC_INTERVAL_10S),
     ok = leo_metrics_req:start_link(?SNMP_SYNC_INTERVAL_60S),
     ok = leo_storage_statistics:start_link(?SNMP_SYNC_INTERVAL_60S),
+
+    %% Launch leo-rpc
+    ok = leo_rpc:start(),
     {ok, Pid};
 
 after_proc(Error) ->
