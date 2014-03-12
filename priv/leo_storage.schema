@@ -122,7 +122,7 @@
  "leo_storage.system_version",
  [
   {datatype, string},
-  {default, "1.0.0-pre3"}
+  {default, "1.0.0"}
  ]}.
 
 %% @doc Path of object-container
@@ -448,38 +448,11 @@
  ]}.
 
 
-
 %%======================================================================
 %% Other libs
 %%======================================================================
-%% @doc
-{mapping,
- "leo_backend_db.profile",
- "leo_backend_db.profile",
- [
-  {datatype, {enum, [true, false]}},
-  {default, false}
- ]}.
-
-%% @doc
-{mapping,
- "leo_logger.profile",
- "leo_logger.profile",
- [
-  {datatype, {enum, [true, false]}},
-  {default, false}
- ]}.
-
-%% @doc
-{mapping,
- "leo_mq.profile",
- "leo_mq.profile",
- [
-  {datatype, {enum, [true, false]}},
-  {default, false}
- ]}.
-
-%% @doc
+%% Leo' MQ
+%% @doc leo-mq.backend_db
 {mapping,
  "leo_mq.backend_db",
  "leo_mq.backend_db",
@@ -488,16 +461,8 @@
   {default, 'bitcask'}
  ]}.
 
-%% @doc
-{mapping,
- "leo_object_storage.profile",
- "leo_object_storage.profile",
- [
-  {datatype, {enum, [true, false]}},
-  {default, false}
- ]}.
-
-%% @doc
+%% Leo' Object-Storage
+%% @doc leo-object-storage.metadata_storage
 {mapping,
  "leo_object_storage.metadata_storage",
  "leo_object_storage.metadata_storage",
@@ -506,7 +471,7 @@
   {default, 'leveldb'}
  ]}.
 
-%% @doc
+%% @doc leo-object-storage.is_strict_check
 {mapping,
  "leo_object_storage.is_strict_check",
  "leo_object_storage.is_strict_check",
@@ -515,16 +480,8 @@
   {default, false}
  ]}.
 
-%% @doc
-{mapping,
- "leo_ordning_reda.profile",
- "leo_ordning_reda.profile",
- [
-  {datatype, {enum, [true, false]}},
-  {default, false}
- ]}.
-
-%% @doc
+%% Leo' Ordning-Reda
+%% @doc leo-ordning-reda.send_after_interval
 {mapping,
  "leo_ordning_reda.send_after_interval",
  "leo_ordning_reda.send_after_interval",
@@ -533,7 +490,8 @@
   {default, 100}
  ]}.
 
-%% @doc
+%% Leo' Redundant-Manager
+%% @doc leo-redundant-manager.profile
 {mapping,
  "leo_redundant_manager.profile",
  "leo_redundant_manager.profile",
@@ -542,7 +500,7 @@
   {default, false}
  ]}.
 
-%% @doc
+%% @doc leo-redundant-manager.norify_mf
 {mapping,
  "leo_redundant_manager.notify_mf",
  "leo_redundant_manager.notify_mf",
@@ -555,7 +513,7 @@
          [leo_manager_api, notify]
  end}.
 
-%% @doc
+%% @doc leo-redundant-manager.sync_mf
 {mapping,
  "leo_redundant_manager.sync_mf",
  "leo_redundant_manager.sync_mf",
@@ -568,7 +526,101 @@
          [leo_manager_api, synchronize]
  end}.
 
-%% @doc
+%% Leo' RPC
+%% @doc leo-rpc.node
+{translation, "leo_rpc.node",
+ fun(Conf) ->
+         Node = cuttlefish_util:conf_get_value("nodename", Conf),
+         list_to_atom(Node)
+ end}.
+
+
+%% @doc leo-rpc.acceptors
+{mapping,
+ "leo_rpc.num_of_acceptors",
+ "leo_rpc.num_of_acceptors",
+ [
+  {datatype, integer},
+  {default, 128}
+ ]}.
+
+%% @doc leo-rpc.listen_port
+{mapping,
+ "leo_rpc.listen_port",
+ "leo_rpc.listen_port",
+ [
+  {datatype, integer},
+  {default, 128}
+ ]}.
+
+%% @doc leo-rpc.listen_timeout
+{mapping,
+ "leo_rpc.listen_timeout",
+ "leo_rpc.listen_timeout",
+ [
+  {datatype, integer},
+  {default, 10000}
+ ]}.
+
+
+%%======================================================================
+%% Profiling
+%%======================================================================
+%% @doc leo-backend-db.profile
+{mapping,
+ "leo_backend_db.profile",
+ "leo_backend_db.profile",
+ [
+  {datatype, {enum, [true, false]}},
+  {default, false}
+ ]}.
+
+%% @doc leo-logger.profile
+{mapping,
+ "leo_logger.profile",
+ "leo_logger.profile",
+ [
+  {datatype, {enum, [true, false]}},
+  {default, false}
+ ]}.
+
+%% @doc leo-mq.profile
+{mapping,
+ "leo_mq.profile",
+ "leo_mq.profile",
+ [
+  {datatype, {enum, [true, false]}},
+  {default, false}
+ ]}.
+
+%% @doc leo-object-storage.profile
+{mapping,
+ "leo_object_storage.profile",
+ "leo_object_storage.profile",
+ [
+  {datatype, {enum, [true, false]}},
+  {default, false}
+ ]}.
+
+%% @doc leo-ordning-reda.profile
+{mapping,
+ "leo_ordning_reda.profile",
+ "leo_ordning_reda.profile",
+ [
+  {datatype, {enum, [true, false]}},
+  {default, false}
+ ]}.
+
+%% @doc leo-rpc.profile
+{mapping,
+ "leo_rpc.profile",
+ "leo_rpc.profile",
+ [
+  {datatype, {enum, [true, false]}},
+  {default, false}
+ ]}.
+
+%% @doc leo-statistics.profile
 {mapping,
  "leo_statistics.profile",
  "leo_statistics.profile",
