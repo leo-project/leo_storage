@@ -335,16 +335,34 @@ handle_call({consume, ?QUEUE_ID_SYNC_OBJ_WITH_DC, MessageBin}) ->
         #inconsistent_data_with_dc{cluster_id = ClusterId,
                                    addr_id = AddrId,
                                    key = Key} ->
-            %% @TODO - Recover inconsistent data with a DC
-            ?debugVal({ClusterId, AddrId, Key}),
-            ok;
+            Ret = case leo_storage_handler_object:get(AddrId, Key, -1) of
+                      {ok, Metadata, ObjBin} ->
+                          case leo_sync_remote_cluster:stack(ClusterId,  Metadata, ObjBin) of
+                              ok ->
+                                  ok;
+                              {error,_Cause} ->
+                                  {error,_Cause}
+                          end;
+                      not_found ->
+                          ok;
+                      {error,_Cause} ->
+                          {error,_Cause}
+                  end,
+
+            case Ret of
+                ok ->
+                    ok;
+                {error,_Reason} ->
+                    ok = leo_storage_mq_client:publish(
+                           ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key)
+            end;                    
         _ ->
             {error, ?ERROR_COULD_MATCH}
     end.
 
 
 %%--------------------------------------------------------------------
-%% INNTERNAL FUNCTIONS
+%% INNTERNAL FUNCTIONS-1
 %%--------------------------------------------------------------------
 %% @doc synchronize by vnode-id.
 %%
@@ -644,6 +662,23 @@ notify_rebalance_message_to_manager(VNodeId) ->
     end.
 
 
+%% %% @doc Replicate an object from other cluster
+%% %% @private
+%% -spec(replicate_data_to_dc(pos_integer(), binary()) ->
+%%              ok | {error, any()}).
+%% replicate_data_to_dc(AddrId, Key) ->
+%%     case leo_mdcr_tbl_cluster_info:all() of
+%%         {ok, ClusterInfoList} ->
+%%             replicate_data_to_dc(ClusterInfoList, AddrId, Key);
+%%         not_found = Cause ->
+%%             {error, Cause};
+%%         {error, Cause} ->
+%%             {error, Cause}
+%%     end.
+
+%%--------------------------------------------------------------------
+%% INNTERNAL FUNCTIONS-2
+%%--------------------------------------------------------------------
 %% @doc Lookup rebalance counter
 %% @private
 -spec(ets_lookup(atom(), integer()) ->
@@ -688,4 +723,3 @@ queue_id(?QUEUE_TYPE_RECOVERY_NODE) ->
     ?QUEUE_ID_RECOVERY_NODE;
 queue_id(?QUEUE_TYPE_SYNC_OBJ_WITH_DC) ->
     ?QUEUE_ID_SYNC_OBJ_WITH_DC.
-

@@ -117,21 +117,27 @@ gen_mocks(Node) ->
 
 
 suite() ->
-    stack(1000),
+    stack("cluster_1",100),
+    stack([],100),
     ok.
 
 
-stack(0) ->
+%% @private
+%% @private
+stack(_,0) ->
     ok;
-stack(Index) ->
+stack(ClusterId, Index) ->
     AddrId = 1024,
     Size   = erlang:phash2(leo_date:now(), 512) + 64,
     Key    = list_to_binary(lists:append(["test/photo/leo/", integer_to_list(Index)])),
     Meta   = #metadata{addr_id = AddrId, key = Key, dsize = Size, ksize = byte_size(Key)},
     Object = crypto:rand_bytes(Size),
 
-    ok = leo_sync_remote_cluster:stack(Meta, Object),
-    stack(Index - 1).
+    case ClusterId of
+        [] -> ok = leo_sync_remote_cluster:stack(Meta, Object);
+        _  -> ok = leo_sync_remote_cluster:stack(ClusterId, Meta, Object)
+    end,
+    stack(ClusterId, Index - 1).
 
 -endif.
 

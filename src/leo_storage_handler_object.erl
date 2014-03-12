@@ -234,12 +234,12 @@ put(From, Object, ReqId) ->
 %%
 -spec(put(#redundancies{}, #metadata{}, binary(), binary()) ->
              {ok, atom()} | {error, any()}).
-put(Redundancies, Metadata, CustomMetaBin, Bin) ->
+put(_Redundancies,_Metadata,_CustomMetaBin,_Bin) ->
     %% @TODO
-    ?debugVal({Redundancies#redundancies.n,
-               Metadata#metadata.msize,
-               erlang:byte_size(CustomMetaBin),
-               erlang:byte_size(Bin)}),
+    %% ?debugVal({Redundancies#redundancies.n,
+    %%            Metadata#metadata.msize,
+    %%            erlang:byte_size(CustomMetaBin),
+    %%            erlang:byte_size(Bin)}),
     ok.
 
 

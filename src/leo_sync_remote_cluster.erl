@@ -31,7 +31,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -export([start_link/0, start_link/1, stop/1,
-         stack/2, store/2,
+         stack/2, stack/3, store/2,
          gen_id/0, gen_id/1]).
 -export([handle_send/3,
          handle_fail/2]).
@@ -72,7 +72,12 @@ stop(Id) ->
 -spec(stack(#metadata{}, binary()) ->
              ok | {error, any()}).
 stack(Metadata, Object) ->
-    stack_fun(Metadata, Object).
+    stack([], Metadata, Object).
+
+-spec(stack(string(), #metadata{}, binary()) ->
+             ok | {error, any()}).
+stack(ClusterId, Metadata, Object) ->
+    stack_fun(ClusterId, Metadata, Object).
 
 
 %% Store stacked objects
@@ -98,12 +103,18 @@ store(ClusterId, CompressedObjs) ->
 -spec(gen_id() ->
              atom()).
 gen_id() ->
-    gen_id(integer_to_list(erlang:phash2(leo_date:clock(),
-                                         ?env_num_of_mdcr_sync_procs()) + 1)).
+    gen_id(erlang:phash2(leo_date:clock(),
+                         ?env_num_of_mdcr_sync_procs()) + 1).
 -spec(gen_id(pos_integer()) ->
              atom()).
-gen_id(Id) ->
-    list_to_atom(lists:append([?DEF_PREDIX_MDCR_SYNC_PROC, Id])).
+gen_id(Id) when is_integer(Id) ->
+    list_to_atom(lists:append([?DEF_PREFIX_MDCR_SYNC_PROC_1, integer_to_list(Id)]));
+gen_id({cluster_id, ClusterId}) ->
+    ClusterId_1 = case is_atom(ClusterId) of
+                      true  -> atom_to_list(ClusterId);
+                      false -> ClusterId
+                  end,
+    list_to_atom(lists:append([?DEF_PREFIX_MDCR_SYNC_PROC_2, ClusterId_1])).
 
 
 %%--------------------------------------------------------------------
@@ -111,9 +122,12 @@ gen_id(Id) ->
 %%--------------------------------------------------------------------
 %% @doc Handle send object to a remote-node.
 %%
-handle_send(_UId, StackedInfo, CompressedObjs) ->
-    %% Retrieve remote-members from
-    case get_cluster_members() of
+handle_send(UId, StackedInfo, CompressedObjs) ->
+    %% Retrieve cluser-id
+    ClusterId = get_cluster_id_from_uid(UId),
+
+    %% Retrieve remote-members from the tables
+    case get_cluster_members(ClusterId) of
         {ok, ListMembers} ->
             send(ListMembers, StackedInfo, CompressedObjs);
         {error,_Reason} ->
@@ -140,18 +154,21 @@ handle_fail(UId, [{AddrId, Key}|Rest] = _StackInfo) ->
 %%--------------------------------------------------------------------
 %% @doc Stack an object into "ordning-reda"
 %% @private
--spec(stack_fun(#metadata{}, binary()) ->
+-spec(stack_fun(string(), #metadata{}, binary()) ->
              ok | {error, any()}).
-stack_fun(#metadata{addr_id = AddrId,
-                    key = Key} = Metadata, Object) ->
+stack_fun(ClusterId, #metadata{addr_id = AddrId,
+                               key = Key} = Metadata, Object) ->
     MetaBin  = term_to_binary(Metadata),
     MetaSize = byte_size(MetaBin),
     ObjSize  = byte_size(Object),
     Data = << MetaSize:?DEF_BIN_META_SIZE, MetaBin/binary,
-              ObjSize:?DEF_BIN_OBJ_SIZE, Object/binary,
+              ObjSize:?DEF_BIN_OBJ_SIZE,   Object/binary,
               ?DEF_BIN_PADDING/binary >>,
 
-    UId = gen_id(),
+    UId = case ClusterId of
+              [] -> gen_id();
+              _  -> gen_id({cluster_id, ClusterId})
+          end,
     stack_fun(UId, AddrId, Key, Data).
 
 
@@ -244,19 +261,44 @@ replicate(ClusterId, Metadata, Object) ->
     end.
 
 
+%% @doc Retrieve cluster-id from uid
+%% @private
+get_cluster_id_from_uid(UId) when is_atom(UId) ->
+    case string:tokens(atom_to_list(UId),
+                       ?DEF_PREFIX_MDCR_SYNC_PROC_2) of
+        [] ->
+            [];
+        [ClusterId|_] ->
+            ClusterId
+    end;
+get_cluster_id_from_uid(_) ->
+    [].
+
+
 %% @doc Retrieve cluster members
 %% @private
-get_cluster_members() ->
+get_cluster_members([]) ->
     case leo_mdcr_tbl_cluster_info:all() of
         {ok, ClusterInfoList} ->
-            case leo_cluster_tbl_conf:get() of
-                {ok, #?SYSTEM_CONF{num_of_dc_replicas = NumOfReplicas}} ->
-                    case get_cluster_members_1(ClusterInfoList, NumOfReplicas, []) of
-                        {ok, MDCR_Info} ->
-                            {ok,  MDCR_Info};
-                        {error, Cause} ->
-                            {error, Cause}
-                    end;
+            get_cluster_members_1(ClusterInfoList);
+
+
+
+
+
+        {error, Cause} ->
+            {error, Cause}
+    end;
+get_cluster_members(ClusterId) ->
+    get_cluster_members_1([#?CLUSTER_INFO{cluster_id = ClusterId}]).
+
+%% @private
+get_cluster_members_1(ClusterInfoList) ->
+    case leo_cluster_tbl_conf:get() of
+        {ok, #?SYSTEM_CONF{num_of_dc_replicas = NumOfReplicas}} ->
+            case get_cluster_members_2(ClusterInfoList, NumOfReplicas, []) of
+                {ok, MDCR_Info} ->
+                    {ok,  MDCR_Info};
                 {error, Cause} ->
                     {error, Cause}
             end;
@@ -265,14 +307,14 @@ get_cluster_members() ->
     end.
 
 %% @private
-get_cluster_members_1([],_NumOfReplicas, Acc) ->
+get_cluster_members_2([],_NumOfReplicas, Acc) ->
     {ok, Acc};
-get_cluster_members_1([#?CLUSTER_INFO{cluster_id = ClusterId}|Rest],
+get_cluster_members_2([#?CLUSTER_INFO{cluster_id = ClusterId}|Rest],
                       NumOfReplicas, Acc) ->
     case leo_mdcr_tbl_cluster_member:find_by_limit(
            ClusterId, ?DEF_NUM_OF_REMOTE_MEMBERS) of
         {ok, ClusterMembers} ->
-            get_cluster_members_1(Rest, NumOfReplicas,
+            get_cluster_members_2(Rest, NumOfReplicas,
                                   [#mdc_replication_info{cluster_id = ClusterId,
                                                          num_of_replicas = NumOfReplicas,
                                                          cluster_members = ClusterMembers}

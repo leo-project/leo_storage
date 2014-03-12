@@ -320,11 +320,13 @@
 
 
 %% For Multi-DC Replication
--define(DEF_PREDIX_MDCR_SYNC_PROC,  "leo_mdcr_sync_worker_").
+-define(DEF_PREFIX_MDCR_SYNC_PROC_1, "leo_mdcr_sync_w1_").
+-define(DEF_PREFIX_MDCR_SYNC_PROC_2, "leo_mdcr_sync_w2_").
 -define(DEF_MDCR_SYNC_PROC_BUFSIZE, 1024 * 1024 * 64). %% 64MB
 -define(DEF_MDCR_SYNC_PROC_TIMEOUT, timer:minutes(5)). %% 5min
 -define(DEF_MDCR_SYNC_PROCS, 8).
 
+-define(DEF_BIN_CID_SIZE,  16).     %% clusterid-size
 -define(DEF_BIN_META_SIZE, 16).     %% metadata-size
 -define(DEF_BIN_OBJ_SIZE,  32).     %% object-size
 -define(DEF_BIN_PADDING, <<0:64>>). %% footer
