@@ -318,6 +318,11 @@
           end}
         ]).
 
+%% Retrieve a quorum bv a method
+-define(quorum(_Method,_W,_D), case _Method of
+                                   ?CMD_PUT    -> _W;
+                                   ?CMD_DELETE -> _D
+                               end).
 
 %% For Multi-DC Replication
 -define(DEF_PREFIX_MDCR_SYNC_PROC_1, "leo_mdcr_sync_w1_").
