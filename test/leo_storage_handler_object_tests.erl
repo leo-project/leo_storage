@@ -410,7 +410,7 @@ put_0_({Node0, Node1}) ->
 
     meck:new(leo_storage_replicator),
     meck:expect(leo_storage_replicator, replicate,
-                fun(_Quorum,_Redundancies,_ObjectPool,_Callback) ->
+                fun(_Method,_Quorum,_Redundancies,_ObjectPool,_Callback) ->
                         {ok, {etag, 1}}
                 end),
 
@@ -487,7 +487,7 @@ delete_0_({Node0, Node1}) ->
 
     meck:new(leo_storage_replicator),
     meck:expect(leo_storage_replicator, replicate,
-                fun(_Quorum,_Redundancies,_ObjectPool,_Callback) ->
+                fun(_Method,_Quorum,_Redundancies,_ObjectPool,_Callback) ->
                         ok
                 end),
     ok = rpc:call(Node1, meck, new,    [leo_metrics_req, [no_link]]),

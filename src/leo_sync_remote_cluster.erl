@@ -247,20 +247,8 @@ replicate(ClusterId, Metadata, Object) ->
     %% then overwrite 'n' and 'w' for the mdc-replication
     case leo_mdcr_tbl_cluster_info:get(ClusterId) of
         {ok, #?CLUSTER_INFO{num_of_dc_replicas = NumOfReplicas}} ->
-            case leo_redundant_manager_api:get_redundancies_by_addr_id(Metadata#metadata.addr_id) of
-                {ok, #redundancies{} = Redundancies} ->
-
-                    %% Replicate an object into the storage cluster
-                    %%
-                    CustomMetaBin  = term_to_binary([{'cluster_id',      ClusterId},
-                                                     {'num_of_replicas', NumOfReplicas}]),
-                    leo_storage_handler_object:put(
-                      Redundancies#redundancies{n = NumOfReplicas, w = 1},
-                      Metadata#metadata{msize = erlang:byte_size(CustomMetaBin)},
-                      CustomMetaBin, Object);
-                {error, Cause} ->
-                    {error, Cause}
-            end;
+            leo_storage_handler_object:put(
+              put, ClusterId, NumOfReplicas, Metadata, Object);
         {error, Cause} ->
             {error, Cause}
     end.

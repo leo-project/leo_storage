@@ -74,6 +74,13 @@ gen_mocks(Node) ->
                                                }}
                      end),
 
+    ok = meck:new(leo_storage_replicator),
+    ok = meck:expect(leo_storage_replicator, replicate,
+                     fun(_,_,_,_,_) ->
+                             ok
+                     end),
+
+
     ClusterId = "cluster_1",
     ok = meck:new(leo_mdcr_tbl_cluster_info),
     ok = meck:expect(leo_mdcr_tbl_cluster_info, all,
