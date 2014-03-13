@@ -62,7 +62,7 @@
 %%
 -spec(replicate(put|delete, pos_integer(), list(), #object{}, function()) ->
              {ok, reference()} | {error, {reference(), any()}}).
-replicate(_Method, Quorum, Nodes, Object, Callback) ->
+replicate(Method, Quorum, Nodes, Object, Callback) ->
     AddrId = Object#object.addr_id,
     Key    = Object#object.key,
     ReqId  = Object#object.req_id,
@@ -70,11 +70,12 @@ replicate(_Method, Quorum, Nodes, Object, Callback) ->
 
     ok = replicate_1(Nodes, From, AddrId, Key, Object, ReqId),
 
-    loop(Quorum, From, [], #state{addr_id = AddrId,
-                                  key = Key,
+    loop(Quorum, From, [], #state{method       = Method,
+                                  addr_id      = AddrId,
+                                  key          = Key,
                                   num_of_nodes = erlang:length(Nodes),
-                                  callback = Callback,
-                                  errors = []}).
+                                  callback     = Callback,
+                                  errors       = []}).
 
 %% @private
 replicate_1([],_From,_AddrId,_Key,_Object,_ReqId) ->
