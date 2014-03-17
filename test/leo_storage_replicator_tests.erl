@@ -24,7 +24,7 @@
 %% @end
 %%====================================================================
 -module(leo_storage_replicator_tests).
--author('yosuke hara').
+-author('Yosuke Hara').
 
 -include("leo_storage.hrl").
 -include_lib("leo_mq/include/leo_mq.hrl").
@@ -36,11 +36,11 @@
 -define(TEST_RING_ID_1,    255).
 -define(TEST_KEY_1,        <<"air/on/g/string/music.png">>).
 -define(TEST_BODY_1,       <<"air-on-g-string">>).
--define(TEST_META_1, #metadata{key       = ?TEST_KEY_1,
-                               addr_id   = 1,
-                               clock     = 9,
-                               timestamp = 8,
-                               checksum  = 7}).
+-define(TEST_META_1, #?METADATA{key       = ?TEST_KEY_1,
+                                addr_id   = 1,
+                                clock     = 9,
+                                timestamp = 8,
+                                checksum  = 7}).
 
 -define(TEST_REDUNDANCIES_1, [#redundant_node{node = Test0Node, available = true},
                               #redundant_node{node = Test1Node, available = true}]).
@@ -91,10 +91,10 @@ replicate_obj_0_({Test0Node, Test1Node}) ->
     gen_mock_2(object, {Test0Node, Test1Node}, ok),
     gen_mock_3(object, Test1Node, ok),
 
-    Object = #object{key     = ?TEST_KEY_1,
-                     addr_id = ?TEST_RING_ID_1,
-                     dsize   = erlang:byte_size(?TEST_BODY_1),
-                     data    = ?TEST_BODY_1},
+    Object = #?OBJECT{key     = ?TEST_KEY_1,
+                      addr_id = ?TEST_RING_ID_1,
+                      dsize   = erlang:byte_size(?TEST_BODY_1),
+                      data    = ?TEST_BODY_1},
 
     F = fun({ok, _Method, ETag}) ->
                 {ok, ETag};
@@ -111,10 +111,10 @@ replicate_obj_1_({Test0Node, Test1Node}) ->
     gen_mock_2(object, {Test0Node, Test1Node}, fail),
     gen_mock_3(object, Test1Node, ok),
 
-    Object = #object{key     = ?TEST_KEY_1,
-                     addr_id = ?TEST_RING_ID_1,
-                     dsize   = erlang:byte_size(?TEST_BODY_1),
-                     data    = ?TEST_BODY_1},
+    Object = #?OBJECT{key     = ?TEST_KEY_1,
+                      addr_id = ?TEST_RING_ID_1,
+                      dsize   = erlang:byte_size(?TEST_BODY_1),
+                      data    = ?TEST_BODY_1},
 
     F = fun({ok, _Method, ETag}) ->
                 {ok, ETag};
@@ -133,10 +133,10 @@ replicate_obj_2_({Test0Node, Test1Node}) ->
     gen_mock_2(object, {Test0Node, Test1Node}, ok),
     gen_mock_3(object, Test1Node, fail),
 
-    Object = #object{key     = ?TEST_KEY_1,
-                     addr_id = ?TEST_RING_ID_1,
-                     dsize   = erlang:byte_size(?TEST_BODY_1),
-                     data    = ?TEST_BODY_1},
+    Object = #?OBJECT{key     = ?TEST_KEY_1,
+                      addr_id = ?TEST_RING_ID_1,
+                      dsize   = erlang:byte_size(?TEST_BODY_1),
+                      data    = ?TEST_BODY_1},
 
     F = fun({ok, _Method, ETag}) ->
                 {ok, ETag};
@@ -186,10 +186,10 @@ gen_mock_2(object, {_Test0Node, _Test1Node}, Case) ->
 gen_mock_3(object, Test1Node, Case) ->
     ok = rpc:call(Test1Node, meck, new,    [leo_storage_handler_object, [no_link]]),
     ok = rpc:call(Test1Node, meck, expect, [leo_storage_handler_object, put,
-                                            fun(#object{addr_id = VNodeId,
-                                                        key     = Key,
-                                                        data    = Body,
-                                                        del     = DelFlag}) ->
+                                            fun(#?OBJECT{addr_id = VNodeId,
+                                                         key     = Key,
+                                                         data    = Body,
+                                                         del     = DelFlag}) ->
                                                     ?assertEqual(?TEST_RING_ID_1, VNodeId),
                                                     ?assertEqual(?TEST_KEY_1,     Key),
                                                     ?assertEqual(?TEST_BODY_1,    Body),

@@ -180,25 +180,25 @@ slice_and_replicate(Objects, Errors) ->
     {ok, Metadata, Object, Rest_5} = slice(Objects),
 
     %% store an object to object-storage
-    case leo_storage_handler_object:head(Metadata#metadata.addr_id,
-                                         Metadata#metadata.key) of
-        {ok, #metadata{clock = Clock}} when Clock >= Metadata#metadata.clock ->
+    case leo_storage_handler_object:head(Metadata#?METADATA.addr_id,
+                                         Metadata#?METADATA.key) of
+        {ok, #?METADATA{clock = Clock}} when Clock >= Metadata#?METADATA.clock ->
             slice_and_replicate(Rest_5, Errors);
         _ ->
             case leo_misc:get_env(leo_redundant_manager, ?PROP_RING_HASH) of
                 {ok, RingHashCur} ->
-                    case leo_object_storage_api:store(Metadata#metadata{ring_hash = RingHashCur},
+                    case leo_object_storage_api:store(Metadata#?METADATA{ring_hash = RingHashCur},
                                                       Object) of
                         ok ->
                             slice_and_replicate(Rest_5, Errors);
                         {error, Cause} ->
                             ?warn("slice_and_replicate/2","key:~s, cause:~p",
-                                  [binary_to_list(Metadata#metadata.key), Cause]),
+                                  [binary_to_list(Metadata#?METADATA.key), Cause]),
                             slice_and_replicate(Rest_5, [Metadata|Errors])
                     end;
                 _ ->
                     ?warn("slice_and_replicate/2","key:~s, cause:~p",
-                          [binary_to_list(Metadata#metadata.key),
+                          [binary_to_list(Metadata#?METADATA.key),
                            "Current ring-hash is not found"]),
                     slice_and_replicate(Rest_5, [Metadata|Errors])
             end

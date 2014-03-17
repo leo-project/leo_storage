@@ -69,12 +69,12 @@ stop(Id) ->
 
 %% @doc Stack a object into the ordning&reda
 %%
--spec(stack(#metadata{}, binary()) ->
+-spec(stack(#?METADATA{}, binary()) ->
              ok | {error, any()}).
 stack(Metadata, Object) ->
     stack([], Metadata, Object).
 
--spec(stack(string(), #metadata{}, binary()) ->
+-spec(stack(string(), #?METADATA{}, binary()) ->
              ok | {error, any()}).
 stack(ClusterId, Metadata, Object) ->
     stack_fun(ClusterId, Metadata, Object).
@@ -159,10 +159,10 @@ handle_fail(UId, [{AddrId, Key}|Rest] = _StackInfo) ->
 %%--------------------------------------------------------------------
 %% @doc Stack an object into "ordning-reda"
 %% @private
--spec(stack_fun(string(), #metadata{}, binary()) ->
+-spec(stack_fun(string(), #?METADATA{}, binary()) ->
              ok | {error, any()}).
-stack_fun(ClusterId, #metadata{addr_id = AddrId,
-                               key = Key} = Metadata, Object) ->
+stack_fun(ClusterId, #?METADATA{addr_id = AddrId,
+                                key = Key} = Metadata, Object) ->
     MetaBin  = term_to_binary(Metadata),
     MetaSize = byte_size(MetaBin),
     ObjSize  = byte_size(Object),
@@ -211,7 +211,7 @@ slice_and_replicate(ClusterId, StackedObjs) ->
                     %% Enqueue the fail message
                     %%
                     ?warn("slice_and_replicate/1","key:~s, cause:~p",
-                          [binary_to_list(Metadata#metadata.key), Cause])
+                          [binary_to_list(Metadata#?METADATA.key), Cause])
             end,
             slice_and_replicate(ClusterId, StackedObjs_1);
         {error, Cause}->
@@ -247,7 +247,8 @@ replicate(ClusterId, Metadata, Object) ->
     %% then overwrite 'n' and 'w' for the mdc-replication
     case leo_mdcr_tbl_cluster_info:get(ClusterId) of
         {ok, #?CLUSTER_INFO{num_of_dc_replicas = NumOfReplicas}} ->
-            leo_storage_handler_object:put(
+            %% @TODO - set method
+            leo_storage_handler_object:replicate(
               put, ClusterId, NumOfReplicas, Metadata, Object);
         {error, Cause} ->
             {error, Cause}

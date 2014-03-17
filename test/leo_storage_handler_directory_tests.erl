@@ -24,7 +24,7 @@
 %% @end
 %%====================================================================
 -module(leo_storage_handler_directory_tests).
--author('yosuke hara').
+-author('Yosuke Hara').
 
 
 -include("leo_storage.hrl").
@@ -79,13 +79,13 @@ find_by_parent_dir_([Node0, Node1]) ->
     ok = rpc:call(Node0, meck, new,    [leo_storage_handler_object, [no_link]]),
     ok = rpc:call(Node0, meck, expect, [leo_storage_handler_object, prefix_search,
                                         fun(_ParentDir, _,_) ->
-                                                {ok, [#metadata{key="air/on/g/0.png"}]}
+                                                {ok, [#?METADATA{key="air/on/g/0.png"}]}
                                         end]),
     ok = rpc:call(Node1, meck, new,    [leo_storage_handler_object, [no_link]]),
     ok = rpc:call(Node1, meck, expect, [leo_storage_handler_object, prefix_search,
                                         fun(_ParentDir,_,_) ->
-                                                {ok, [#metadata{key="air/on/g/1.png"},
-                                                      #metadata{key="air/on/g/1.png"}]}
+                                                {ok, [#?METADATA{key="air/on/g/1.png"},
+                                                      #?METADATA{key="air/on/g/1.png"}]}
                                         end]),
 
     {ok, Res} = leo_storage_handler_directory:find_by_parent_dir("air/on/g/", none, none, 1000),

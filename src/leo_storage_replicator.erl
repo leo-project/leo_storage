@@ -42,7 +42,7 @@
           pid     :: pid(),
           addr_id :: integer(),
           key     :: binary(),
-          object  :: #object{},
+          object  :: #?OBJECT{},
           req_id  :: integer()}).
 
 -record(state, {
@@ -60,12 +60,12 @@
 %%--------------------------------------------------------------------
 %% @doc Replicate an object to local-node and remote-nodes.
 %%
--spec(replicate(put|delete, pos_integer(), list(), #object{}, function()) ->
+-spec(replicate(put|delete, pos_integer(), list(), #?OBJECT{}, function()) ->
              {ok, reference()} | {error, {reference(), any()}}).
 replicate(Method, Quorum, Nodes, Object, Callback) ->
-    AddrId = Object#object.addr_id,
-    Key    = Object#object.key,
-    ReqId  = Object#object.req_id,
+    AddrId = Object#?OBJECT.addr_id,
+    Key    = Object#?OBJECT.key,
+    ReqId  = Object#?OBJECT.req_id,
     From = self(),
 
     ok = replicate_1(Nodes, From, AddrId, Key, Object, ReqId),

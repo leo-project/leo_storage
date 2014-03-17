@@ -19,7 +19,7 @@
 %% under the License.
 %%====================================================================
 -module(leo_sync_local_cluster_tests).
--author('yosuke hara').
+-author('Yosuke Hara').
 
 -include("leo_storage.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
@@ -69,7 +69,7 @@ teardown(Node) ->
 
 suite_regular_1_(Node) ->
     ok = meck:new(leo_storage_handler_object),
-    ok = meck:expect(leo_storage_handler_object, head, 2, {ok, #metadata{clock = -1}}),
+    ok = meck:expect(leo_storage_handler_object, head, 2, {ok, #?METADATA{clock = -1}}),
 
     ok = meck:new(leo_object_storage_api),
     ok = meck:expect(leo_object_storage_api, store,
@@ -89,7 +89,7 @@ suite_regular_1_(Node) ->
 
 suite_regular_2_(Node) ->
     ok = meck:new(leo_storage_handler_object),
-    ok = meck:expect(leo_storage_handler_object, head, 2, {ok, #metadata{clock = 5}}),
+    ok = meck:expect(leo_storage_handler_object, head, 2, {ok, #?METADATA{clock = 5}}),
 
     ok = meck:new(leo_object_storage_api),
     ok = meck:expect(leo_object_storage_api, store,
@@ -110,7 +110,7 @@ suite_regular_2_(Node) ->
 
 suite_error_(Node) ->
     ok = meck:new(leo_storage_handler_object),
-    ok = meck:expect(leo_storage_handler_object, head, 2, {ok, #metadata{clock = -1}}),
+    ok = meck:expect(leo_storage_handler_object, head, 2, {ok, #?METADATA{clock = -1}}),
 
     ok = meck:new(leo_object_storage_api),
     ok = meck:expect(leo_object_storage_api, store,
@@ -134,10 +134,10 @@ stack(Node) ->
     Key2   = <<"photo/hawaii-1.jpg">>,
     Key3   = <<"photo/hawaii-2.jpg">>,
     Key4   = <<"photo/hawaii-3.jpg">>,
-    Meta1  = #metadata{addr_id = AddrId, key = Key1, dsize = Size, ksize = 18},
-    Meta2  = #metadata{addr_id = AddrId, key = Key2, dsize = Size, ksize = 18},
-    Meta3  = #metadata{addr_id = AddrId, key = Key3, dsize = Size, ksize = 18},
-    Meta4  = #metadata{addr_id = AddrId, key = Key4, dsize = Size, ksize = 18},
+    Meta1  = #?METADATA{addr_id = AddrId, key = Key1, dsize = Size, ksize = 18},
+    Meta2  = #?METADATA{addr_id = AddrId, key = Key2, dsize = Size, ksize = 18},
+    Meta3  = #?METADATA{addr_id = AddrId, key = Key3, dsize = Size, ksize = 18},
+    Meta4  = #?METADATA{addr_id = AddrId, key = Key4, dsize = Size, ksize = 18},
     Object = crypto:rand_bytes(Size),
 
     _ = leo_sync_local_cluster:stack([Node], AddrId, Key1, Meta1, Object),

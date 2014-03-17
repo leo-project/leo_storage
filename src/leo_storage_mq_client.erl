@@ -302,11 +302,11 @@ handle_call({consume, ?QUEUE_ID_ASYNC_DELETION, MessageBin}) ->
             {error, Cause};
         #async_deletion_message{addr_id  = AddrId,
                                 key      = Key} ->
-            case leo_storage_handler_object:delete(#object{addr_id   = AddrId,
-                                                           key       = Key,
-                                                           clock     = leo_date:clock(),
-                                                           timestamp = leo_date:now()
-                                                          }, 0) of
+            case leo_storage_handler_object:delete(#?OBJECT{addr_id   = AddrId,
+                                                            key       = Key,
+                                                            clock     = leo_date:clock(),
+                                                            timestamp = leo_date:now()
+                                                           }, 0) of
                 ok ->
                     ok;
                 {error, _Cause} ->
@@ -368,7 +368,7 @@ handle_call({consume, ?QUEUE_ID_SYNC_OBJ_WITH_DC, MessageBin}) ->
              ok).
 recover_node(Node) ->
     Fun = fun(Key, V, Acc) ->
-                  #metadata{addr_id = AddrId} = binary_to_term(V),
+                  #?METADATA{addr_id = AddrId} = binary_to_term(V),
                   case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
                       {ok, #redundancies{nodes = Redundancies}} ->
                           Nodes = [N || #redundant_node{node = N} <- Redundancies],
@@ -397,7 +397,7 @@ sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
     Fun = fun(Key, V, Acc) ->
                   %% Note: An object of copy is NOT equal current ring-hash.
                   %%       Then a message in the rebalance-queue.
-                  #metadata{addr_id = AddrId} = binary_to_term(V),
+                  #?METADATA{addr_id = AddrId} = binary_to_term(V),
 
                   case (AddrId >= FromAddrId andalso
                         AddrId =< ToAddrId) of
@@ -524,7 +524,7 @@ correct_redundancies_1(Key, AddrId, [#redundant_node{node = Node}|T], Metadatas,
              ok | {error, any()}).
 correct_redundancies_2(ListOfMetadata, ErrorNodes) ->
     [{_, Metadata} = H|_] = lists:sort(fun({_, M1}, {_, M2}) ->
-                                               M1#metadata.clock >= M2#metadata.clock;
+                                               M1#?METADATA.clock >= M2#?METADATA.clock;
                                           (_,_) ->
                                                false
                                        end, ListOfMetadata),
@@ -534,13 +534,13 @@ correct_redundancies_2(ListOfMetadata, ErrorNodes) ->
           fun({Node, _},
               {{DestNode, _Metadata} = Dest, C, R}) when Node =:= DestNode ->
                   {Dest, [Node|C], R};
-             ({Node, #metadata{clock = Clock}},
-              {{DestNode, #metadata{clock = DestClock}} = Dest, C, R}) when Node  =/= DestNode,
-                                                                            Clock =:= DestClock ->
+             ({Node, #?METADATA{clock = Clock}},
+              {{DestNode, #?METADATA{clock = DestClock}} = Dest, C, R}) when Node  =/= DestNode,
+                                                                             Clock =:= DestClock ->
                   {Dest, [Node|C], R};
-             ({Node, #metadata{clock = Clock}},
-              {{DestNode, #metadata{clock = DestClock}} = Dest, C, R}) when Node  =/= DestNode,
-                                                                            Clock =/= DestClock ->
+             ({Node, #?METADATA{clock = Clock}},
+              {{DestNode, #?METADATA{clock = DestClock}} = Dest, C, R}) when Node  =/= DestNode,
+                                                                             Clock =/= DestClock ->
                   {Dest, C, [Node|R]}
           end, {H, [], []}, ListOfMetadata),
 
@@ -549,7 +549,7 @@ correct_redundancies_2(ListOfMetadata, ErrorNodes) ->
 
 %% correct_redundancies_3/4 - last.
 %%
--spec(correct_redundancies_3(list(), list(), #metadata{}) ->
+-spec(correct_redundancies_3(list(), list(), #?METADATA{}) ->
              ok | {error, any()}).
 correct_redundancies_3([], _, _) ->
     ok;

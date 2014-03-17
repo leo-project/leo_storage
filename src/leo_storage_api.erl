@@ -203,10 +203,10 @@ attach(SystemConf) ->
 synchronize(Node) ->
     leo_storage_mq_client:publish(?QUEUE_TYPE_RECOVERY_NODE, Node).
 
--spec(synchronize(list() | string(), #metadata{} | atom()) ->
+-spec(synchronize(list() | string(), #?METADATA{} | atom()) ->
              ok | {error, any()}).
-synchronize(InconsistentNodes, #metadata{addr_id = AddrId,
-                                         key     = Key}) ->
+synchronize(InconsistentNodes, #?METADATA{addr_id = AddrId,
+                                          key     = Key}) ->
     leo_storage_handler_object:replicate(InconsistentNodes, AddrId, Key);
 
 synchronize(Key, ErrorType) ->

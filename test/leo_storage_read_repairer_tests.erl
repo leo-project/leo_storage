@@ -32,16 +32,16 @@
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 
 -define(TEST_KEY_1, <<"air/on/g/string/music.png">>).
--define(TEST_META_1, #metadata{key       = ?TEST_KEY_1,
-                               addr_id   = 1,
-                               clock     = 9,
-                               timestamp = 8,
-                               checksum  = 7}).
--define(TEST_META_2, #metadata{key       = ?TEST_KEY_1,
-                               addr_id   = 1,
-                               clock     = 7,
-                               timestamp = 8,
-                               checksum  = 7}).
+-define(TEST_META_1, #?METADATA{key       = ?TEST_KEY_1,
+                                addr_id   = 1,
+                                clock     = 9,
+                                timestamp = 8,
+                                checksum  = 7}).
+-define(TEST_META_2, #?METADATA{key       = ?TEST_KEY_1,
+                                addr_id   = 1,
+                                clock     = 7,
+                                timestamp = 8,
+                                checksum  = 7}).
 
 %%--------------------------------------------------------------------
 %% TEST FUNCTIONS
