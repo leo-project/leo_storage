@@ -31,7 +31,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -export([start_link/0, start_link/1, stop/1,
-         stack/2, stack/3, store/2,
+         defer_stack/1, stack/1, stack/2, store/2,
          gen_id/0, gen_id/1]).
 -export([handle_send/3,
          handle_fail/2]).
@@ -69,15 +69,26 @@ stop(Id) ->
 
 %% @doc Stack a object into the ordning&reda
 %%
--spec(stack(#?METADATA{}, binary()) ->
+-spec(defer_stack(null | #?OBJECT{}) ->
              ok | {error, any()}).
-stack(Metadata, Object) ->
-    stack([], Metadata, Object).
+defer_stack(#?OBJECT{} = _Object) ->
+    %% @TODO - Check whether stack an object or not
+    ok;
+defer_stack(_) ->
+    ok.
 
--spec(stack(string(), #?METADATA{}, binary()) ->
+
+%% @doc Stack a object into the ordning&reda
+%%
+-spec(stack(#?OBJECT{}) ->
              ok | {error, any()}).
-stack(ClusterId, Metadata, Object) ->
-    stack_fun(ClusterId, Metadata, Object).
+stack(Object) ->
+    stack([], Object).
+
+-spec(stack(string(), #?OBJECT{}) ->
+             ok | {error, any()}).
+stack(ClusterId, Object) ->
+    stack_fun(ClusterId, Object).
 
 
 %% Store stacked objects
@@ -159,17 +170,14 @@ handle_fail(UId, [{AddrId, Key}|Rest] = _StackInfo) ->
 %%--------------------------------------------------------------------
 %% @doc Stack an object into "ordning-reda"
 %% @private
--spec(stack_fun(string(), #?METADATA{}, binary()) ->
+-spec(stack_fun(string(), #?OBJECT{}) ->
              ok | {error, any()}).
-stack_fun(ClusterId, #?METADATA{addr_id = AddrId,
-                                key = Key} = Metadata, Object) ->
-    MetaBin  = term_to_binary(Metadata),
-    MetaSize = byte_size(MetaBin),
-    ObjSize  = byte_size(Object),
-    Data = << MetaSize:?DEF_BIN_META_SIZE, MetaBin/binary,
-              ObjSize:?DEF_BIN_OBJ_SIZE,   Object/binary,
-              ?DEF_BIN_PADDING/binary >>,
-
+stack_fun(ClusterId, #?OBJECT{addr_id = AddrId,
+                              key     = Key} = Object) ->
+    ObjBin  = term_to_binary(Object),
+    ObjSize = byte_size(ObjBin),
+    Data    = << ObjSize:?DEF_BIN_OBJ_SIZE, ObjBin/binary,
+                 ?DEF_BIN_PADDING/binary >>,
     UId = case ClusterId of
               [] -> gen_id();
               _  -> gen_id({cluster_id, ClusterId})
@@ -203,15 +211,15 @@ slice_and_replicate(ClusterId, StackedObjs) ->
     %% Retrieve a metadata and an object from stacked objects,
     %% then replicate an object into the storage cluster
     case slice(StackedObjs) of
-        {ok, Metadata, Object, StackedObjs_1} ->
-            case replicate(ClusterId, Metadata, Object) of
+        {ok, Object, StackedObjs_1} ->
+            case replicate(ClusterId, Object) of
                 ok ->
                     ok;
                 {error, Cause} ->
                     %% Enqueue the fail message
                     %%
                     ?warn("slice_and_replicate/1","key:~s, cause:~p",
-                          [binary_to_list(Metadata#?METADATA.key), Cause])
+                          [binary_to_list(Object#?OBJECT.key), Cause])
             end,
             slice_and_replicate(ClusterId, StackedObjs_1);
         {error, Cause}->
@@ -221,35 +229,34 @@ slice_and_replicate(ClusterId, StackedObjs) ->
 %% @private
 slice(StackedObjs) ->
     try
-        %% Retrieve metadata
-        <<MetaSize:?DEF_BIN_META_SIZE, Rest_1/binary>> = StackedObjs,
-        MetaBin  = binary:part(Rest_1, {0, MetaSize}),
-        Rest_2   = binary:part(Rest_1, {MetaSize, byte_size(Rest_1) - MetaSize}),
-        Metadata = binary_to_term(MetaBin),
-
         %% Retrieve object
-        <<ObjSize:?DEF_BIN_OBJ_SIZE, Rest_3/binary>> = Rest_2,
-        Object = binary:part(Rest_3, {0, ObjSize}),
-        Rest_4 = binary:part(Rest_3, {ObjSize, byte_size(Rest_3) - ObjSize}),
+        << ObjSize:?DEF_BIN_OBJ_SIZE, Rest_1/binary >> = StackedObjs,
+        ObjBin = binary:part(Rest_1, {0, ObjSize}),
+
+        Object = binary_to_term(ObjBin),
+        Rest_2 = binary:part(Rest_1, {ObjSize, byte_size(Rest_1) - ObjSize}),
 
         %% Retrieve footer
-        <<_Fotter:64, Rest_5/binary>> = Rest_4,
-        {ok, Metadata, Object, Rest_5}
+        <<_Fotter:64, Rest_3/binary>> = Rest_2,
+        {ok, Object, Rest_3}
     catch
         _:Cause ->
             ?error("slice/1", "cause:~p",[Cause]),
             {error, invalid_format}
     end.
 
+
+%% @doc Replicate an object between clusters
 %% @private
-replicate(ClusterId, Metadata, Object) ->
+-spec(replicate(string(), #?OBJECT{}) ->
+             ok | {error, any()}).
+replicate(ClusterId, Object) ->
     %% Retrieve redundancies of the cluster,
     %% then overwrite 'n' and 'w' for the mdc-replication
     case leo_mdcr_tbl_cluster_info:get(ClusterId) of
         {ok, #?CLUSTER_INFO{num_of_dc_replicas = NumOfReplicas}} ->
-            %% @TODO - set method
-            leo_storage_handler_object:replicate(
-              put, ClusterId, NumOfReplicas, Metadata, Object);
+            leo_storage_handler_object:replicate(Object#?OBJECT{cluster_id = ClusterId,
+                                                                num_of_replicas = NumOfReplicas});
         {error, Cause} ->
             {error, Cause}
     end.

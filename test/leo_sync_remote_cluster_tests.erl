@@ -138,11 +138,13 @@ stack(ClusterId, Index) ->
     Size   = erlang:phash2(leo_date:now(), 512) + 64,
     Key    = list_to_binary(lists:append(["test/photo/leo/", integer_to_list(Index)])),
     Meta   = #?METADATA{addr_id = AddrId, key = Key, dsize = Size, ksize = byte_size(Key)},
-    Object = crypto:rand_bytes(Size),
+    Object_1 = leo_object_storage_transformer:metadata_to_object(Meta),
+    Object_2 = Object_1#?OBJECT{method = put,
+                                data = crypto:rand_bytes(Size)},
 
     case ClusterId of
-        [] -> ok = leo_sync_remote_cluster:stack(Meta, Object);
-        _  -> ok = leo_sync_remote_cluster:stack(ClusterId, Meta, Object)
+        [] -> ok = leo_sync_remote_cluster:stack(Object_2);
+        _  -> ok = leo_sync_remote_cluster:stack(ClusterId, Object_2)
     end,
     stack(ClusterId, Index - 1).
 

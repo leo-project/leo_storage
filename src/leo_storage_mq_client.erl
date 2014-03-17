@@ -336,10 +336,10 @@ handle_call({consume, ?QUEUE_ID_SYNC_OBJ_WITH_DC, MessageBin}) ->
                                    addr_id = AddrId,
                                    key = Key} ->
             Ret = case leo_storage_handler_object:get(AddrId, Key, -1) of
-                      {ok, Metadata, ObjBin} ->
+                      {ok,_Metadata, Object} ->
                           case ClusterId of
-                              [] -> leo_sync_remote_cluster:stack(Metadata, ObjBin);
-                              _  -> leo_sync_remote_cluster:stack(ClusterId, Metadata, ObjBin)
+                              [] -> leo_sync_remote_cluster:stack(Object);
+                              _  -> leo_sync_remote_cluster:stack(ClusterId, Object)
                           end;
                       not_found ->
                           ok;

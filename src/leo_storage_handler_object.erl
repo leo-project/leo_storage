@@ -40,7 +40,7 @@
          put/1, put/2, put/3,
          delete/1, delete/2,
          head/2,
-         replicate/3, replicate/5,
+         replicate/1, replicate/3,
          prefix_search/3, prefix_search_and_remove_objects/1,
          find_uploaded_objects_by_key/1
         ]).
@@ -355,6 +355,38 @@ head_1([_|Rest], AddrId, Key) ->
 %%--------------------------------------------------------------------
 %% API - COPY/STACK-SEND/RECEIVE-STORE
 %%--------------------------------------------------------------------
+%% @doc Replicate an object, which is requested from remote-cluster
+%%
+-spec(replicate(#?OBJECT{}) ->
+             {ok, atom()} | {error, any()}).
+replicate(Object) ->
+    %% Transform an object to a metadata
+    Metadata = leo_object_storage_transformer:object_to_metadata(Object),
+    Method = Object#?OBJECT.method,
+    NumOfReplicas = Object#?OBJECT.num_of_replicas,
+    AddrId = Metadata#?METADATA.addr_id,
+
+    %% Retrieve redudancies
+    case leo_redundant_manager_api:get_redundancies_by_addr_id(AddrId) of
+        {ok, #redundancies{nodes = Redundancies,
+                           w = WriteQuorum,
+                           d = DeleteQuorum}} ->
+            %% Replicate an object into the storage cluster
+            Redundancies_1 = lists:sublist(Redundancies, NumOfReplicas),
+            Quorum_1 = ?quorum(Method, WriteQuorum, DeleteQuorum),
+            Quorum_2 = case (NumOfReplicas < Quorum_1) of
+                           true when NumOfReplicas =< 1 -> 1;
+                           true  -> NumOfReplicas - 1;
+                           false -> Quorum_1
+                       end,
+
+            leo_storage_replicator:replicate(
+              Method, Quorum_2, Redundancies_1, Object, replicate_callback());
+        {error, Cause} ->
+            {error, Cause}
+    end.
+
+
 %% @doc Replicate an object from local to remote
 %%
 -spec(replicate(list(), integer(), string()) ->
@@ -379,56 +411,6 @@ replicate(DestNodes, AddrId, Key) ->
             end;
         Error ->
             Error
-    end.
-
-
-%% @doc Replicate an object, which is requested from remote-cluster
-%%
--spec(replicate(put|delete, string(), pos_integer(), #?METADATA{}, binary()) ->
-             {ok, atom()} | {error, any()}).
-replicate(Method, ClusterId, NumOfReplicas, Metadata, ObjBin) ->
-    AddrId = Metadata#?METADATA.addr_id,
-    Key    = Metadata#?METADATA.key,
-    KSize  = Metadata#?METADATA.ksize,
-    DSize  = Metadata#?METADATA.dsize,
-    CSize  = Metadata#?METADATA.csize,
-    CNum   = Metadata#?METADATA.cnumber,
-    CIndex = Metadata#?METADATA.cindex,
-    DelFlg = Metadata#?METADATA.del,
-
-    %% Retrieve redudancies
-    %%
-    case leo_redundant_manager_api:get_redundancies_by_addr_id(AddrId) of
-        {ok, #redundancies{nodes = Redundancies,
-                           w = WriteQuorum,
-                           d = DeleteQuorum}} ->
-            %% Replicate an object into the storage cluster
-            %%
-            CustomMetaBin = term_to_binary([{'cluster_id', ClusterId},
-                                            {'num_of_replicas', NumOfReplicas}]),
-            Object = #?OBJECT{method  = Method,
-                              key     = Key,
-                              addr_id = AddrId,
-                              data    = ObjBin,
-                              meta    = CustomMetaBin,
-                              ksize   = KSize,
-                              dsize   = DSize,
-                              msize   = byte_size(CustomMetaBin),
-                              csize   = CSize,
-                              cnumber = CNum,
-                              cindex  = CIndex,
-                              del     = DelFlg},
-            Redundancies_1 = lists:sublist(Redundancies, NumOfReplicas),
-            Quorum_1 = ?quorum(Method, WriteQuorum, DeleteQuorum),
-            Quorum_2 = case (NumOfReplicas < Quorum_1) of
-                           true when NumOfReplicas =< 1 -> 1;
-                           true  -> NumOfReplicas - 1;
-                           false -> Quorum_1
-                       end,
-            leo_storage_replicator:replicate(
-              Method, Quorum_2, Redundancies_1, Object, fun replicate_callback/1);
-        {error, Cause} ->
-            {error, Cause}
     end.
 
 
@@ -704,11 +686,9 @@ replicate_fun(?REP_LOCAL, Method, AddrId, Object) ->
                            d         = DeleteQuorum,
                            ring_hash = RingHash}} ->
             leo_storage_replicator:replicate(
-              Method,
-              ?quorum(Method, WriteQuorum, DeleteQuorum),
-              Redundancies,
-              Object#?OBJECT{ring_hash = RingHash},
-              fun replicate_callback/1);
+              Method, ?quorum(Method, WriteQuorum, DeleteQuorum),
+              Redundancies, Object#?OBJECT{ring_hash = RingHash},
+              replicate_callback(Object));
         _Error ->
             {error, ?ERROR_META_NOT_FOUND}
     end;
@@ -718,13 +698,12 @@ replicate_fun(_,_,_,_) ->
 %% @doc obj-replication request from remote node.
 %%
 replicate_fun(?REP_REMOTE, Method, Object) ->
-    Ref  = make_ref(),
-    Ret0 = case Method of
-               ?CMD_PUT    -> ?MODULE:put(Object, Ref);
-               ?CMD_DELETE -> ?MODULE:delete(Object, Ref)
-           end,
-
-    case Ret0 of
+    Ref = make_ref(),
+    Ret = case Method of
+              ?CMD_PUT    -> ?MODULE:put(Object, Ref);
+              ?CMD_DELETE -> ?MODULE:delete(Object, Ref)
+          end,
+    case Ret of
         %% Put
         {ok, Ref, ETag} ->
             {ok, ETag};
@@ -740,15 +719,28 @@ replicate_fun(?REP_REMOTE, Method, Object) ->
 replicate_fun(_,_,_) ->
     {error, badarg}.
 
+
+%% @doc Being callback, after executed replication of an object
 %% @private
-replicate_callback({ok, ?CMD_PUT, ETag}) ->
-    {ok, ETag};
-replicate_callback({ok, ?CMD_DELETE,_ETag}) ->
-    ok;
-replicate_callback({error, Cause}) ->
-    case lists:keyfind(not_found, 2, Cause) of
-        false ->
-            {error, ?ERROR_REPLICATE_FAILURE};
-        _ ->
-            {error, not_found}
+-spec(replicate_callback() ->
+             function()).
+replicate_callback() ->
+    replicate_callback(null).
+
+-spec(replicate_callback(#?OBJECT{}) ->
+             function()).
+replicate_callback(Object) ->
+    fun({ok, ?CMD_PUT, ETag}) ->
+            ok = leo_sync_remote_cluster:defer_stack(Object),
+            {ok, ETag};
+       ({ok,?CMD_DELETE,_ETag}) ->
+            ok = leo_sync_remote_cluster:defer_stack(Object),
+            ok;
+       ({error, Cause}) ->
+            case lists:keyfind(not_found, 2, Cause) of
+                false ->
+                    {error, ?ERROR_REPLICATE_FAILURE};
+                _ ->
+                    {error, not_found}
+            end
     end.

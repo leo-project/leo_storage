@@ -321,7 +321,8 @@
 %% Retrieve a quorum bv a method
 -define(quorum(_Method,_W,_D), case _Method of
                                    ?CMD_PUT    -> _W;
-                                   ?CMD_DELETE -> _D
+                                   ?CMD_DELETE -> _D;
+                                   _ -> _W
                                end).
 
 %% For Multi-DC Replication
