@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012-2013 Rakuten, Inc.
+%% Copyright (c) 2012-2014 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -608,7 +608,7 @@ rebalance_2({ok, Redundancies}, #rebalance_message{node = Node,
                                                    key     = Key}) ->
     case find_node_from_redundancies(Redundancies, erlang:node()) of
         true ->
-            case leo_storage_handler_object:copy([Node], AddrId, Key) of
+            case leo_storage_handler_object:replicate([Node], AddrId, Key) of
                 ok ->
                     ok;
                 Error ->

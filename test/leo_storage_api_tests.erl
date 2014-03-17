@@ -193,7 +193,7 @@ attach_(_) ->
 
 synchronize_([Node0, _]) ->
     meck:new(leo_storage_handler_object),
-    meck:expect(leo_storage_handler_object, copy,
+    meck:expect(leo_storage_handler_object, replicate,
                 fun(_Nodes, _AddrId, _Key) ->
                         ok
                 end),

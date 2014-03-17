@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012-2013 Rakuten, Inc.
+%% Copyright (c) 2012-2014 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -207,7 +207,7 @@ synchronize(Node) ->
              ok | {error, any()}).
 synchronize(InconsistentNodes, #metadata{addr_id = AddrId,
                                          key     = Key}) ->
-    leo_storage_handler_object:copy(InconsistentNodes, AddrId, Key);
+    leo_storage_handler_object:replicate(InconsistentNodes, AddrId, Key);
 
 synchronize(Key, ErrorType) ->
     {ok, #redundancies{vnode_id_to = VNodeId}} = leo_redundant_manager_api:get_redundancies_by_key(Key),

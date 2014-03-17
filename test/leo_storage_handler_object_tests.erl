@@ -667,7 +667,7 @@ copy_({Node0, Node1}) ->
     meck:new(leo_metrics_req),
     meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
-    Res1 = leo_storage_handler_object:copy([Node1, Node1], 0, ?TEST_KEY_0),
+    Res1 = leo_storage_handler_object:replicate([Node1, Node1], 0, ?TEST_KEY_0),
     ?assertEqual(ok, Res1),
 
     %% 2. for DELETE
@@ -683,7 +683,7 @@ copy_({Node0, Node1}) ->
                         {ok, ?TEST_META_1, #object{}}
                 end),
 
-    Res2 = leo_storage_handler_object:copy([Node1, Node1], 0, ?TEST_KEY_0),
+    Res2 = leo_storage_handler_object:replicate([Node1, Node1], 0, ?TEST_KEY_0),
     ?assertEqual(ok, Res2),
     ok.
 

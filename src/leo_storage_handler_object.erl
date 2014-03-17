@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012-2013 Rakuten, Inc.
+%% Copyright (c) 2012-2014 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -40,7 +40,7 @@
          put/1, put/2, put/3, put/5,
          delete/1, delete/2,
          head/2,
-         copy/3,
+         replicate/3,
          prefix_search/3, prefix_search_and_remove_objects/1,
          find_uploaded_objects_by_key/1
         ]).
@@ -166,7 +166,7 @@ get_fun(AddrId, Key, StartPos, EndPos) ->
              {ok, atom()} | {error, any()}).
 put(Object) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
-    replicate(?REP_REMOTE, ?CMD_PUT, Object).
+    replicate_fun(?REP_REMOTE, ?CMD_PUT, Object).
 
 %% @doc Insert an object (request from gateway).
 %%
@@ -174,10 +174,10 @@ put(Object) ->
              ok | {error, any()}).
 put(Object, ReqId) when is_integer(ReqId)  ->
     ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
-    replicate(?REP_LOCAL, ?CMD_PUT, Object#object.addr_id,
-              Object#object{method = ?CMD_PUT,
-                            clock  = leo_date:clock(),
-                            req_id = ReqId});
+    replicate_fun(?REP_LOCAL, ?CMD_PUT, Object#object.addr_id,
+                  Object#object{method = ?CMD_PUT,
+                                clock  = leo_date:clock(),
+                                req_id = ReqId});
 
 put(Object, Ref) when is_reference(Ref) ->
     AddrId = Object#object.addr_id,
@@ -218,7 +218,7 @@ put(_,_) ->
              {ok, atom()} | {error, any()}).
 put(From, Object, ReqId) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
-    case replicate(?REP_REMOTE, ?CMD_PUT, Object) of
+    case replicate_fun(?REP_REMOTE, ?CMD_PUT, Object) of
         {ok, ETag} ->
             erlang:send(From, {ok, ETag});
 
@@ -324,7 +324,7 @@ delete_chunked_objects(CIndex, ParentKey) ->
              ok | {error, any()}).
 delete(Object) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
-    replicate(?REP_REMOTE, ?CMD_DELETE, Object).
+    replicate_fun(?REP_REMOTE, ?CMD_DELETE, Object).
 
 %% @doc Remova an object (request from gateway)
 %%
@@ -332,13 +332,13 @@ delete(Object) ->
              ok | {error, any()}).
 delete(Object, ReqId) when is_integer(ReqId) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
-    replicate(?REP_LOCAL, ?CMD_DELETE,
-              Object#object.addr_id, Object#object{method   = ?CMD_DELETE,
-                                                   data     = <<>>,
-                                                   dsize    = 0,
-                                                   clock    = leo_date:clock(),
-                                                   req_id   = ReqId,
-                                                   del      = ?DEL_TRUE});
+    replicate_fun(?REP_LOCAL, ?CMD_DELETE,
+                  Object#object.addr_id, Object#object{method   = ?CMD_DELETE,
+                                                       data     = <<>>,
+                                                       dsize    = 0,
+                                                       clock    = leo_date:clock(),
+                                                       req_id   = ReqId,
+                                                       del      = ?DEL_TRUE});
 
 delete(Object, Ref) when is_reference(Ref) ->
     AddrId = Object#object.addr_id,
@@ -405,11 +405,11 @@ head_1([_|Rest], AddrId, Key) ->
 %%--------------------------------------------------------------------
 %% API - COPY/STACK-SEND/RECEIVE-STORE
 %%--------------------------------------------------------------------
-%% @doc copy an object.
+%% @doc Replicate an object from local to remote
 %%
--spec(copy(list(), integer(), string()) ->
+-spec(replicate(list(), integer(), string()) ->
              ok | not_found | {error, any()}).
-copy(DestNodes, AddrId, Key) ->
+replicate(DestNodes, AddrId, Key) ->
     Ref = make_ref(),
 
     case leo_object_storage_api:head({AddrId, Key}) of
@@ -695,9 +695,9 @@ read_and_repair_1(_,_,_) ->
 
 %% @doc Replicate an object from local-node to remote node
 %% @private
--spec(replicate(replication(), put | delete, integer(), #object{}) ->
+-spec(replicate_fun(replication(), put | delete, integer(), #object{}) ->
              ok | {error, any()}).
-replicate(?REP_LOCAL, Method, AddrId, Object) ->
+replicate_fun(?REP_LOCAL, Method, AddrId, Object) ->
     case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
         {ok, #redundancies{nodes     = Redundancies,
                            w         = WriteQuorum,
@@ -712,27 +712,12 @@ replicate(?REP_LOCAL, Method, AddrId, Object) ->
         _Error ->
             {error, ?ERROR_META_NOT_FOUND}
     end;
-replicate(_,_,_,_) ->
+replicate_fun(_,_,_,_) ->
     {error, badarg}.
-
-
-%% @private
-replicate_callback({ok, ?CMD_PUT, ETag}) ->
-    {ok, ETag};
-replicate_callback({ok, ?CMD_DELETE,_ETag}) ->
-    ok;
-replicate_callback({error, Cause}) ->
-    case lists:keyfind(not_found, 2, Cause) of
-        false ->
-            {error, ?ERROR_REPLICATE_FAILURE};
-        _ ->
-            {error, not_found}
-    end.
-
 
 %% @doc obj-replication request from remote node.
 %%
-replicate(?REP_REMOTE, Method, Object) ->
+replicate_fun(?REP_REMOTE, Method, Object) ->
     Ref  = make_ref(),
     Ret0 = case Method of
                ?CMD_PUT    -> ?MODULE:put(Object, Ref);
@@ -749,8 +734,21 @@ replicate(?REP_REMOTE, Method, Object) ->
         {error, Ref, not_found} ->
             {error, not_found};
         {error, Ref, Cause} ->
-            ?warn("replicate/3", "cause:~p", [Cause]),
+            ?warn("replicate_fun/3", "cause:~p", [Cause]),
             {error, Cause}
     end;
-replicate(_,_,_) ->
+replicate_fun(_,_,_) ->
     {error, badarg}.
+
+%% @private
+replicate_callback({ok, ?CMD_PUT, ETag}) ->
+    {ok, ETag};
+replicate_callback({ok, ?CMD_DELETE,_ETag}) ->
+    ok;
+replicate_callback({error, Cause}) ->
+    case lists:keyfind(not_found, 2, Cause) of
+        false ->
+            {error, ?ERROR_REPLICATE_FAILURE};
+        _ ->
+            {error, not_found}
+    end.
