@@ -181,10 +181,10 @@ attach_(_) ->
                 end),
 
     ok = leo_storage_api:attach(#?SYSTEM_CONF{n = 3,
-                                             r = 1,
-                                             w = 2,
-                                             d = 2,
-                                             bit_of_ring = 128}),
+                                              r = 1,
+                                              w = 2,
+                                              d = 2,
+                                              bit_of_ring = 128}),
     Res = meck:history(leo_redundant_manager_api),
     ?assertEqual(1, length(Res)),
 
@@ -193,7 +193,7 @@ attach_(_) ->
 
 synchronize_([Node0, _]) ->
     meck:new(leo_storage_handler_object),
-    meck:expect(leo_storage_handler_object, copy,
+    meck:expect(leo_storage_handler_object, replicate,
                 fun(_Nodes, _AddrId, _Key) ->
                         ok
                 end),
@@ -216,8 +216,8 @@ synchronize_([Node0, _]) ->
 
     %% 1.
     Key = "air/on/g/string",
-    ok = leo_storage_api:synchronize([Node0], #metadata{addr_id = 0,
-                                                        key = Key}),
+    ok = leo_storage_api:synchronize([Node0], #?METADATA{addr_id = 0,
+                                                         key = Key}),
     Res0 = meck:history(leo_storage_handler_object),
     ?assertEqual(1, length(Res0)),
 

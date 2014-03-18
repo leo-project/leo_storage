@@ -33,67 +33,99 @@
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
--export([replicate/4]).
+-export([replicate/5]).
 
 -type(error_msg_type() :: ?ERR_TYPE_REPLICATE_DATA  |
                           ?ERR_TYPE_DELETE_DATA).
 
--record(req_params, {pid     :: pid(),
-                     addr_id :: integer(),
-                     key     :: string(),
-                     object  :: #object{},
-                     req_id  :: integer()}).
+-record(req_params, {
+          pid     :: pid(),
+          addr_id :: integer(),
+          key     :: binary(),
+          object  :: #?OBJECT{},
+          req_id  :: integer()}).
+
+-record(state, {
+          method       :: atom(),
+          addr_id      :: integer(),
+          key          :: binary(),
+          num_of_nodes :: pos_integer(),
+          callback     :: function(),
+          errors = []  :: list()
+         }).
+
 
 %%--------------------------------------------------------------------
 %% API
 %%--------------------------------------------------------------------
 %% @doc Replicate an object to local-node and remote-nodes.
 %%
--spec(replicate(pos_integer(), list(), #object{}, function()) ->
+-spec(replicate(put|delete, pos_integer(), list(), #?OBJECT{}, function()) ->
              {ok, reference()} | {error, {reference(), any()}}).
-replicate(Quorum, Nodes, Object, Callback) ->
-    AddrId = Object#object.addr_id,
-    Key    = Object#object.key,
-    ReqId  = Object#object.req_id,
+replicate(Method, Quorum, Nodes, Object, Callback) ->
+    AddrId = Object#?OBJECT.addr_id,
+    Key    = Object#?OBJECT.key,
+    ReqId  = Object#?OBJECT.req_id,
     From = self(),
 
-    lists:foreach(
-      fun(#redundant_node{node = Node,
-                          available = true}) when Node == erlang:node() ->
-              spawn(fun() ->
-                            replicate_fun(local, #req_params{pid     = From,
-                                                             addr_id = AddrId,
-                                                             key     = Key,
-                                                             object  = Object,
-                                                             req_id  = ReqId})
-                    end);
-         (#redundant_node{node = Node,
-                          available = true}) ->
-              true = rpc:cast(Node, leo_storage_handler_object, put, [From, Object, ReqId]);
-         (#redundant_node{node = Node,
-                          available = false}) ->
-              erlang:send(From, {error, {Node, nodedown}})
-      end, Nodes),
+    ok = replicate_1(Nodes, From, AddrId, Key, Object, ReqId),
 
-    loop(Quorum, From, AddrId, Key, {length(Nodes), [], []}, Callback).
+    loop(Quorum, From, [], #state{method       = Method,
+                                  addr_id      = AddrId,
+                                  key          = Key,
+                                  num_of_nodes = erlang:length(Nodes),
+                                  callback     = Callback,
+                                  errors       = []}).
+
+%% @private
+replicate_1([],_From,_AddrId,_Key,_Object,_ReqId) ->
+    ok;
+replicate_1([#redundant_node{node = Node,
+                             available = true}|Rest],
+            From, AddrId, Key, Object, ReqId) when Node == erlang:node() ->
+    spawn(fun() ->
+                  replicate_fun(local, #req_params{pid     = From,
+                                                   addr_id = AddrId,
+                                                   key     = Key,
+                                                   object  = Object,
+                                                   req_id  = ReqId})
+          end),
+    replicate_1(Rest, From, AddrId, Key, Object, ReqId);
+
+replicate_1([#redundant_node{node = Node,
+                             available = true}|Rest],
+            From, AddrId, Key, Object, ReqId) ->
+    true = rpc:cast(Node, leo_storage_handler_object, put, [From, Object, ReqId]),
+    replicate_1(Rest, From, AddrId, Key, Object, ReqId);
+
+replicate_1([#redundant_node{node = Node,
+                             available = false}|Rest],
+            From, AddrId, Key, Object, ReqId) ->
+    erlang:send(From, {error, {Node, nodedown}}),
+    replicate_1(Rest, From, AddrId, Key, Object, ReqId).
+
 
 %% @doc Waiting for messages (replication)
-%%
--spec(loop(integer(), function(), integer(), binary(),
-           {integer(), string(), integer(), list()}, function()) ->
-             ok).
-loop(0,_From,_AddrId,_Key, {_NumOfNodes,_ResL,_Errors}, Callback) ->
-    Callback({ok, hd(_ResL)});
-loop(W,_From,_AddrId,_Key, { NumOfNodes,_ResL, Errors}, Callback) when (NumOfNodes - W) < length(Errors) ->
+%% @private
+loop(0,_From, ResL, #state{method = Method,
+                           callback = Callback}) ->
+    Callback({ok, Method, hd(ResL)});
+
+loop(W,_From,_ResL, #state{num_of_nodes = NumOfNodes,
+                           callback = Callback,
+                           errors = Errors}) when (NumOfNodes - W) < length(Errors) ->
     Callback({error, Errors});
 
-loop(W, From, AddrId, Key, { NumOfNodes, ResL, Errors}, Callback) ->
+loop(W, From, ResL, #state{addr_id = AddrId,
+                           key = Key,
+                           callback = Callback,
+                           errors = Errors} = State) ->
     receive
         {ok, Checksum} ->
-            loop(W-1, From, AddrId, Key, {NumOfNodes, [Checksum|ResL], Errors}, Callback);
+            loop(W-1, From, [Checksum|ResL], State);
         {error, {Node, Cause}} ->
             ok = enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
-            loop(W,   From, AddrId, Key, {NumOfNodes, ResL, [{Node, Cause}|Errors]}, Callback)
+            loop(W, From, ResL, State#state{errors = [{Node, Cause}|Errors]})
     after
         ?DEF_REQ_TIMEOUT ->
             case (W >= 0) of

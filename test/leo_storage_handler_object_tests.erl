@@ -44,12 +44,12 @@
 -define(TEST_KEY_0,  <<"air/on/g/string">>).
 -define(TEST_KEY_1,  <<"air/on/g/bach/music">>).
 -define(TEST_BIN,    <<"V">>).
--define(TEST_META_0, #metadata{key   = ?TEST_KEY_0,
-                               dsize = byte_size(?TEST_BIN)}).
--define(TEST_META_1, #metadata{key   = ?TEST_KEY_0,
-                               dsize = byte_size(?TEST_BIN),
-                               del   = 1
-                              }).
+-define(TEST_META_0, #?METADATA{key   = ?TEST_KEY_0,
+                                dsize = byte_size(?TEST_BIN)}).
+-define(TEST_META_1, #?METADATA{key   = ?TEST_KEY_0,
+                                dsize = byte_size(?TEST_BIN),
+                                del   = 1
+                               }).
 
 
 object_handler_test_() ->
@@ -146,7 +146,7 @@ get_a1_({Node0, Node1}) ->
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, get,
                 fun(_Key, _StartPos, _EndPos) ->
-                        {ok, ?TEST_META_0, #object{}}
+                        {ok, ?TEST_META_0, #?OBJECT{}}
                 end),
 
     meck:new(leo_metrics_req),
@@ -262,7 +262,7 @@ get_b2_({Node0, _Node1}) ->
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, get,
                 fun(_Key, _StartPos, _EndPos) ->
-                        {ok, ?TEST_META_0, #object{data = <<"leofs">>}}
+                        {ok, ?TEST_META_0, #?OBJECT{data = <<"leofs">>}}
                 end),
 
     %% leo_storage_read_repairer
@@ -302,7 +302,7 @@ get_b3_({Node0, Node1}) ->
 
     %% leo_object_storage_api
     Fun2 = fun(_Key, _StartPos, _EndPos) ->
-                   {ok, ?TEST_META_0, #object{data = ?TEST_BIN}}
+                   {ok, ?TEST_META_0, #?OBJECT{data = ?TEST_BIN}}
            end,
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, get, Fun2),
@@ -361,7 +361,7 @@ get_c0_({Node0, Node1}) ->
                    not_found
            end,
     Fun3 = fun(_Key) ->
-                   {ok, term_to_binary(#metadata{checksum = Checksum0})}
+                   {ok, term_to_binary(#?METADATA{checksum = Checksum0})}
            end,
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, get,  Fun2),
@@ -410,7 +410,7 @@ put_0_({Node0, Node1}) ->
 
     meck:new(leo_storage_replicator),
     meck:expect(leo_storage_replicator, replicate,
-                fun(_Quorum,_Redundancies,_ObjectPool,_Callback) ->
+                fun(_Method,_Quorum,_Redundancies,_ObjectPool,_Callback) ->
                         {ok, {etag, 1}}
                 end),
 
@@ -420,14 +420,14 @@ put_0_({Node0, Node1}) ->
     meck:new(leo_metrics_req),
     meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
-    Object = #object{method    = ?CMD_PUT,
-                     addr_id   = AddrId,
-                     key       = Key,
-                     data      = Bin,
-                     dsize     = Size,
-                     req_id    = ReqId,
-                     timestamp = Timestamp,
-                     del       = 0},
+    Object = #?OBJECT{method    = ?CMD_PUT,
+                      addr_id   = AddrId,
+                      key       = Key,
+                      data      = Bin,
+                      dsize     = Size,
+                      req_id    = ReqId,
+                      timestamp = Timestamp,
+                      del       = 0},
     {ok, _Checksum} = leo_storage_handler_object:put(Object, 0),
     ok.
 
@@ -440,7 +440,7 @@ put_1_({_Node0, _Node1}) ->
                 end),
 
     Ref = make_ref(),
-    {ok, Ref, _Etag} = leo_storage_handler_object:put(#object{}, Ref),
+    {ok, Ref, _Etag} = leo_storage_handler_object:put(#?OBJECT{}, Ref),
     ok.
 
 %% put/1
@@ -448,7 +448,7 @@ put_2_(_) ->
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, head,
                 fun(_Key) ->
-                        {ok, term_to_binary(#metadata{checksum = 12345})}
+                        {ok, term_to_binary(#?METADATA{checksum = 12345})}
                 end),
     meck:expect(leo_object_storage_api, put,
                 fun(_Key, _Object) ->
@@ -458,7 +458,7 @@ put_2_(_) ->
     meck:new(leo_metrics_req),
     meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
-    Object = #object{key = ?TEST_KEY_0},
+    Object = #?OBJECT{key = ?TEST_KEY_0},
     Res = leo_storage_handler_object:put(Object),
     ?assertEqual({ok, {etag, 1}}, Res),
     ok.
@@ -487,7 +487,7 @@ delete_0_({Node0, Node1}) ->
 
     meck:new(leo_storage_replicator),
     meck:expect(leo_storage_replicator, replicate,
-                fun(_Quorum,_Redundancies,_ObjectPool,_Callback) ->
+                fun(_Method,_Quorum,_Redundancies,_ObjectPool,_Callback) ->
                         ok
                 end),
     ok = rpc:call(Node1, meck, new,    [leo_metrics_req, [no_link]]),
@@ -496,14 +496,14 @@ delete_0_({Node0, Node1}) ->
     meck:new(leo_metrics_req),
     meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
-    Object = #object{method    = ?CMD_DELETE,
-                     addr_id   = AddrId,
-                     key       = Key,
-                     data      = <<>>,
-                     dsize     = 0,
-                     req_id    = ReqId,
-                     timestamp = Timestamp,
-                     del       = 1},
+    Object = #?OBJECT{method    = ?CMD_DELETE,
+                      addr_id   = AddrId,
+                      key       = Key,
+                      data      = <<>>,
+                      dsize     = 0,
+                      req_id    = ReqId,
+                      timestamp = Timestamp,
+                      del       = 1},
     Res = leo_storage_handler_object:delete(Object, 0),
     ?assertEqual(ok, Res),
     ok.
@@ -516,7 +516,7 @@ delete_1_({_Node0, _Node1}) ->
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, head,
                 fun(_Key) ->
-                        {ok, #metadata{del = ?DEL_TRUE}}
+                        {ok, #?METADATA{del = ?DEL_TRUE}}
                 end),
     meck:expect(leo_object_storage_api, delete,
                 fun(_Key, _) ->
@@ -525,10 +525,10 @@ delete_1_({_Node0, _Node1}) ->
     meck:new(leo_metrics_req),
     meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
-    Res = leo_storage_handler_object:delete(#object{key      = ?TEST_KEY_0,
-                                                    addr_id  = 0,
-                                                    checksum = Checksum,
-                                                    clock    = Clock}),
+    Res = leo_storage_handler_object:delete(#?OBJECT{key      = ?TEST_KEY_0,
+                                                     addr_id  = 0,
+                                                     checksum = Checksum,
+                                                     clock    = Clock}),
     ?assertEqual(ok, Res),
     ok.
 
@@ -540,8 +540,8 @@ delete_2_({_Node0, _Node1}) ->
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, head,
                 fun(_Key) ->
-                        {ok, #metadata{checksum = Checksum0,
-                                       clock    = Clock0}}
+                        {ok, #?METADATA{checksum = Checksum0,
+                                        clock    = Clock0}}
                 end),
     meck:expect(leo_object_storage_api, delete,
                 fun(_Key, _ObjPool) ->
@@ -550,10 +550,10 @@ delete_2_({_Node0, _Node1}) ->
     meck:new(leo_metrics_req),
     meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
-    Res = leo_storage_handler_object:delete(#object{key      = ?TEST_KEY_0,
-                                                    addr_id  = 0,
-                                                    checksum = Checksum1,
-                                                    clock    = Clock1}),
+    Res = leo_storage_handler_object:delete(#?OBJECT{key      = ?TEST_KEY_0,
+                                                     addr_id  = 0,
+                                                     checksum = Checksum1,
+                                                     clock    = Clock1}),
     ?assertEqual(ok, Res),
     ok.
 
@@ -573,7 +573,7 @@ head_({Node0, Node1}) ->
                 fun(get, _AddrId) ->
                         {ok, #redundancies{id = 0,
                                            nodes = [#redundant_node{node = Node0,
-                                                                     available = true},
+                                                                    available = true},
                                                     #redundant_node{node = Node1,
                                                                     available = true}],
                                            n = 2, r = 1, w = 1, d = 1}}
@@ -594,7 +594,7 @@ head_({Node0, Node1}) ->
                 fun(get, _AddrId) ->
                         {ok, #redundancies{id = 0,
                                            nodes = [#redundant_node{node = Node0,
-                                                                     available = true},
+                                                                    available = true},
                                                     #redundant_node{node = Node1,
                                                                     available = true}],
                                            n = 2, r = 1, w = 1, d = 1}}
@@ -610,7 +610,7 @@ head_({Node0, Node1}) ->
                 fun(get, _AddrId) ->
                         {ok, #redundancies{id = 0,
                                            nodes = [#redundant_node{node = Node0,
-                                                                     available = false},
+                                                                    available = false},
                                                     #redundant_node{node = Node1,
                                                                     available = true}],
                                            n = 2, r = 1, w = 1, d = 1}}
@@ -638,7 +638,7 @@ copy_({Node0, Node1}) ->
                 end),
     meck:expect(leo_object_storage_api, get,
                 fun(_Key, _StartPos, _EndPos) ->
-                        {ok, ?TEST_META_0, #object{}}
+                        {ok, ?TEST_META_0, #?OBJECT{}}
                 end),
 
     %% Retrieve object from get-func
@@ -667,7 +667,7 @@ copy_({Node0, Node1}) ->
     meck:new(leo_metrics_req),
     meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
-    Res1 = leo_storage_handler_object:copy([Node1, Node1], 0, ?TEST_KEY_0),
+    Res1 = leo_storage_handler_object:replicate([Node1, Node1], 0, ?TEST_KEY_0),
     ?assertEqual(ok, Res1),
 
     %% 2. for DELETE
@@ -680,10 +680,10 @@ copy_({Node0, Node1}) ->
                 end),
     meck:expect(leo_object_storage_api, get,
                 fun(_Key, _StartPos, _EndPos) ->
-                        {ok, ?TEST_META_1, #object{}}
+                        {ok, ?TEST_META_1, #?OBJECT{}}
                 end),
 
-    Res2 = leo_storage_handler_object:copy([Node1, Node1], 0, ?TEST_KEY_0),
+    Res2 = leo_storage_handler_object:replicate([Node1, Node1], 0, ?TEST_KEY_0),
     ?assertEqual(ok, Res2),
     ok.
 
@@ -692,9 +692,9 @@ prefix_search_({_Node0, _Node1}) ->
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, fetch_by_key,
                 fun(_ParentDir, Fun) ->
-                        Fun(?TEST_KEY_0, term_to_binary(#metadata{}), []),
-                        Fun(?TEST_DIR_0, term_to_binary(#metadata{}), [#metadata{key=?TEST_KEY_0}]),
-                        Fun(?TEST_KEY_1, term_to_binary(#metadata{}), [#metadata{key=?TEST_KEY_0}])
+                        Fun(?TEST_KEY_0, term_to_binary(#?METADATA{}), []),
+                        Fun(?TEST_DIR_0, term_to_binary(#?METADATA{}), [#?METADATA{key=?TEST_KEY_0}]),
+                        Fun(?TEST_KEY_1, term_to_binary(#?METADATA{}), [#?METADATA{key=?TEST_KEY_0}])
                 end),
 
     Res = leo_storage_handler_object:prefix_search(?TEST_DIR_0, [], 1000),
@@ -705,11 +705,11 @@ prefix_search_and_remove_objects_(_) ->
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, fetch_by_key,
                 fun(_ParentDir, Fun) ->
-                        Fun(?TEST_KEY_0, term_to_binary(#metadata{}), []),
-                        Fun(?TEST_DIR_0, term_to_binary(#metadata{}), [#metadata{key=?TEST_KEY_0}]),
-                        Fun(?TEST_KEY_1, term_to_binary(#metadata{}), [#metadata{key=?TEST_KEY_0}]),
+                        Fun(?TEST_KEY_0, term_to_binary(#?METADATA{}), []),
+                        Fun(?TEST_DIR_0, term_to_binary(#?METADATA{}), [#?METADATA{key=?TEST_KEY_0}]),
+                        Fun(?TEST_KEY_1, term_to_binary(#?METADATA{}), [#?METADATA{key=?TEST_KEY_0}]),
                         Fun(<< "_", ?TEST_KEY_1/binary >>,
-                            term_to_binary(#metadata{}), [#metadata{key=?TEST_KEY_0}])
+                            term_to_binary(#?METADATA{}), [#?METADATA{key=?TEST_KEY_0}])
                 end),
 
     Res = leo_storage_handler_object:prefix_search_and_remove_objects(?TEST_BUCKET),

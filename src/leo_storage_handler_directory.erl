@@ -68,11 +68,11 @@ find_by_parent_dir(ParentDir, _Delimiter, Marker, MaxKeys) ->
 
     case lists:foldl(fun({ok, List}, Acc0) ->
                              lists:foldl(
-                               fun(#metadata{key = Key} = Meta0, Acc1) ->
+                               fun(#?METADATA{key = Key} = Meta0, Acc1) ->
                                        case lists:keyfind(Key, 2, Acc1) of
                                            false ->
                                                [Meta0|Acc1];
-                                           #metadata{clock = Clock} when Meta0#metadata.clock > Clock ->
+                                           #?METADATA{clock = Clock} when Meta0#?METADATA.clock > Clock ->
                                                Acc2 = lists:keydelete(Key, 2, Acc1),
                                                [Meta0|Acc2];
                                            _ ->

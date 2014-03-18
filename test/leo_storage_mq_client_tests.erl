@@ -24,7 +24,7 @@
 %% @end
 %%====================================================================
 -module(leo_storage_mq_client_tests).
--author('yosuke hara').
+-author('Yosuke Hara').
 
 -include("leo_storage.hrl").
 -include_lib("leo_mq/include/leo_mq.hrl").
@@ -48,16 +48,16 @@
                                                       addr_id  = ?TEST_VNODE_ID,
                                                       key      = ?TEST_KEY_1})).
 
--define(TEST_META_1, #metadata{key       = ?TEST_KEY_1,
-                               addr_id   = 1,
-                               clock     = 9,
-                               timestamp = 8,
-                               checksum  = 7}).
--define(TEST_META_2, #metadata{key       = ?TEST_KEY_1,
-                               addr_id   = 1,
-                               clock     = 8,
-                               timestamp = 7,
-                               checksum  = 5}).
+-define(TEST_META_1, #?METADATA{key       = ?TEST_KEY_1,
+                                addr_id   = 1,
+                                clock     = 9,
+                                timestamp = 8,
+                                checksum  = 7}).
+-define(TEST_META_2, #?METADATA{key       = ?TEST_KEY_1,
+                                addr_id   = 1,
+                                clock     = 8,
+                                timestamp = 7,
+                                checksum  = 5}).
 
 %%--------------------------------------------------------------------
 %% TEST FUNCTIONS
@@ -279,7 +279,7 @@ subscribe_3_({_Test0Node, _Test1Node}) ->
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, fetch_by_addr_id,
                 fun(_FromVNodeId, Fun) ->
-                        Fun(<<"key">>, term_to_binary(#metadata{ring_hash = 0}), []),
+                        Fun(<<"key">>, term_to_binary(#?METADATA{ring_hash = 0}), []),
                         ok
                 end),
     meck:expect(leo_redundant_manager_api, get_member_by_node,

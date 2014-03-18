@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012-2013 Rakuten, Inc.
+%% Copyright (c) 2012-2014 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -42,22 +42,27 @@
 -export([init/0, handle_call/1]).
 
 -define(SLASH, "/").
--define(MSG_PATH_PER_OBJECT,     "1").
--define(MSG_PATH_SYNC_VNODE_ID,  "2").
--define(MSG_PATH_REBALANCE,      "3").
--define(MSG_PATH_ASYNC_DELETION, "4").
--define(MSG_PATH_RECOVERY_NODE,  "5").
+-define(MSG_PATH_PER_OBJECT,       "1").
+-define(MSG_PATH_SYNC_VNODE_ID,    "2").
+-define(MSG_PATH_REBALANCE,        "3").
+-define(MSG_PATH_ASYNC_DELETION,   "4").
+-define(MSG_PATH_RECOVERY_NODE,    "5").
+-define(MSG_PATH_SYNC_OBJ_WITH_DC, "6").
 
 -type(queue_type() :: ?QUEUE_TYPE_PER_OBJECT  |
                       ?QUEUE_TYPE_SYNC_BY_VNODE_ID  |
                       ?QUEUE_TYPE_ASYNC_DELETION |
-                      ?QUEUE_TYPE_RECOVERY_NODE).
+                      ?QUEUE_TYPE_RECOVERY_NODE |
+                      ?QUEUE_TYPE_SYNC_OBJ_WITH_DC
+                      ).
 
 -type(queue_id()   :: ?QUEUE_ID_PER_OBJECT |
                       ?QUEUE_ID_SYNC_BY_VNODE_ID |
                       ?QUEUE_ID_REBALANCE |
                       ?QUEUE_ID_ASYNC_DELETION |
-                      ?QUEUE_ID_RECOVERY_NODE).
+                      ?QUEUE_ID_RECOVERY_NODE |
+                      ?QUEUE_ID_SYNC_OBJ_WITH_DC
+                      ).
 
 %%--------------------------------------------------------------------
 %% API
@@ -128,7 +133,13 @@ start(RefSup, Intervals, RootPath0) ->
              leo_misc:get_value(cns_num_of_batch_process_recovery_node, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC),
              leo_misc:get_value(cns_interval_recovery_node_max, Intervals, ?DEF_MQ_INTERVAL_MAX),
              leo_misc:get_value(cns_interval_recovery_node_min, Intervals, ?DEF_MQ_INTERVAL_MIN)
-            }]),
+            },
+            {?QUEUE_ID_SYNC_OBJ_WITH_DC, ?MSG_PATH_SYNC_OBJ_WITH_DC,
+             leo_misc:get_value(cns_num_of_batch_process_sync_obj_with_dc, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC),
+             leo_misc:get_value(cns_interval_sync_obj_with_dc_max, Intervals, ?DEF_MQ_INTERVAL_MAX),
+             leo_misc:get_value(cns_interval_sync_obj_with_dc_min, Intervals, ?DEF_MQ_INTERVAL_MIN)
+            }
+           ]),
     ok.
 
 %% @doc Input a message into the queue.
@@ -163,6 +174,9 @@ publish(?QUEUE_TYPE_ASYNC_DELETION = Id, AddrId, Key) ->
                                                         timestamp = leo_date:now()}),
     leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
 
+publish(?QUEUE_TYPE_SYNC_OBJ_WITH_DC, AddrId, Key) ->
+    publish(?QUEUE_TYPE_SYNC_OBJ_WITH_DC, [], AddrId, Key);
+
 publish(_,_,_) ->
     {error, badarg}.
 
@@ -170,12 +184,20 @@ publish(_,_,_) ->
              ok).
 publish(?QUEUE_TYPE_PER_OBJECT = Id, AddrId, Key, ErrorType) ->
     KeyBin = term_to_binary({ErrorType, Key}),
-    PublishedAt = leo_date:now(),
     MessageBin  = term_to_binary(#inconsistent_data_message{id        = leo_date:clock(),
                                                             type      = ErrorType,
                                                             addr_id   = AddrId,
                                                             key       = Key,
-                                                            timestamp = PublishedAt}),
+                                                            timestamp = leo_date:now()}),
+    leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
+
+publish(?QUEUE_TYPE_SYNC_OBJ_WITH_DC = Id, ClusterId, AddrId, Key) ->
+    KeyBin = term_to_binary({ClusterId, AddrId, Key}),
+    MessageBin  = term_to_binary(#inconsistent_data_with_dc{id         = leo_date:clock(),
+                                                            cluster_id = ClusterId,
+                                                            addr_id    = AddrId,
+                                                            key        = Key,
+                                                            timestamp  = leo_date:now()}),
     leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
 
 publish(_,_,_,_) ->
@@ -280,11 +302,11 @@ handle_call({consume, ?QUEUE_ID_ASYNC_DELETION, MessageBin}) ->
             {error, Cause};
         #async_deletion_message{addr_id  = AddrId,
                                 key      = Key} ->
-            case leo_storage_handler_object:delete(#object{addr_id   = AddrId,
-                                                           key       = Key,
-                                                           clock     = leo_date:clock(),
-                                                           timestamp = leo_date:now()
-                                                          }, 0) of
+            case leo_storage_handler_object:delete(#?OBJECT{addr_id   = AddrId,
+                                                            key       = Key,
+                                                            clock     = leo_date:clock(),
+                                                            timestamp = leo_date:now()
+                                                           }, 0) of
                 ok ->
                     ok;
                 {error, _Cause} ->
@@ -303,11 +325,42 @@ handle_call({consume, ?QUEUE_ID_RECOVERY_NODE, MessageBin}) ->
             recover_node(Node);
         _ ->
             {error, ?ERROR_COULD_MATCH}
+    end;
+
+handle_call({consume, ?QUEUE_ID_SYNC_OBJ_WITH_DC, MessageBin}) ->
+    case catch binary_to_term(MessageBin) of
+        {'EXIT', Cause} ->
+            ?error("handle_call/1 - QUEUE_ID_SYNC_OBJ_WITH_DC", "cause:~p", [Cause]),
+            {error, Cause};
+        #inconsistent_data_with_dc{cluster_id = ClusterId,
+                                   addr_id = AddrId,
+                                   key = Key} ->
+            Ret = case leo_storage_handler_object:get(AddrId, Key, -1) of
+                      {ok,_Metadata, Object} ->
+                          case ClusterId of
+                              [] -> leo_sync_remote_cluster:stack(Object);
+                              _  -> leo_sync_remote_cluster:stack(ClusterId, Object)
+                          end;
+                      not_found ->
+                          ok;
+                      {error,_Cause} ->
+                          {error,_Cause}
+                  end,
+
+            case Ret of
+                ok ->
+                    ok;
+                {error,_Reason} ->
+                    ok = leo_storage_mq_client:publish(
+                           ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key)
+            end;
+        _ ->
+            {error, ?ERROR_COULD_MATCH}
     end.
 
 
 %%--------------------------------------------------------------------
-%% INNTERNAL FUNCTIONS
+%% INNTERNAL FUNCTIONS-1
 %%--------------------------------------------------------------------
 %% @doc synchronize by vnode-id.
 %%
@@ -315,7 +368,7 @@ handle_call({consume, ?QUEUE_ID_RECOVERY_NODE, MessageBin}) ->
              ok).
 recover_node(Node) ->
     Fun = fun(Key, V, Acc) ->
-                  #metadata{addr_id = AddrId} = binary_to_term(V),
+                  #?METADATA{addr_id = AddrId} = binary_to_term(V),
                   case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
                       {ok, #redundancies{nodes = Redundancies}} ->
                           Nodes = [N || #redundant_node{node = N} <- Redundancies],
@@ -344,7 +397,7 @@ sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
     Fun = fun(Key, V, Acc) ->
                   %% Note: An object of copy is NOT equal current ring-hash.
                   %%       Then a message in the rebalance-queue.
-                  #metadata{addr_id = AddrId} = binary_to_term(V),
+                  #?METADATA{addr_id = AddrId} = binary_to_term(V),
 
                   case (AddrId >= FromAddrId andalso
                         AddrId =< ToAddrId) of
@@ -471,7 +524,7 @@ correct_redundancies_1(Key, AddrId, [#redundant_node{node = Node}|T], Metadatas,
              ok | {error, any()}).
 correct_redundancies_2(ListOfMetadata, ErrorNodes) ->
     [{_, Metadata} = H|_] = lists:sort(fun({_, M1}, {_, M2}) ->
-                                               M1#metadata.clock >= M2#metadata.clock;
+                                               M1#?METADATA.clock >= M2#?METADATA.clock;
                                           (_,_) ->
                                                false
                                        end, ListOfMetadata),
@@ -481,13 +534,13 @@ correct_redundancies_2(ListOfMetadata, ErrorNodes) ->
           fun({Node, _},
               {{DestNode, _Metadata} = Dest, C, R}) when Node =:= DestNode ->
                   {Dest, [Node|C], R};
-             ({Node, #metadata{clock = Clock}},
-              {{DestNode, #metadata{clock = DestClock}} = Dest, C, R}) when Node  =/= DestNode,
-                                                                            Clock =:= DestClock ->
+             ({Node, #?METADATA{clock = Clock}},
+              {{DestNode, #?METADATA{clock = DestClock}} = Dest, C, R}) when Node  =/= DestNode,
+                                                                             Clock =:= DestClock ->
                   {Dest, [Node|C], R};
-             ({Node, #metadata{clock = Clock}},
-              {{DestNode, #metadata{clock = DestClock}} = Dest, C, R}) when Node  =/= DestNode,
-                                                                            Clock =/= DestClock ->
+             ({Node, #?METADATA{clock = Clock}},
+              {{DestNode, #?METADATA{clock = DestClock}} = Dest, C, R}) when Node  =/= DestNode,
+                                                                             Clock =/= DestClock ->
                   {Dest, C, [Node|R]}
           end, {H, [], []}, ListOfMetadata),
 
@@ -496,7 +549,7 @@ correct_redundancies_2(ListOfMetadata, ErrorNodes) ->
 
 %% correct_redundancies_3/4 - last.
 %%
--spec(correct_redundancies_3(list(), list(), #metadata{}) ->
+-spec(correct_redundancies_3(list(), list(), #?METADATA{}) ->
              ok | {error, any()}).
 correct_redundancies_3([], _, _) ->
     ok;
@@ -555,7 +608,7 @@ rebalance_2({ok, Redundancies}, #rebalance_message{node = Node,
                                                    key     = Key}) ->
     case find_node_from_redundancies(Redundancies, erlang:node()) of
         true ->
-            case leo_storage_handler_object:copy([Node], AddrId, Key) of
+            case leo_storage_handler_object:replicate([Node], AddrId, Key) of
                 ok ->
                     ok;
                 Error ->
@@ -607,6 +660,23 @@ notify_rebalance_message_to_manager(VNodeId) ->
     end.
 
 
+%% %% @doc Replicate an object from other cluster
+%% %% @private
+%% -spec(replicate_data_to_dc(pos_integer(), binary()) ->
+%%              ok | {error, any()}).
+%% replicate_data_to_dc(AddrId, Key) ->
+%%     case leo_mdcr_tbl_cluster_info:all() of
+%%         {ok, ClusterInfoList} ->
+%%             replicate_data_to_dc(ClusterInfoList, AddrId, Key);
+%%         not_found = Cause ->
+%%             {error, Cause};
+%%         {error, Cause} ->
+%%             {error, Cause}
+%%     end.
+
+%%--------------------------------------------------------------------
+%% INNTERNAL FUNCTIONS-2
+%%--------------------------------------------------------------------
 %% @doc Lookup rebalance counter
 %% @private
 -spec(ets_lookup(atom(), integer()) ->
@@ -648,4 +718,6 @@ queue_id(?QUEUE_TYPE_PER_OBJECT) ->
 queue_id(?QUEUE_TYPE_REBALANCE) ->
     ?QUEUE_ID_REBALANCE;
 queue_id(?QUEUE_TYPE_RECOVERY_NODE) ->
-    ?QUEUE_ID_RECOVERY_NODE.
+    ?QUEUE_ID_RECOVERY_NODE;
+queue_id(?QUEUE_TYPE_SYNC_OBJ_WITH_DC) ->
+    ?QUEUE_ID_SYNC_OBJ_WITH_DC.

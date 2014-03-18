@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012
+%% Copyright (c) 2012-2014 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -17,14 +17,9 @@
 %% KIND, either express or implied.  See the License for the
 %% specific language governing permissions and limitations
 %% under the License.
-%%
-%% -------------------------------------------------------------------
-%% LeoFS Storage - EUnit
-%% @doc
-%% @end
 %%====================================================================
--module(leo_storage_ordning_reda_client_tests).
--author('yosuke hara').
+-module(leo_sync_local_cluster_tests).
+-author('Yosuke Hara').
 
 -include("leo_storage.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
@@ -38,7 +33,7 @@
 %%--------------------------------------------------------------------
 -ifdef(EUNIT).
 
-ordning_reda_test_() ->
+sync_local_cluster_test_() ->
     {foreach, fun setup/0, fun teardown/1,
      [{with, [T]} || T <- [fun suite_regular_1_/1,
                            fun suite_regular_2_/1,
@@ -55,7 +50,7 @@ setup() ->
 
     %% launch ordning-reda
     leo_ordning_reda_api:start(),
-    leo_storage_ordning_reda_client:start_link(Node, 1024, 5000),
+    leo_sync_local_cluster:start_link(Node, 1024, 5000),
 
     %% mock
     ok = meck:new(leo_redundant_manager_api),
@@ -66,7 +61,7 @@ setup() ->
     Node.
 
 teardown(Node) ->
-    leo_storage_ordning_reda_client:stop(Node),
+    leo_sync_local_cluster:stop(Node),
 
     net_kernel:stop(),
     meck:unload(),
@@ -74,7 +69,7 @@ teardown(Node) ->
 
 suite_regular_1_(Node) ->
     ok = meck:new(leo_storage_handler_object),
-    ok = meck:expect(leo_storage_handler_object, head, 2, {ok, #metadata{clock = -1}}),
+    ok = meck:expect(leo_storage_handler_object, head, 2, {ok, #?METADATA{clock = -1}}),
 
     ok = meck:new(leo_object_storage_api),
     ok = meck:expect(leo_object_storage_api, store,
@@ -94,7 +89,7 @@ suite_regular_1_(Node) ->
 
 suite_regular_2_(Node) ->
     ok = meck:new(leo_storage_handler_object),
-    ok = meck:expect(leo_storage_handler_object, head, 2, {ok, #metadata{clock = 5}}),
+    ok = meck:expect(leo_storage_handler_object, head, 2, {ok, #?METADATA{clock = 5}}),
 
     ok = meck:new(leo_object_storage_api),
     ok = meck:expect(leo_object_storage_api, store,
@@ -115,7 +110,7 @@ suite_regular_2_(Node) ->
 
 suite_error_(Node) ->
     ok = meck:new(leo_storage_handler_object),
-    ok = meck:expect(leo_storage_handler_object, head, 2, {ok, #metadata{clock = -1}}),
+    ok = meck:expect(leo_storage_handler_object, head, 2, {ok, #?METADATA{clock = -1}}),
 
     ok = meck:new(leo_object_storage_api),
     ok = meck:expect(leo_object_storage_api, store,
@@ -139,16 +134,16 @@ stack(Node) ->
     Key2   = <<"photo/hawaii-1.jpg">>,
     Key3   = <<"photo/hawaii-2.jpg">>,
     Key4   = <<"photo/hawaii-3.jpg">>,
-    Meta1  = #metadata{addr_id = AddrId, key = Key1, dsize = Size, ksize = 18},
-    Meta2  = #metadata{addr_id = AddrId, key = Key2, dsize = Size, ksize = 18},
-    Meta3  = #metadata{addr_id = AddrId, key = Key3, dsize = Size, ksize = 18},
-    Meta4  = #metadata{addr_id = AddrId, key = Key4, dsize = Size, ksize = 18},
+    Meta1  = #?METADATA{addr_id = AddrId, key = Key1, dsize = Size, ksize = 18},
+    Meta2  = #?METADATA{addr_id = AddrId, key = Key2, dsize = Size, ksize = 18},
+    Meta3  = #?METADATA{addr_id = AddrId, key = Key3, dsize = Size, ksize = 18},
+    Meta4  = #?METADATA{addr_id = AddrId, key = Key4, dsize = Size, ksize = 18},
     Object = crypto:rand_bytes(Size),
 
-    _ = leo_storage_ordning_reda_client:stack([Node], AddrId, Key1, Meta1, Object),
-    _ = leo_storage_ordning_reda_client:stack([Node], AddrId, Key2, Meta2, Object),
-    _ = leo_storage_ordning_reda_client:stack([Node], AddrId, Key3, Meta3, Object),
-    _ = leo_storage_ordning_reda_client:stack([Node], AddrId, Key4, Meta4, Object),
+    _ = leo_sync_local_cluster:stack([Node], AddrId, Key1, Meta1, Object),
+    _ = leo_sync_local_cluster:stack([Node], AddrId, Key2, Meta2, Object),
+    _ = leo_sync_local_cluster:stack([Node], AddrId, Key3, Meta3, Object),
+    _ = leo_sync_local_cluster:stack([Node], AddrId, Key4, Meta4, Object),
     ok.
 
 -endif.
