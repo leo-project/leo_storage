@@ -83,6 +83,12 @@ after_proc({ok, Pid}) ->
     ensure_started(rex, rpc, start_link, worker, 2000),
     ok = leo_storage_api:register_in_monitor(first),
 
+    %% Create cluster-related tables
+    ok = leo_mdcr_tbl_cluster_info:create_table(ram_copies, [node()]),
+    ok = leo_mdcr_tbl_cluster_stat:create_table(ram_copies, [node()]),
+    ok = leo_mdcr_tbl_cluster_mgr:create_table(ram_copies, [node()]),
+    ok = leo_mdcr_tbl_cluster_member:create_table(ram_copies, [node()]),
+
     %% Launch metric-servers
     ok = leo_statistics_api:start_link(leo_storage),
     ok = leo_statistics_api:create_tables(ram_copies, [node()]),
