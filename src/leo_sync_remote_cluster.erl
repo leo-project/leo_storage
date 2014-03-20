@@ -354,7 +354,7 @@ send_1([#?CLUSTER_MEMBER{node = Node,
     Ret = case leo_rpc:call(Node_1, ?MODULE, store,
                             [ClusterId, CompressedObjs],
                             ?DEF_TIMEOUT_REMOTE_CLUSTER) of
-              {ok, _} ->
+              ok ->
                   ok;
               {error, Cause} ->
                   {error, Cause};
