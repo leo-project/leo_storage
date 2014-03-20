@@ -86,7 +86,8 @@ register_in_monitor_([_Node0, Node1]) ->
     %% 2.
     ok = rpc:call(Node1, meck, new,    [leo_manager_api, [no_link]]),
     ok = rpc:call(Node1, meck, expect, [leo_manager_api, register,
-                                        fun(_RequestedTimes, _Pid, _Node, storage,_L1,_L2,_NumOfVNodes) ->
+                                        fun(_RequestedTimes, _Pid, _Node, storage,
+                                            _L1,_L2,_NumOfVNodes,_RPCPort) ->
                                                 ok
                                         end]),
 

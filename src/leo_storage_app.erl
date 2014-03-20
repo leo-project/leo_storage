@@ -91,6 +91,7 @@ after_proc({ok, Pid}) ->
     ok = leo_storage_statistics:start_link(?SNMP_SYNC_INTERVAL_60S),
 
     %% Create cluster-related tables
+    ok = leo_cluster_tbl_conf:create_table(ram_copies, [node()]),
     ok = leo_mdcr_tbl_cluster_info:create_table(ram_copies, [node()]),
     ok = leo_mdcr_tbl_cluster_stat:create_table(ram_copies, [node()]),
     ok = leo_mdcr_tbl_cluster_mgr:create_table(ram_copies, [node()]),

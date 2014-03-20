@@ -162,7 +162,7 @@ handle_send(UId, StackedInfo, CompressedObjs) ->
 handle_fail(_, []) ->
     ok;
 handle_fail(UId, [{AddrId, Key}|Rest] = _StackInfo) ->
-    ?warn("handle_fail/2","uid:~w, addr-id:~w, key:~s", [UId, AddrId, Key]),
+    ?warn("handle_fail/2","uid:~w, addr-id:~w, key:~p", [UId, AddrId, Key]),
     case get_cluster_id_from_uid(UId) of
         [] ->
             ok = leo_storage_mq_client:publish(
@@ -274,12 +274,14 @@ replicate(ClusterId, Object) ->
 %% @doc Retrieve cluster-id from uid
 %% @private
 get_cluster_id_from_uid(UId) when is_atom(UId) ->
-    case string:tokens(atom_to_list(UId),
-                       ?DEF_PREFIX_MDCR_SYNC_PROC_2) of
-        [] ->
+    UIdStr = atom_to_list(UId),
+    case string:str(UIdStr,
+                    ?DEF_PREFIX_MDCR_SYNC_PROC_2) of
+        0 ->
             [];
-        [ClusterId|_] ->
-            ClusterId
+        _ ->
+            string:sub_string(
+              UIdStr, length(?DEF_PREFIX_MDCR_SYNC_PROC_2))
     end;
 get_cluster_id_from_uid(_) ->
     [].
@@ -291,11 +293,6 @@ get_cluster_members([]) ->
     case leo_mdcr_tbl_cluster_info:all() of
         {ok, ClusterInfoList} ->
             get_cluster_members_1(ClusterInfoList);
-
-
-
-
-
         {error, Cause} ->
             {error, Cause}
     end;
@@ -329,8 +326,9 @@ get_cluster_members_2([#?CLUSTER_INFO{cluster_id = ClusterId}|Rest],
                                                          num_of_replicas = NumOfReplicas,
                                                          cluster_members = ClusterMembers}
                                    |Acc]);
-        not_found = Cause ->
-            {error, Cause};
+        %% @TODO
+        not_found ->
+            get_cluster_members_2(Rest, NumOfReplicas, Acc);
         {error, Cause} ->
             {error, Cause}
     end.
@@ -348,8 +346,12 @@ send([#mdc_replication_info{cluster_id = ClusterId,
 %% @private
 send_1([], ClusterId, StackedInfo,_CompressedObjs) ->
     ok = enqueue_fail_replication(StackedInfo, ClusterId);
-send_1([#?CLUSTER_MEMBER{node = Node}|Rest], ClusterId, StackedInfo, CompressedObjs) ->
-    Ret = case leo_rpc:call(Node, ?MODULE, store,
+send_1([#?CLUSTER_MEMBER{node = Node,
+                         port = Port}|Rest], ClusterId, StackedInfo, CompressedObjs) ->
+    Node_1 = list_to_atom(lists:append([atom_to_list(Node),
+                                        ":",
+                                        integer_to_list(Port)])),
+    Ret = case leo_rpc:call(Node_1, ?MODULE, store,
                             [ClusterId, CompressedObjs],
                             ?DEF_TIMEOUT_REMOTE_CLUSTER) of
               ok ->

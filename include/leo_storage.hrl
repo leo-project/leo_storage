@@ -328,9 +328,10 @@
 %% For Multi-DC Replication
 -define(DEF_PREFIX_MDCR_SYNC_PROC_1, "leo_mdcr_sync_w1_").
 -define(DEF_PREFIX_MDCR_SYNC_PROC_2, "leo_mdcr_sync_w2_").
--define(DEF_MDCR_SYNC_PROC_BUFSIZE, 1024 * 1024 * 64). %% 64MB
--define(DEF_MDCR_SYNC_PROC_TIMEOUT, timer:minutes(5)). %% 5min
+-define(DEF_MDCR_SYNC_PROC_BUFSIZE, 1024 * 1024 * 64).  %% 64MB
+-define(DEF_MDCR_SYNC_PROC_TIMEOUT, timer:seconds(30)). %% 30sec
 -define(DEF_MDCR_SYNC_PROCS, 8).
+-define(DEF_RPC_LISTEN_PORT, 13075).
 
 -define(DEF_BIN_CID_SIZE,  16).     %% clusterid-size
 -define(DEF_BIN_META_SIZE, 16).     %% metadata-size
@@ -341,6 +342,7 @@
 -define(env_mdcr_sync_proc_buf_size(), 1024).
 -define(env_mdcr_sync_proc_timeout(),    30).
 -define(env_num_of_mdcr_sync_procs(),     1).
+-define(env_rpc_port(), ?DEF_RPC_LISTEN_PORT).
 
 -else.
 -define(env_mdcr_sync_proc_buf_size(),
@@ -357,5 +359,10 @@
         case application:get_env(leo_storage, num_of_mdcr_sync_procs) of
             {ok, _NumOfMDCRSyncProcs} -> _NumOfMDCRSyncProcs;
             _ -> ?DEF_MDCR_SYNC_PROCS
+        end).
+-define(env_rpc_port(),
+        case application:get_env(leo_rpc, listen_port) of
+            {ok, _ListenPort} -> _ListenPort;
+            _ -> ?DEF_RPC_LISTEN_PORT
         end).
 -endif.
