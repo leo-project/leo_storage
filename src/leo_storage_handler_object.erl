@@ -40,6 +40,7 @@
          put/1, put/2, put/3,
          delete/1, delete/2,
          head/2,
+         head_with_calc_md5/3,
          replicate/1, replicate/3,
          prefix_search/3, prefix_search_and_remove_objects/1,
          find_uploaded_objects_by_key/1
@@ -351,6 +352,16 @@ head_1([#redundant_node{node = Node,
 head_1([_|Rest], AddrId, Key) ->
     head_1(Rest, AddrId, Key).
 
+%%--------------------------------------------------------------------
+%% API - HEAD with calculating MD5 
+%%--------------------------------------------------------------------
+%% @doc Retrieve a metada/data from backend_db/object-storage
+%%      AND calc MD5 based on the body data
+%%
+-spec(head_with_calc_md5(integer(), string(), any()) ->
+             {ok, #?METADATA{}, any()} | {error, any()}).
+head_with_calc_md5(AddrId, Key, MD5Context) ->
+    leo_object_storage_api:head_with_calc_md5({AddrId, Key}, MD5Context).
 
 %%--------------------------------------------------------------------
 %% API - COPY/STACK-SEND/RECEIVE-STORE
