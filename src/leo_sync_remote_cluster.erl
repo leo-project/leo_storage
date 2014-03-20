@@ -222,8 +222,8 @@ slice_and_replicate(ClusterId, StackedObjs) ->
     case slice(StackedObjs) of
         {ok, Object, StackedObjs_1} ->
             case replicate(ClusterId, Object) of
-                ok ->
-                    ok;
+                {ok, _} = Ret ->
+                    Ret;
                 {error, Cause} ->
                     %% Enqueue the fail message
                     %%
@@ -354,7 +354,7 @@ send_1([#?CLUSTER_MEMBER{node = Node,
     Ret = case leo_rpc:call(Node_1, ?MODULE, store,
                             [ClusterId, CompressedObjs],
                             ?DEF_TIMEOUT_REMOTE_CLUSTER) of
-              ok ->
+              {ok, _} ->
                   ok;
               {error, Cause} ->
                   {error, Cause};
