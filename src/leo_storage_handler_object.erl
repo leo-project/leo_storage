@@ -369,7 +369,7 @@ head_with_calc_md5(AddrId, Key, MD5Context) ->
 %% @doc Replicate an object, which is requested from remote-cluster
 %%
 -spec(replicate(#?OBJECT{}) ->
-             {ok, atom()} | {error, any()}).
+             ok | {ok, atom()} | {error, any()}).
 replicate(Object) ->
     %% Transform an object to a metadata
     Metadata = leo_object_storage_transformer:object_to_metadata(Object),
@@ -689,7 +689,7 @@ read_and_repair_1(_,_,_) ->
 %% @doc Replicate an object from local-node to remote node
 %% @private
 -spec(replicate_fun(replication(), put | delete, integer(), #?OBJECT{}) ->
-             ok | {error, any()}).
+             ok | {ok, pos_integer()} | {error, any()}).
 replicate_fun(?REP_LOCAL, Method, AddrId, Object) ->
     case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
         {ok, #redundancies{nodes     = Redundancies,

@@ -36,7 +36,7 @@
 -export([handle_send/3,
          handle_fail/2]).
 
--define(DEF_TIMEOUT_REMOTE_CLUSTER, timer:seconds(30)).
+-define(DEF_TIMEOUT_REMOTE_CLUSTER, timer:seconds(60)).
 
 
 %%--------------------------------------------------------------------
@@ -103,13 +103,13 @@ stack(ClusterId, Object) ->
 %% Store stacked objects
 %%
 -spec(store(string(), binary()) ->
-             ok | {error, any()}).
+             {ok, list(tuple())} | {error, any()}).
 store(ClusterId, CompressedObjs) ->
     case catch lz4:unpack(CompressedObjs) of
         {ok, OriginalObjects} ->
-            case slice_and_replicate(ClusterId, OriginalObjects) of
-                ok ->
-                    ok;
+            case slice_and_replicate(ClusterId, OriginalObjects, []) of
+                {ok, RetL} ->
+                    {ok, RetL};
                 {error, _Cause} ->
                     {error, fail_storing_files}
             end;
@@ -212,25 +212,17 @@ stack_fun(UId, AddrId, Key, Data) ->
 
 %% @doc Slicing objects and Store objects
 %% @private
--spec(slice_and_replicate(string(), binary()) ->
-             ok | {error, any()}).
-slice_and_replicate(_, <<>>) ->
-    ok;
-slice_and_replicate(ClusterId, StackedObjs) ->
+-spec(slice_and_replicate(string(), binary(), list(tuple())) ->
+             {ok, list(tuple())} | {error, any()}).
+slice_and_replicate(_, <<>>, Acc) ->
+    {ok, Acc};
+slice_and_replicate(ClusterId, StackedObjs, Acc) ->
     %% Retrieve a metadata and an object from stacked objects,
     %% then replicate an object into the storage cluster
     case slice(StackedObjs) of
         {ok, Object, StackedObjs_1} ->
-            case replicate(ClusterId, Object) of
-                {ok, _} = Ret ->
-                    Ret;
-                {error, Cause} ->
-                    %% Enqueue the fail message
-                    %%
-                    ?warn("slice_and_replicate/1","key:~s, cause:~p",
-                          [binary_to_list(Object#?OBJECT.key), Cause])
-            end,
-            slice_and_replicate(ClusterId, StackedObjs_1);
+            Ret = replicate(ClusterId, Object),
+            slice_and_replicate(ClusterId, StackedObjs_1, [Ret|Acc]);
         {error, Cause}->
             {error, Cause}
     end.
@@ -258,17 +250,33 @@ slice(StackedObjs) ->
 %% @doc Replicate an object between clusters
 %% @private
 -spec(replicate(string(), #?OBJECT{}) ->
-             ok | {error, any()}).
-replicate(ClusterId, Object) ->
+             {ok, tuple()} | {error, any()}).
+replicate(ClusterId, #?OBJECT{key = Key} = Object) ->
     %% Retrieve redundancies of the cluster,
     %% then overwrite 'n' and 'w' for the mdc-replication
-    case leo_mdcr_tbl_cluster_info:get(ClusterId) of
-        {ok, #?CLUSTER_INFO{num_of_dc_replicas = NumOfReplicas}} ->
-            leo_storage_handler_object:replicate(Object#?OBJECT{cluster_id = ClusterId,
-                                                                num_of_replicas = NumOfReplicas});
-        {error, Cause} ->
-            {error, Cause}
-    end.
+    Ret = case leo_mdcr_tbl_cluster_info:get(ClusterId) of
+              {ok, #?CLUSTER_INFO{num_of_dc_replicas = NumOfReplicas}} ->
+                  case leo_storage_handler_object:replicate(
+                         Object#?OBJECT{cluster_id = ClusterId,
+                                        num_of_replicas = NumOfReplicas}) of
+                      ok ->
+                          ok;
+                      {ok, Checksum} ->
+                          {ok, Checksum};
+                      {error, Cause} ->
+                          {error, Cause}
+                  end;
+              {error, Cause} ->
+                  ?warn("replicate/2","cause:~p", [Cause]),
+                  {error, Cause}
+          end,
+    replicate_1(Ret, Key).
+
+%% @private
+replicate_1({ok, Checksum}, Key) ->
+    {Key, Checksum};
+replicate_1(_, Key) ->
+    {Key, -1}.
 
 
 %% @doc Retrieve cluster-id from uid
@@ -340,7 +348,13 @@ send([],_StackedInfo,_CompressedObjs) ->
     ok;
 send([#mdc_replication_info{cluster_id = ClusterId,
                             cluster_members = Members}|Rest], StackedInfo, CompressedObjs) ->
-    ok = send_1(Members, ClusterId, StackedInfo, CompressedObjs),
+    case send_1(Members, ClusterId, StackedInfo, CompressedObjs) of
+        {ok, _RetL} ->
+            %% @TODO - Compare with local-cluster's objects
+            ok;
+        _ ->
+            void
+    end,
     send(Rest, StackedInfo, CompressedObjs).
 
 %% @private
@@ -354,8 +368,8 @@ send_1([#?CLUSTER_MEMBER{node = Node,
     Ret = case leo_rpc:call(Node_1, ?MODULE, store,
                             [ClusterId, CompressedObjs],
                             ?DEF_TIMEOUT_REMOTE_CLUSTER) of
-              ok ->
-                  ok;
+              {ok, RetL} ->
+                  {ok, RetL};
               {error, Cause} ->
                   {error, Cause};
               {badrpc, Cause} ->
@@ -365,8 +379,8 @@ send_1([#?CLUSTER_MEMBER{node = Node,
           end,
 
     case Ret of
-        ok ->
-            ok;
+        {ok, _} ->
+            Ret;
         {error, Reason} ->
             ?warn("send_1/4","node:~w, cause:~p", [Node, Reason]),
             send_1(Rest, ClusterId, StackedInfo, CompressedObjs)

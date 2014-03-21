@@ -113,7 +113,7 @@ gen_mocks(Node) ->
                      fun(_Node,_Module,_Method,_Args,_Timeout) ->
                              %% ?debugVal({_Node,_Module,_Method,_Args,_Timeout}),
                              erlang:apply(_Module, _Method, _Args),
-                             ok
+                             {ok, []}
                      end),
     ok = meck:new(leo_storage_mq_client),
     ok = meck:expect(leo_storage_mq_client, publish,
