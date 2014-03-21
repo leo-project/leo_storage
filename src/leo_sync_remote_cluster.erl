@@ -261,7 +261,7 @@ replicate(ClusterId, #?OBJECT{key = Key} = Object) ->
                                         num_of_replicas = NumOfReplicas}) of
                       ok ->
                           ok;
-                      {ok, Checksum} ->
+                      {ok, {_,Checksum}} ->
                           {ok, Checksum};
                       {error, Cause} ->
                           {error, Cause}
@@ -346,8 +346,8 @@ get_cluster_members_2([#?CLUSTER_INFO{cluster_id = ClusterId}|Rest],
 %% @private
 send([],_StackedInfo,_CompressedObjs) ->
     ok;
-send([#mdc_replication_info{cluster_id = ClusterId,
-                            cluster_members = Members}|Rest], StackedInfo, CompressedObjs) ->
+send([#mdc_replication_info{cluster_members = Members}|Rest], StackedInfo, CompressedObjs) ->
+    {ok, #?SYSTEM_CONF{cluster_id = ClusterId}} = leo_cluster_tbl_conf:get(),
     case send_1(Members, ClusterId, StackedInfo, CompressedObjs) of
         {ok, _RetL} ->
             %% @TODO - Compare with local-cluster's objects
