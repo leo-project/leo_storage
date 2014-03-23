@@ -374,6 +374,28 @@
 
 
 %% --------------------------------------------------------------------
+%% STORAGE - MDC-Replication
+%% --------------------------------------------------------------------
+%% @doc Size of stacked objects (bytes)
+{mapping,
+ "mdc_replication.size_of_stacked_objs",
+ "leo_storage.mdcr_size_of_stacked_objs",
+ [
+  {datatype, integer},
+  {default, 67108864}
+ ]}.
+
+%% @doc Stacking timeout (msec)
+{mapping,
+ "mdc_replication.stacking_timeout",
+ "leo_storage.mdcr_stacking_timeout",
+ [
+  {datatype, integer},
+  {default, 5000}
+ ]}.
+
+
+%% --------------------------------------------------------------------
 %% STORAGE - LOG
 %% --------------------------------------------------------------------
 %% @doc Log level
