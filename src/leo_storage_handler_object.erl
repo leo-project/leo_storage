@@ -353,7 +353,7 @@ head_1([_|Rest], AddrId, Key) ->
     head_1(Rest, AddrId, Key).
 
 %%--------------------------------------------------------------------
-%% API - HEAD with calculating MD5 
+%% API - HEAD with calculating MD5
 %%--------------------------------------------------------------------
 %% @doc Retrieve a metada/data from backend_db/object-storage
 %%      AND calc MD5 based on the body data

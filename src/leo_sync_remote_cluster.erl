@@ -213,7 +213,7 @@ stack_fun(UId, AddrId, Key, Data) ->
 -spec(slice_and_replicate(string(), binary(), list(tuple())) ->
              {ok, list(tuple())} | {error, any()}).
 slice_and_replicate(_, <<>>, Acc) ->
-    {ok, Acc};
+    {ok, lists:flatten(Acc)};
 slice_and_replicate(ClusterId, StackedObjs, Acc) ->
     %% Retrieve a metadata and an object from stacked objects,
     %% then replicate an object into the storage cluster
@@ -249,18 +249,19 @@ slice(StackedObjs) ->
 %% @private
 -spec(replicate(string(), #?OBJECT{}) ->
              {ok, tuple()} | {error, any()}).
-replicate(ClusterId, #?OBJECT{key = Key} = Object) ->
+replicate(ClusterId, Object) ->
     %% Retrieve redundancies of the cluster,
     %% then overwrite 'n' and 'w' for the mdc-replication
     Ret = case leo_mdcr_tbl_cluster_info:get(ClusterId) of
               {ok, #?CLUSTER_INFO{num_of_dc_replicas = NumOfReplicas}} ->
-                  case leo_storage_handler_object:replicate(
-                         Object#?OBJECT{cluster_id = ClusterId,
-                                        num_of_replicas = NumOfReplicas}) of
+                  Object_1 = Object#?OBJECT{cluster_id = ClusterId,
+                                            num_of_replicas = NumOfReplicas},
+                  case leo_storage_handler_object:replicate(Object_1) of
                       ok ->
                           ok;
-                      {ok, {_,Checksum}} ->
-                          {ok, Checksum};
+                      {ok, {_, Checksum}} ->
+                          Object_2 = Object_1#?OBJECT{checksum = Checksum},
+                          {ok, leo_object_storage_transformer:object_to_metadata(Object_2)};
                       {error, Cause} ->
                           {error, Cause}
                   end;
@@ -268,13 +269,13 @@ replicate(ClusterId, #?OBJECT{key = Key} = Object) ->
                   ?warn("replicate/2","cause:~p", [Cause]),
                   {error, Cause}
           end,
-    replicate_1(Ret, Key).
+    replicate_1(Ret).
 
 %% @private
-replicate_1({ok, Checksum}, Key) ->
-    {Key, Checksum};
-replicate_1(_, Key) ->
-    {Key, -1}.
+replicate_1({ok, Metadata}) ->
+    Metadata;
+replicate_1(_) ->
+    [].
 
 
 %% @doc Retrieve cluster-id from uid
@@ -284,18 +285,18 @@ get_cluster_id_from_uid(UId) when is_atom(UId) ->
     case string:str(UIdStr,
                     ?DEF_PREFIX_MDCR_SYNC_PROC_2) of
         0 ->
-            [];
+            undefined;
         _ ->
             string:sub_string(
               UIdStr, length(?DEF_PREFIX_MDCR_SYNC_PROC_2))
     end;
 get_cluster_id_from_uid(_) ->
-    [].
+    undefined.
 
 
 %% @doc Retrieve cluster members
 %% @private
-get_cluster_members([]) ->
+get_cluster_members(undefined) ->
     case leo_mdcr_tbl_cluster_info:all() of
         {ok, ClusterInfoList} ->
             get_cluster_members_1(ClusterInfoList);
@@ -324,19 +325,23 @@ get_cluster_members_2([],_NumOfReplicas, Acc) ->
     {ok, Acc};
 get_cluster_members_2([#?CLUSTER_INFO{cluster_id = ClusterId}|Rest],
                       NumOfReplicas, Acc) ->
-    case leo_mdcr_tbl_cluster_member:find_by_limit(
-           ClusterId, ?DEF_NUM_OF_REMOTE_MEMBERS) of
-        {ok, ClusterMembers} ->
-            get_cluster_members_2(Rest, NumOfReplicas,
-                                  [#mdc_replication_info{cluster_id = ClusterId,
-                                                         num_of_replicas = NumOfReplicas,
-                                                         cluster_members = ClusterMembers}
-                                   |Acc]);
-        %% @TODO
-        not_found ->
+    case leo_cluster_tbl_conf:get() of
+        {ok, #?SYSTEM_CONF{cluster_id = ClusterId}} ->
             get_cluster_members_2(Rest, NumOfReplicas, Acc);
-        {error, Cause} ->
-            {error, Cause}
+        _ ->
+            case leo_mdcr_tbl_cluster_member:find_by_limit(
+                   ClusterId, ?DEF_NUM_OF_REMOTE_MEMBERS) of
+                {ok, ClusterMembers} ->
+                    get_cluster_members_2(Rest, NumOfReplicas,
+                                          [#mdc_replication_info{cluster_id = ClusterId,
+                                                                 num_of_replicas = NumOfReplicas,
+                                                                 cluster_members = ClusterMembers}
+                                           |Acc]);
+                not_found = Cause ->
+                    {error, Cause};
+                {error, Cause} ->
+                    {error, Cause}
+            end
     end.
 
 
@@ -349,6 +354,9 @@ send([#mdc_replication_info{cluster_members = Members}|Rest], StackedInfo, Compr
     case send_1(Members, ClusterId, StackedInfo, CompressedObjs) of
         {ok, _RetL} ->
             %% @TODO - Compare with local-cluster's objects
+            %% lists:foreach(fun(_Metadata) ->
+            %%                       ?debugVal(_Metadata)
+            %%               end, _RetL),
             ok;
         _ ->
             void
@@ -380,7 +388,7 @@ send_1([#?CLUSTER_MEMBER{node = Node,
         {ok, _} ->
             Ret;
         {error, Reason} ->
-            ?warn("send_1/4","node:~w, cause:~p", [Node, Reason]),
+            ?warn("send_1/4","node:~w, cause:~p", [Node_1, Reason]),
             send_1(Rest, ClusterId, StackedInfo, CompressedObjs)
     end.
 

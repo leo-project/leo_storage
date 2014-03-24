@@ -81,7 +81,7 @@ gen_mocks(Node) ->
                      end),
 
 
-    ClusterId = "cluster_1",
+    ClusterId = 'cluster_1',
     ok = meck:new(leo_mdcr_tbl_cluster_info),
     ok = meck:expect(leo_mdcr_tbl_cluster_info, all,
                      fun() ->
@@ -97,7 +97,8 @@ gen_mocks(Node) ->
     ok = meck:new(leo_cluster_tbl_conf),
     ok = meck:expect(leo_cluster_tbl_conf, get,
                      fun() ->
-                             {ok, #?SYSTEM_CONF{num_of_dc_replicas = 1}}
+                             {ok, #?SYSTEM_CONF{cluster_id = 'leofs_1',
+                                                num_of_dc_replicas = 1}}
                      end),
     ok = meck:new(leo_mdcr_tbl_cluster_member),
     ok = meck:expect(leo_mdcr_tbl_cluster_member, find_by_limit,
