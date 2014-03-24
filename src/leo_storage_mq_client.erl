@@ -175,7 +175,7 @@ publish(?QUEUE_TYPE_ASYNC_DELETION = Id, AddrId, Key) ->
     leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
 
 publish(?QUEUE_TYPE_SYNC_OBJ_WITH_DC, AddrId, Key) ->
-    publish(?QUEUE_TYPE_SYNC_OBJ_WITH_DC, [], AddrId, Key);
+    publish(?QUEUE_TYPE_SYNC_OBJ_WITH_DC, undefined, AddrId, Key);
 
 publish(_,_,_) ->
     {error, badarg}.
@@ -338,8 +338,10 @@ handle_call({consume, ?QUEUE_ID_SYNC_OBJ_WITH_DC, MessageBin}) ->
             Ret = case leo_storage_handler_object:get(AddrId, Key, -1) of
                       {ok,_Metadata, Object} ->
                           case ClusterId of
-                              [] -> leo_sync_remote_cluster:stack(Object);
-                              _  -> leo_sync_remote_cluster:stack(ClusterId, Object)
+                              undefined ->
+                                  leo_sync_remote_cluster:stack(Object);
+                              _ ->
+                                  leo_sync_remote_cluster:stack(ClusterId, Object)
                           end;
                       not_found ->
                           ok;
@@ -659,20 +661,6 @@ notify_rebalance_message_to_manager(VNodeId) ->
             Error
     end.
 
-
-%% %% @doc Replicate an object from other cluster
-%% %% @private
-%% -spec(replicate_data_to_dc(pos_integer(), binary()) ->
-%%              ok | {error, any()}).
-%% replicate_data_to_dc(AddrId, Key) ->
-%%     case leo_mdcr_tbl_cluster_info:all() of
-%%         {ok, ClusterInfoList} ->
-%%             replicate_data_to_dc(ClusterInfoList, AddrId, Key);
-%%         not_found = Cause ->
-%%             {error, Cause};
-%%         {error, Cause} ->
-%%             {error, Cause}
-%%     end.
 
 %%--------------------------------------------------------------------
 %% INNTERNAL FUNCTIONS-2

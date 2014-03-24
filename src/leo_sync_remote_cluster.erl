@@ -90,7 +90,7 @@ defer_stack(_) ->
 -spec(stack(#?OBJECT{}) ->
              ok | {error, any()}).
 stack(Object) ->
-    stack([], Object).
+    stack(undefined, Object).
 
 -spec(stack(string(), #?OBJECT{}) ->
              ok | {error, any()}).
@@ -186,14 +186,14 @@ stack_fun(ClusterId, #?OBJECT{addr_id = AddrId,
     Data    = << ObjSize:?DEF_BIN_OBJ_SIZE, ObjBin/binary,
                  ?DEF_BIN_PADDING/binary >>,
     UId = case ClusterId of
-              [] -> gen_id();
+              undefined -> gen_id();
               _  -> gen_id({cluster_id, ClusterId})
           end,
     stack_fun(UId, AddrId, Key, Data).
 
 
 stack_fun(UId, AddrId, Key, Data) ->
-    case leo_ordning_reda_api:stack(UId, {AddrId, Key}, Data) of
+    case leo_ordning_reda_api:stack(UId, AddrId, Key, Data) of
         ok ->
             ok;
         {error, undefined} ->
