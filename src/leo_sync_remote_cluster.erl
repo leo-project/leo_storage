@@ -351,9 +351,10 @@ send([],_StackedInfo,_CompressedObjs) ->
     ok;
 send([#mdc_replication_info{cluster_members = Members}|Rest], StackedInfo, CompressedObjs) ->
     {ok, #?SYSTEM_CONF{cluster_id = ClusterId}} = leo_cluster_tbl_conf:get(),
-    case send_1(Members, ClusterId, StackedInfo, CompressedObjs) of
+    case send_1(Members, ClusterId, StackedInfo, CompressedObjs, 0) of
         {ok, _RetL} ->
             %% @TODO - Compare with local-cluster's objects
+            %% ?debugVal(length(_RetL)),
             %% lists:foreach(fun(_Metadata) ->
             %%                       ?debugVal(_Metadata)
             %%               end, _RetL),
@@ -364,32 +365,43 @@ send([#mdc_replication_info{cluster_members = Members}|Rest], StackedInfo, Compr
     send(Rest, StackedInfo, CompressedObjs).
 
 %% @private
-send_1([], ClusterId, StackedInfo,_CompressedObjs) ->
+send_1([], ClusterId, StackedInfo,_CompressedObjs,_RetryTimes) ->
     ok = enqueue_fail_replication(StackedInfo, ClusterId);
+send_1([_|Rest], ClusterId, StackedInfo, CompressedObjs, ?DEF_MAX_RETRY_TIMES) ->
+    send_1(Rest, ClusterId, StackedInfo, CompressedObjs, 0);
 send_1([#?CLUSTER_MEMBER{node = Node,
-                         port = Port}|Rest], ClusterId, StackedInfo, CompressedObjs) ->
+                         port = Port}|Rest] = ClusterMembes,
+       ClusterId, StackedInfo, CompressedObjs, RetryTimes) ->
     Node_1 = list_to_atom(lists:append([atom_to_list(Node),
                                         ":",
                                         integer_to_list(Port)])),
-    Timeout = ?env_mdcr_req_timeout(),
-    Ret = case leo_rpc:call(Node_1, ?MODULE, store,
-                            [ClusterId, CompressedObjs], Timeout) of
-              {ok, RetL} ->
-                  {ok, RetL};
-              {error, Cause} ->
-                  {error, Cause};
-              {badrpc, Cause} ->
-                  {error, Cause};
-              timeout = Cause ->
-                  {error, Cause}
-          end,
 
-    case Ret of
-        {ok, _} ->
-            Ret;
-        {error, Reason} ->
-            ?warn("send_1/4","node:~w, cause:~p", [Node_1, Reason]),
-            send_1(Rest, ClusterId, StackedInfo, CompressedObjs)
+    case leo_rpc:call(Node_1, erlang, node, []) of
+        Msg when Msg == timeout orelse
+                 element(1, Msg) == badrpc ->
+            send_1(ClusterMembes, ClusterId,
+                   StackedInfo, CompressedObjs, RetryTimes + 1);
+        _ ->
+            Timeout = ?env_mdcr_req_timeout(),
+            Ret = case leo_rpc:call(Node_1, ?MODULE, store,
+                                    [ClusterId, CompressedObjs], Timeout) of
+                      {ok, RetL} ->
+                          {ok, RetL};
+                      {error, Cause} ->
+                          {error, Cause};
+                      {badrpc, Cause} ->
+                          {error, Cause};
+                      timeout = Cause ->
+                          {error, Cause}
+                  end,
+
+            case Ret of
+                {ok, _} ->
+                    Ret;
+                {error,_} ->
+                    send_1(Rest, ClusterId,
+                           StackedInfo, CompressedObjs, 0)
+            end
     end.
 
 

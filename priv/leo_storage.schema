@@ -403,6 +403,15 @@
   {default, 30000}
  ]}.
 
+%% @doc Request timeout (msec)
+{mapping,
+ "mdc_replication.stacking_procs",
+ "leo_storage.mdcr_stacking_procs",
+ [
+  {datatype, integer},
+  {default, 1}
+ ]}.
+
 
 %% --------------------------------------------------------------------
 %% STORAGE - LOG

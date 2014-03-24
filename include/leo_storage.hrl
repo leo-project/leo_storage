@@ -331,8 +331,9 @@
 -define(DEF_MDCR_SYNC_PROC_BUFSIZE, 1024 * 1024 * 64).  %% 64MB
 -define(DEF_MDCR_SYNC_PROC_TIMEOUT, timer:seconds(30)). %% 30sec
 -define(DEF_MDCR_REQ_TIMEOUT,       timer:seconds(30)). %% 30sec
--define(DEF_MDCR_SYNC_PROCS, 8).
+-define(DEF_MDCR_SYNC_PROCS, 1).
 -define(DEF_RPC_LISTEN_PORT, 13075).
+-define(DEF_MAX_RETRY_TIMES, 3).
 
 -define(DEF_BIN_CID_SIZE,  16).     %% clusterid-size
 -define(DEF_BIN_META_SIZE, 16).     %% metadata-size
@@ -354,7 +355,7 @@
         end).
 -define(env_mdcr_sync_proc_timeout(),
         case application:get_env(leo_storage, mdcr_stacking_timeout) of
-            {ok, _MDCRSyncProcTimeout} -> _MDCRSyncProcTimeout;
+            {ok, _MDCRSyncProcTimeout} ->  timer:seconds(_MDCRSyncProcTimeout);
             _ -> ?DEF_MDCR_SYNC_PROC_TIMEOUT
         end).
 -define(env_mdcr_req_timeout(),
@@ -363,7 +364,7 @@
             _ -> ?DEF_MDCR_REQ_TIMEOUT
         end).
 -define(env_num_of_mdcr_sync_procs(),
-        case application:get_env(leo_storage, num_of_mdcr_sync_procs) of
+        case application:get_env(leo_storage, mdcr_stacking_procs) of
             {ok, _NumOfMDCRSyncProcs} -> _NumOfMDCRSyncProcs;
             _ -> ?DEF_MDCR_SYNC_PROCS
         end).
