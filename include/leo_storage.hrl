@@ -330,6 +330,7 @@
 -define(DEF_PREFIX_MDCR_SYNC_PROC_2, "leo_mdcr_sync_w2_").
 -define(DEF_MDCR_SYNC_PROC_BUFSIZE, 1024 * 1024 * 64).  %% 64MB
 -define(DEF_MDCR_SYNC_PROC_TIMEOUT, timer:seconds(30)). %% 30sec
+-define(DEF_MDCR_REQ_TIMEOUT,       timer:seconds(30)). %% 30sec
 -define(DEF_MDCR_SYNC_PROCS, 8).
 -define(DEF_RPC_LISTEN_PORT, 13075).
 
@@ -341,19 +342,25 @@
 -ifdef(TEST).
 -define(env_mdcr_sync_proc_buf_size(), 1024).
 -define(env_mdcr_sync_proc_timeout(),    30).
+-define(env_mdcr_req_timeout(),       30000).
 -define(env_num_of_mdcr_sync_procs(),     1).
 -define(env_rpc_port(), ?DEF_RPC_LISTEN_PORT).
 
 -else.
 -define(env_mdcr_sync_proc_buf_size(),
-        case application:get_env(leo_storage, mdcr_sync_proc_buf_size) of
+        case application:get_env(leo_storage, mdcr_size_of_stacked_objs) of
             {ok, _MDCRSyncProcBufSize} -> _MDCRSyncProcBufSize;
             _ -> ?DEF_MDCR_SYNC_PROC_BUFSIZE
         end).
 -define(env_mdcr_sync_proc_timeout(),
-        case application:get_env(leo_storage, mdcr_sync_proc_timeout) of
+        case application:get_env(leo_storage, mdcr_stacking_timeout) of
             {ok, _MDCRSyncProcTimeout} -> _MDCRSyncProcTimeout;
             _ -> ?DEF_MDCR_SYNC_PROC_TIMEOUT
+        end).
+-define(env_mdcr_req_timeout(),
+        case application:get_env(leo_storage, mdcr_req_timeout) of
+            {ok, _MDCRReqTimeout} -> _MDCRReqTimeout;
+            _ -> ?DEF_MDCR_REQ_TIMEOUT
         end).
 -define(env_num_of_mdcr_sync_procs(),
         case application:get_env(leo_storage, num_of_mdcr_sync_procs) of

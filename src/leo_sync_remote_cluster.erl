@@ -36,8 +36,6 @@
 -export([handle_send/3,
          handle_fail/2]).
 
--define(DEF_TIMEOUT_REMOTE_CLUSTER, timer:seconds(60)).
-
 
 %%--------------------------------------------------------------------
 %% API
@@ -365,9 +363,9 @@ send_1([#?CLUSTER_MEMBER{node = Node,
     Node_1 = list_to_atom(lists:append([atom_to_list(Node),
                                         ":",
                                         integer_to_list(Port)])),
+    Timeout = ?env_mdcr_req_timeout(),
     Ret = case leo_rpc:call(Node_1, ?MODULE, store,
-                            [ClusterId, CompressedObjs],
-                            ?DEF_TIMEOUT_REMOTE_CLUSTER) of
+                            [ClusterId, CompressedObjs], Timeout) of
               {ok, RetL} ->
                   {ok, RetL};
               {error, Cause} ->

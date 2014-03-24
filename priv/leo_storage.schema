@@ -385,13 +385,22 @@
   {default, 67108864}
  ]}.
 
-%% @doc Stacking timeout (msec)
+%% @doc Stacking timeout (sec)
 {mapping,
  "mdc_replication.stacking_timeout",
  "leo_storage.mdcr_stacking_timeout",
  [
   {datatype, integer},
-  {default, 5000}
+  {default, 30}
+ ]}.
+
+%% @doc Request timeout (msec)
+{mapping,
+ "mdc_replication.req_timeout",
+ "leo_storage.mdcr_req_timeout",
+ [
+  {datatype, integer},
+  {default, 30000}
  ]}.
 
 
