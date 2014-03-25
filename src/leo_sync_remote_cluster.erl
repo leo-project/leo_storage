@@ -177,7 +177,7 @@ handle_fail(UId, [{AddrId, Key}|Rest] = _StackInfo) ->
 %%--------------------------------------------------------------------
 %% @doc Stack an object into "ordning-reda"
 %% @private
--spec(stack_fun(string(), #?OBJECT{}) ->
+-spec(stack_fun(atom(), #?OBJECT{}) ->
              ok | {error, any()}).
 stack_fun(ClusterId, #?OBJECT{addr_id = AddrId,
                               key     = Key} = Object) ->
@@ -352,12 +352,9 @@ send([],_StackedInfo,_CompressedObjs) ->
 send([#mdc_replication_info{cluster_members = Members}|Rest], StackedInfo, CompressedObjs) ->
     {ok, #?SYSTEM_CONF{cluster_id = ClusterId}} = leo_cluster_tbl_conf:get(),
     case send_1(Members, ClusterId, StackedInfo, CompressedObjs, 0) of
-        {ok, _RetL} ->
-            %% @TODO - Compare with local-cluster's objects
-            %% ?debugVal(length(_RetL)),
-            %% lists:foreach(fun(_Metadata) ->
-            %%                       ?debugVal(_Metadata)
-            %%               end, _RetL),
+        {ok, RetL} ->
+            %% Compare with local-cluster's objects
+            ok = compare_metadata(RetL),
             ok;
         _ ->
             void
@@ -398,11 +395,45 @@ send_1([#?CLUSTER_MEMBER{node = Node,
             case Ret of
                 {ok, _} ->
                     Ret;
-                {error,_} ->
+                {error,_Cause} ->
                     send_1(Rest, ClusterId,
                            StackedInfo, CompressedObjs, 0)
             end
     end.
+
+
+%% @doc Compare a local-metadata with a remote-metadata
+%%      If it's inconsistent, the metadata is put into the queue
+%% @private
+-spec(compare_metadata(list(#?METADATA{})) ->
+             ok).
+compare_metadata([]) ->
+    ok;
+compare_metadata([#?METADATA{cluster_id = ClusterId,
+                             addr_id    = AddrId,
+                             key        = Key,
+                             clock      = Clock,
+                             del        = Del}|Rest]) ->
+    case leo_object_storage_api:head({AddrId, Key}) of
+        {ok, MetaBin} ->
+            #?METADATA{clock = Clock_1,
+                       del   = Del_1} = binary_to_term(MetaBin),
+            case (Clock == Clock_1 andalso
+                  Del   == Del_1) of
+                true ->
+                    void;
+                false ->
+                    leo_storage_mq_client:publish(
+                      ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key)
+            end;
+        not_found ->
+            leo_storage_mq_client:publish(
+              ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key, ?DEL_TRUE);
+        {error, Cause} ->
+            ?warn("comapare_metadata/1",
+                  "key:~s, cause:~p", [binary_to_list(Key), Cause])
+    end,
+    compare_metadata(Rest).
 
 
 %% @doc Put messages of fail replication into the queue

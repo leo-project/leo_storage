@@ -151,6 +151,7 @@
           cluster_id = []       :: string(),
           addr_id = 0           :: integer(),
           key                   :: any(),
+          del = 0               :: integer(), %% del:[0:false, 1:true]
           timestamp = 0         :: integer(),
           times = 0             :: integer()}).
 

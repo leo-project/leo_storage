@@ -197,6 +197,7 @@ publish(?QUEUE_TYPE_SYNC_OBJ_WITH_DC = Id, ClusterId, AddrId, Key) ->
                                                             cluster_id = ClusterId,
                                                             addr_id    = AddrId,
                                                             key        = Key,
+                                                            del        = 0,
                                                             timestamp  = leo_date:now()}),
     leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
 
@@ -217,6 +218,16 @@ publish(?QUEUE_TYPE_REBALANCE = Id, Node, VNodeId, AddrId, Key) ->
         _Other  -> void
     end,
     ok = increment_counter(Table, VNodeId),
+    leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
+
+publish(?QUEUE_TYPE_SYNC_OBJ_WITH_DC = Id, ClusterId, AddrId, Key, Del) ->
+    KeyBin = term_to_binary({ClusterId, AddrId, Key}),
+    MessageBin  = term_to_binary(#inconsistent_data_with_dc{id         = leo_date:clock(),
+                                                            cluster_id = ClusterId,
+                                                            addr_id    = AddrId,
+                                                            key        = Key,
+                                                            del        = Del,
+                                                            timestamp  = leo_date:now()}),
     leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
 
 publish(_,_,_,_,_) ->
@@ -332,30 +343,8 @@ handle_call({consume, ?QUEUE_ID_SYNC_OBJ_WITH_DC, MessageBin}) ->
         {'EXIT', Cause} ->
             ?error("handle_call/1 - QUEUE_ID_SYNC_OBJ_WITH_DC", "cause:~p", [Cause]),
             {error, Cause};
-        #inconsistent_data_with_dc{cluster_id = ClusterId,
-                                   addr_id = AddrId,
-                                   key = Key} ->
-            Ret = case leo_storage_handler_object:get(AddrId, Key, -1) of
-                      {ok,_Metadata, Object} ->
-                          case ClusterId of
-                              undefined ->
-                                  leo_sync_remote_cluster:stack(Object);
-                              _ ->
-                                  leo_sync_remote_cluster:stack(ClusterId, Object)
-                          end;
-                      not_found ->
-                          ok;
-                      {error,_Cause} ->
-                          {error,_Cause}
-                  end,
-
-            case Ret of
-                ok ->
-                    ok;
-                {error,_Reason} ->
-                    ok = leo_storage_mq_client:publish(
-                           ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key)
-            end;
+        #inconsistent_data_with_dc{} = Msg ->
+            fix_consistency_between_clusters(Msg);
         _ ->
             {error, ?ERROR_COULD_MATCH}
     end.
@@ -660,6 +649,36 @@ notify_rebalance_message_to_manager(VNodeId) ->
         Error ->
             Error
     end.
+
+
+%% @doc Fix consistency of an object between a local-cluster and remote-cluster(s)
+%% @private
+fix_consistency_between_clusters(#inconsistent_data_with_dc{
+                                    cluster_id = ClusterId,
+                                    addr_id = AddrId,
+                                    key = Key,
+                                    del = ?DEL_FALSE}) ->
+    case leo_storage_handler_object:get(AddrId, Key, -1) of
+        {ok,_Metadata, Object} ->
+            leo_sync_remote_cluster:stack(Object);
+        not_found ->
+            ok;
+        {error,_Cause} ->
+            ok = leo_storage_mq_client:publish(
+                   ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key)
+    end;
+fix_consistency_between_clusters(#inconsistent_data_with_dc{
+                                    cluster_id = ClusterId,
+                                    addr_id = AddrId,
+                                    key = Key,
+                                    del = ?DEL_TRUE}) ->
+    Metadata = #?METADATA{cluster_id = ClusterId,
+                          addr_id = AddrId,
+                          key = Key,
+                          dsize = 0,
+                          del = ?DEL_FALSE},
+    Object = leo_object_storage_transformer:metadata_to_object(Metadata),
+    leo_sync_remote_cluster:stack(Object#?OBJECT{data = <<>>}).
 
 
 %%--------------------------------------------------------------------

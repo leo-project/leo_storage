@@ -121,12 +121,21 @@ gen_mocks(Node) ->
                      fun(_,_,_,_) ->
                              ok
                      end),
+    ok = meck:expect(leo_storage_mq_client, publish,
+                     fun(_,_,_,_,_) ->
+                             ok
+                     end),
+    ok = meck:new(leo_ordning_reda_api),
+    ok = meck:expect(leo_ordning_reda_api, stack,
+                     fun(_,_,_,_) ->
+                             ok
+                     end),
     ok.
 
 
 suite() ->
     stack("cluster_1",100),
-    stack([],100),
+    stack(undefined,  100),
     ok.
 
 
@@ -142,11 +151,7 @@ stack(ClusterId, Index) ->
     Object_1 = leo_object_storage_transformer:metadata_to_object(Meta),
     Object_2 = Object_1#?OBJECT{method = put,
                                 data = crypto:rand_bytes(Size)},
-
-    case ClusterId of
-        [] -> ok = leo_sync_remote_cluster:stack(Object_2);
-        _  -> ok = leo_sync_remote_cluster:stack(ClusterId, Object_2)
-    end,
+    ok = leo_sync_remote_cluster:stack(Object_2),
     stack(ClusterId, Index - 1).
 
 -endif.
