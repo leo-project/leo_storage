@@ -354,8 +354,7 @@ send([#mdc_replication_info{cluster_members = Members}|Rest], StackedInfo, Compr
     case send_1(Members, ClusterId, StackedInfo, CompressedObjs, 0) of
         {ok, RetL} ->
             %% Compare with local-cluster's objects
-            ok = compare_metadata(RetL),
-            ok;
+            compare_metadata(RetL);
         _ ->
             void
     end,
