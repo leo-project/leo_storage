@@ -566,40 +566,61 @@
          [leo_manager_api, synchronize]
  end}.
 
-%% Leo' RPC
+
+%% --------------------------------------------------------------------
+%% RPC
+%% --------------------------------------------------------------------
 %% @doc leo-rpc.node
 {translation, "leo_rpc.node",
  fun(Conf) ->
-         Node = cuttlefish_util:conf_get_value("nodename", Conf),
-         list_to_atom(Node)
+         NodeName = cuttlefish_util:conf_get_value("nodename", Conf),
+         PortNum  = cuttlefish_util:conf_get_value("rpc.server.listen_port", Conf),
+         list_to_atom(lists:append([NodeName, ":", integer_to_list(PortNum)]))
  end}.
 
-
-%% @doc leo-rpc.acceptors
+%% @doc
 {mapping,
- "leo_rpc.num_of_acceptors",
+ "rpc.server.acceptors",
  "leo_rpc.num_of_acceptors",
  [
   {datatype, integer},
   {default, 16}
  ]}.
 
-%% @doc leo-rpc.listen_port
+%% @doc
 {mapping,
- "leo_rpc.listen_port",
+ "rpc.server.listen_port",
  "leo_rpc.listen_port",
  [
   {datatype, integer},
   {default, 13075}
  ]}.
 
-%% @doc leo-rpc.listen_timeout
+%% @doc
 {mapping,
- "leo_rpc.listen_timeout",
+ "rpc.server.listen_timeout",
  "leo_rpc.listen_timeout",
  [
   {datatype, integer},
   {default, 30000}
+ ]}.
+
+%% @doc
+{mapping,
+ "rpc.client.connection_pool_size",
+ "leo_rpc.connection_pool_size",
+ [
+  {datatype, integer},
+  {default, 16}
+ ]}.
+
+%% @doc
+{mapping,
+ "rpc.client.connection_buffer_size",
+ "leo_rpc.connection_buffer_size",
+ [
+  {datatype, integer},
+  {default, 16}
  ]}.
 
 
