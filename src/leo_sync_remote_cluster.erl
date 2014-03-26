@@ -76,7 +76,7 @@ defer_stack(#?OBJECT{} = Object) ->
                       {ok, _} ->
                           stack(Object);
                       not_found ->
-                          voidl;
+                          void;
                       {error, Cause} ->
                           ?warn("defer_stack/1", "key:~s, cause:~p",
                                 [binary_to_list(Object#?OBJECT.key), Cause])
