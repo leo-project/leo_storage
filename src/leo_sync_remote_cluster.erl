@@ -70,17 +70,19 @@ stop(Id) ->
 -spec(defer_stack(null | #?OBJECT{}) ->
              ok | {error, any()}).
 defer_stack(#?OBJECT{} = Object) ->
-    %% Check whether stack an object or not
-    case leo_mdcr_tbl_cluster_stat:find_by_state(?STATE_RUNNING) of
-        {ok, _} ->
-            stack(Object);
-        not_found ->
-            ok;
-        {error, Cause} ->
-            ?warn("defer_stack/1",
-                  "key:~s, cause:~p", [binary_to_list(Object#?OBJECT.key), Cause]),
-            ok
-    end;
+    spawn(fun() ->
+                  %% Check whether stack an object or not
+                  case leo_mdcr_tbl_cluster_stat:find_by_state(?STATE_RUNNING) of
+                      {ok, _} ->
+                          stack(Object);
+                      not_found ->
+                          voidl;
+                      {error, Cause} ->
+                          ?warn("defer_stack/1", "key:~s, cause:~p",
+                                [binary_to_list(Object#?OBJECT.key), Cause])
+                  end
+          end),
+    ok;
 defer_stack(_) ->
     ok.
 
