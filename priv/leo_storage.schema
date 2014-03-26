@@ -581,7 +581,7 @@
  "leo_rpc.num_of_acceptors",
  [
   {datatype, integer},
-  {default, 128}
+  {default, 16}
  ]}.
 
 %% @doc leo-rpc.listen_port
@@ -590,7 +590,7 @@
  "leo_rpc.listen_port",
  [
   {datatype, integer},
-  {default, 128}
+  {default, 13075}
  ]}.
 
 %% @doc leo-rpc.listen_timeout
@@ -599,7 +599,7 @@
  "leo_rpc.listen_timeout",
  [
   {datatype, integer},
-  {default, 10000}
+  {default, 30000}
  ]}.
 
 
