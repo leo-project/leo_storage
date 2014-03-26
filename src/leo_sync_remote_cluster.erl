@@ -160,9 +160,9 @@ handle_send(UId, StackedInfo, CompressedObjs) ->
 handle_fail(_, []) ->
     ok;
 handle_fail(UId, [{AddrId, Key}|Rest] = _StackInfo) ->
-    ?warn("handle_fail/2","uid:~w, addr-id:~w, key:~p", [UId, AddrId, Key]),
+    ?warn("handle_fail/2", "uid:~w, addr-id:~w, key:~p", [UId, AddrId, Key]),
     case get_cluster_id_from_uid(UId) of
-        [] ->
+        undefined ->
             ok = leo_storage_mq_client:publish(
                    ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, AddrId, Key);
         ClusterId ->
@@ -371,7 +371,6 @@ send_1([#?CLUSTER_MEMBER{node = Node,
     Node_1 = list_to_atom(lists:append([atom_to_list(Node),
                                         ":",
                                         integer_to_list(Port)])),
-
     case leo_rpc:call(Node_1, erlang, node, []) of
         Msg when Msg == timeout orelse
                  element(1, Msg) == badrpc ->

@@ -654,18 +654,15 @@ notify_rebalance_message_to_manager(VNodeId) ->
 %% @doc Fix consistency of an object between a local-cluster and remote-cluster(s)
 %% @private
 fix_consistency_between_clusters(#inconsistent_data_with_dc{
-                                    cluster_id = ClusterId,
                                     addr_id = AddrId,
                                     key = Key,
                                     del = ?DEL_FALSE}) ->
     case leo_storage_handler_object:get(AddrId, Key, -1) of
-        {ok,_Metadata, Object} ->
-            leo_sync_remote_cluster:stack(Object);
-        not_found ->
-            ok;
-        {error,_Cause} ->
-            ok = leo_storage_mq_client:publish(
-                   ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key)
+        {ok, Metadata, Bin} ->
+            Object = leo_object_storage_transformer:metadata_to_object(Metadata),
+            leo_sync_remote_cluster:defer_stack(Object#?OBJECT{data = Bin});
+        _ ->
+            ok
     end;
 fix_consistency_between_clusters(#inconsistent_data_with_dc{
                                     cluster_id = ClusterId,
