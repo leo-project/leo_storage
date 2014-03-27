@@ -241,7 +241,7 @@ compact(start, NumOfTargets, MaxProc) ->
                               _Other -> lists:sublist(TargetPids1, NumOfTargets)
                           end,
             leo_compaction_manager_fsm:start(
-              TargetPids2, MaxProc, fun leo_redundant_manager_api:has_charge_of_node/1)
+              TargetPids2, MaxProc, fun leo_redundant_manager_api:has_charge_of_node/2)
     end.
 
 compact(suspend) ->
