@@ -331,7 +331,7 @@ get_cluster_members_2([#?CLUSTER_INFO{cluster_id = ClusterId}|Rest],
         {ok, #?SYSTEM_CONF{cluster_id = ClusterId}} ->
             get_cluster_members_2(Rest, NumOfReplicas, Acc);
         _ ->
-            case leo_mdcr_tbl_cluster_member:find_by_limit(
+            case leo_mdcr_tbl_cluster_member:find_by_limit_with_rnd(
                    ClusterId, ?DEF_NUM_OF_REMOTE_MEMBERS) of
                 {ok, ClusterMembers} ->
                     get_cluster_members_2(Rest, NumOfReplicas,
