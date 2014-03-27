@@ -738,13 +738,16 @@ replicate_fun(_,_,_) ->
 replicate_callback() ->
     replicate_callback(null).
 
--spec(replicate_callback(#?OBJECT{}) ->
+-spec(replicate_callback(#?OBJECT{}|null) ->
              function()).
 replicate_callback(Object) ->
     fun({ok, ?CMD_PUT, ETag}) ->
             ok = leo_sync_remote_cluster:defer_stack(Object),
             {ok, ETag};
        ({ok,?CMD_DELETE,_ETag}) ->
+            ok = leo_sync_remote_cluster:defer_stack(Object),
+            ok;
+       ({ok,_,_ETag}) ->
             ok = leo_sync_remote_cluster:defer_stack(Object),
             ok;
        ({error, Cause}) ->
