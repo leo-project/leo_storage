@@ -265,6 +265,12 @@ subscribe_2_({Test0Node, _Test1Node}) ->
                         {ok, #redundancies{nodes = [{Test0Node, true}]}}
                 end),
 
+    meck:new(leo_object_storage_api),
+    meck:expect(leo_object_storage_api, head,
+                fun({_AddrId, _Key}) ->
+                        {ok, term_to_binary(#?METADATA{num_of_replicas = 0})}
+                end),
+
     timer:sleep(100),
     leo_storage_mq_client:handle_call({consume, ?QUEUE_ID_REBALANCE, ?TEST_MSG_3}),
 

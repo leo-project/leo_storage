@@ -426,8 +426,8 @@ delete_node_from_redundancies([],_, Acc) ->
     {ok, lists:reverse(Acc)};
 delete_node_from_redundancies([#redundant_node{node = Node}|Rest], Node, Acc) ->
     delete_node_from_redundancies(Rest, Node, Acc);
-delete_node_from_redundancies([RedundatNode|Rest], Node, Acc) ->
-    delete_node_from_redundancies(Rest, Node, [RedundatNode|Acc]).
+delete_node_from_redundancies([RedundantNode|Rest], Node, Acc) ->
+    delete_node_from_redundancies(Rest, Node, [RedundantNode|Acc]).
 
 
 %% @doc Find a node from redundancies
@@ -594,17 +594,22 @@ rebalance_1(#rebalance_message{node = Node,
     end.
 
 %% @private
+rebalance_2({ok,[]},_) ->
+    ok;
 rebalance_2({ok, Redundancies}, #rebalance_message{node = Node,
                                                    addr_id = AddrId,
                                                    key     = Key}) ->
-    case find_node_from_redundancies(Redundancies, erlang:node()) of
+    Redundancies_1 = get_redundancies_with_replicas(
+                       AddrId, Key, Redundancies),
+    case find_node_from_redundancies(Redundancies_1, erlang:node()) of
         true ->
             case leo_storage_handler_object:replicate([Node], AddrId, Key) of
                 ok ->
                     ok;
                 Error ->
                     ok = leo_storage_mq_client:publish(
-                           ?QUEUE_TYPE_PER_OBJECT, AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
+                           ?QUEUE_TYPE_PER_OBJECT,
+                           AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
                     Error
             end;
         false ->
@@ -612,6 +617,24 @@ rebalance_2({ok, Redundancies}, #rebalance_message{node = Node,
     end;
 rebalance_2(_,_) ->
     ok.
+
+
+%% @doc Retrieve redundancies with a number of replicas
+%% @private
+get_redundancies_with_replicas(AddrId, Key, Redundancies) ->
+    %% Retrieve redundancies with a number of replicas
+    case leo_object_storage_api:head({AddrId, Key}) of
+        {ok, MetaBin} ->
+            Metadata = binary_to_term(MetaBin),
+            case Metadata of
+                #?METADATA{num_of_replicas = 0} ->
+                    Redundancies;
+                #?METADATA{num_of_replicas = NumOfReplicas} ->
+                    lists:sublist(Redundancies, NumOfReplicas)
+            end;
+        _ ->
+            Redundancies
+    end.
 
 
 %% @doc Notify a rebalance-progress messages to manager.
