@@ -360,7 +360,7 @@
  "leo_storage.size_of_stacked_objs",
  [
   {datatype, integer},
-  {default, 67108864}
+  {default, 33554432}
  ]}.
 
 %% @doc Stacking timeout (msec)
@@ -382,7 +382,7 @@
  "leo_storage.mdcr_size_of_stacked_objs",
  [
   {datatype, integer},
-  {default, 67108864}
+  {default, 33554432}
  ]}.
 
 %% @doc Stacking timeout (sec)
