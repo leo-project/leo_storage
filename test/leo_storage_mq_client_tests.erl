@@ -206,6 +206,12 @@ subscribe_0_({Test0Node, Test1Node}) ->
                         {ok, #member{state = ?STATE_RUNNING}}
                 end),
 
+    meck:new(leo_object_storage_api),
+    meck:expect(leo_object_storage_api, head,
+                fun({_AddrId, _Key}) ->
+                        {ok, term_to_binary(#?METADATA{num_of_replicas = 0})}
+                end),
+
     timer:sleep(100),
     leo_storage_mq_client:handle_call({consume, ?QUEUE_ID_PER_OBJECT, ?TEST_MSG_1}),
 
@@ -237,6 +243,13 @@ subscribe_1_({Test0Node, Test1Node}) ->
                 fun(_Node) ->
                         {ok, #member{state = ?STATE_RUNNING}}
                 end),
+
+    meck:new(leo_object_storage_api),
+    meck:expect(leo_object_storage_api, head,
+                fun({_AddrId, _Key}) ->
+                        {ok, term_to_binary(#?METADATA{num_of_replicas = 0})}
+                end),
+
     timer:sleep(100),
     leo_storage_mq_client:handle_call({consume, ?QUEUE_ID_PER_OBJECT, ?TEST_MSG_1}),
 

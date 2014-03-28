@@ -359,7 +359,10 @@ handle_call({consume, ?QUEUE_ID_SYNC_OBJ_WITH_DC, MessageBin}) ->
              ok).
 recover_node(Node) ->
     Fun = fun(Key, V, Acc) ->
-                  #?METADATA{addr_id = AddrId} = binary_to_term(V),
+                  Metadata_1 = binary_to_term(V),
+                  Metadata_2 = leo_object_storage_transformer:transform_metadata(Metadata_1),
+                  #?METADATA{addr_id = AddrId} = Metadata_2,
+
                   case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
                       {ok, #redundancies{nodes = Redundancies}} ->
                           Nodes = [N || #redundant_node{node = N} <- Redundancies],
@@ -370,9 +373,9 @@ recover_node(Node) ->
                               false  ->
                                   void
                           end,
-                          {ok, Acc};
-                      _ ->
-                          {ok, Acc}
+                          Acc;
+                      _Other ->
+                          Acc
                   end
           end,
     _ = leo_object_storage_api:fetch_by_addr_id(0, Fun),
@@ -476,7 +479,9 @@ notify_message_to_manager([Manager|T], VNodeId, Node) ->
 correct_redundancies(Key) ->
     {ok, #redundancies{nodes = Redundancies,
                        id    = AddrId}} = leo_redundant_manager_api:get_redundancies_by_key(Key),
-    correct_redundancies_1(Key, AddrId, Redundancies, [], []).
+    Redundancies_1 = get_redundancies_with_replicas(
+                       AddrId, Key, Redundancies),
+    correct_redundancies_1(Key, AddrId, Redundancies_1, [], []).
 
 %% correct_redundancies_1/5 - next.
 %%
@@ -625,8 +630,7 @@ get_redundancies_with_replicas(AddrId, Key, Redundancies) ->
     %% Retrieve redundancies with a number of replicas
     case leo_object_storage_api:head({AddrId, Key}) of
         {ok, MetaBin} ->
-            Metadata = binary_to_term(MetaBin),
-            case Metadata of
+            case binary_to_term(MetaBin) of
                 #?METADATA{num_of_replicas = 0} ->
                     Redundancies;
                 #?METADATA{num_of_replicas = NumOfReplicas} ->
