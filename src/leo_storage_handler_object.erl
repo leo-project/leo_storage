@@ -392,7 +392,8 @@ replicate(Object) ->
                        end,
 
             leo_storage_replicator:replicate(
-              Method, Quorum_2, Redundancies_1, Object, replicate_callback());
+              Method, Quorum_2, Redundancies_1,
+              Object, replicate_callback());
         {error, Cause} ->
             {error, Cause}
     end.
@@ -411,12 +412,14 @@ replicate(DestNodes, AddrId, Key) ->
                 #?METADATA{del = ?DEL_FALSE} = Metadata ->
                     case ?MODULE:get({Ref, Key}) of
                         {ok, Ref, Metadata, Bin} ->
-                            leo_sync_local_cluster:stack(DestNodes, AddrId, Key, Metadata, Bin);
+                            leo_sync_local_cluster:stack(
+                              DestNodes, AddrId, Key, Metadata, Bin);
                         {error, Ref, Cause} ->
                             {error, Cause}
                     end;
                 #?METADATA{del = ?DEL_TRUE} = Metadata ->
-                    leo_sync_local_cluster:stack(DestNodes, AddrId, Key, Metadata, <<>>);
+                    leo_sync_local_cluster:stack(
+                      DestNodes, AddrId, Key, Metadata, <<>>);
                 _ ->
                     {error, invalid_data_type}
             end;
