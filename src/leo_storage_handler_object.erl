@@ -413,13 +413,19 @@ replicate(DestNodes, AddrId, Key) ->
                     case ?MODULE:get({Ref, Key}) of
                         {ok, Ref, Metadata, Bin} ->
                             leo_sync_local_cluster:stack(
-                              DestNodes, AddrId, Key, Metadata, Bin);
+                              DestNodes, AddrId, Key, Metadata, Bin),
+                            Object = leo_object_storage_transformer:metadata_to_object(Metadata),
+                            Object2 = Object#?OBJECT{data = Bin},
+                            leo_sync_remote_cluster:defer_stack(Object2);
                         {error, Ref, Cause} ->
                             {error, Cause}
                     end;
                 #?METADATA{del = ?DEL_TRUE} = Metadata ->
                     leo_sync_local_cluster:stack(
-                      DestNodes, AddrId, Key, Metadata, <<>>);
+                      DestNodes, AddrId, Key, Metadata, <<>>),
+                    Object = leo_object_storage_transformer:metadata_to_object(Metadata),
+                    Object2 = Object#?OBJECT{data = <<>>},
+                    leo_sync_remote_cluster:defer_stack(Object2);
                 _ ->
                     {error, invalid_data_type}
             end;
