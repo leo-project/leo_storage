@@ -567,6 +567,21 @@
  end}.
 
 
+%% @doc Request timeout (msec)
+%% @doc leo-redundant-manager.norify_mf
+{mapping,
+ "leo_redundant_manager.sync_new_cluster_mf",
+ "leo_redundant_manager.sync_new_cluster_mf",
+ [
+  {default, []}
+ ]}.
+
+{translation, "leo_redundant_manager.sync_new_cluster_mf",
+ fun(_Conf) ->
+         [leo_storage_api, sync_new_cluster]
+ end}.
+
+
 %% --------------------------------------------------------------------
 %% RPC
 %% --------------------------------------------------------------------
