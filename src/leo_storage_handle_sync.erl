@@ -32,7 +32,9 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -export([get_metadatas/1,
-         force_sync/1]).
+         force_sync/1,
+         send_addrid_and_key_to_remote/2
+        ]).
 -export([handle_call/1]).
 
 -define(DEF_THRESHOLD_LEN, 100).
@@ -66,6 +68,81 @@ force_sync(ClusterId) when is_atom(ClusterId) ->
     handle_call(ClusterId);
 force_sync(_) ->
     {error, invalid_parameter}.
+
+
+%% @doc Send list of metadatas to remote-storage(s),
+%%      then compare with metadatas of remote-storage
+%%      if found an inconsist metadata then fix it
+%%
+-spec(send_addrid_and_key_to_remote(atom(), list(tuple())) ->
+             ok).
+send_addrid_and_key_to_remote(ClusterId, ListAddrIdAndKey) ->
+    case leo_sync_remote_cluster:get_cluster_members(ClusterId) of
+        {ok, ListMembers} ->
+            send_addrid_and_key_to_remote_1(
+              ListMembers, ClusterId, ListAddrIdAndKey);
+        {error, Cause} ->
+            ?warn("send_addrid_and_key_callback/1",
+                  "cause:~p", [Cause]),
+            ok
+    end.
+
+%% @private
+send_addrid_and_key_to_remote_1([],_ClusterId,_ListAddrIdAndKey) ->
+    ok;
+send_addrid_and_key_to_remote_1([#mdc_replication_info{
+                                    cluster_members = Members}|Rest],
+                                ClusterId, ListAddrIdAndKey) ->
+    case send_addrid_and_key_to_remote_2(Members, ClusterId, ListAddrIdAndKey, 0) of
+        {ok, RetL} ->
+            leo_sync_remote_cluster:compare_metadata(RetL);
+        _ ->
+            void
+    end,
+    send_addrid_and_key_to_remote_1(Rest, ClusterId, ListAddrIdAndKey).
+
+%% @private
+send_addrid_and_key_to_remote_2([], ClusterId, ListAddrIdAndKey,_RetryTimes) ->
+    %% Enqueue a fail msg
+    ok = leo_storage_mq_client:publish(
+           ?QUEUE_TYPE_COMP_META_WITH_DC, ClusterId, ListAddrIdAndKey),
+    ok;
+send_addrid_and_key_to_remote_2([_|Rest], ClusterId, ListAddrIdAndKey, ?DEF_MAX_RETRY_TIMES) ->
+    send_addrid_and_key_to_remote_2(Rest, ClusterId, ListAddrIdAndKey, 0);
+send_addrid_and_key_to_remote_2([#?CLUSTER_MEMBER{
+                                     node = Node,
+                                     port = Port}|Rest] = ClusterMembes,
+                                ClusterId, ListAddrIdAndKey, RetryTimes) ->
+    Node_1 = list_to_atom(lists:append([atom_to_list(Node),
+                                        ":",
+                                        integer_to_list(Port)])),
+    case leo_rpc:call(Node_1, erlang, node, []) of
+        Msg when Msg == timeout orelse
+                 element(1, Msg) == badrpc ->
+            send_addrid_and_key_to_remote_2(
+              ClusterMembes, ClusterId, ListAddrIdAndKey, RetryTimes + 1);
+        _ ->
+            Timeout = ?env_mdcr_req_timeout(),
+            Ret = case leo_rpc:call(Node_1, ?MODULE, get_metadatas,
+                                    [ListAddrIdAndKey], Timeout) of
+                      {ok, RetL} ->
+                          {ok, RetL};
+                      {error, Cause} ->
+                          {error, Cause};
+                      {badrpc, Cause} ->
+                          {error, Cause};
+                      timeout = Cause ->
+                          {error, Cause}
+                  end,
+
+            case Ret of
+                {ok, _} ->
+                    Ret;
+                {error,_Cause} ->
+                    send_addrid_and_key_to_remote_2(
+                      Rest, ClusterId, ListAddrIdAndKey, 0)
+            end
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -130,71 +207,3 @@ send_addrid_and_key_callback_2([Node|_],
     [{AddrId, Key}|Acc];
 send_addrid_and_key_callback_2(_,_,Acc) ->
     Acc.
-
-
-%% @doc Send list of metadatas to remote-storage(s),
-%%      then compare with metadatas of remote-storage
-%%      if found an inconsist metadata then fix it
-%% @private
-send_addrid_and_key_to_remote(ClusterId, ListAddrIdAndKey) ->
-    case leo_sync_remote_cluster:get_cluster_members(ClusterId) of
-        {ok, ListMembers} ->
-            send_addrid_and_key_to_remote_1(ListMembers, ListAddrIdAndKey);
-        {error, Cause} ->
-            ?warn("send_addrid_and_key_callback/1", "cause:~p", [Cause]),
-            ok
-    end.
-
-%% @private
-send_addrid_and_key_to_remote_1([],_ListAddrIdAndKey) ->
-    ok;
-send_addrid_and_key_to_remote_1([#mdc_replication_info{
-                                    cluster_members = Members}|Rest], ListAddrIdAndKey) ->
-    case send_addrid_and_key_to_remote_2(Members, ListAddrIdAndKey, 0) of
-        {ok, RetL} ->
-            %% Compare with local-cluster's objects
-            leo_sync_remote_cluster:compare_metadata(RetL);
-        _ ->
-            void
-    end,
-    send_addrid_and_key_to_remote_1(Rest, ListAddrIdAndKey).
-
-
-%% @private
-send_addrid_and_key_to_remote_2([],_ListAddrIdAndKey,_RetryTimes) ->
-    %% @TODO enqueue a fail msg
-    ok;
-send_addrid_and_key_to_remote_2([_|Rest], ListAddrIdAndKey, ?DEF_MAX_RETRY_TIMES) ->
-    send_addrid_and_key_to_remote_2(Rest, ListAddrIdAndKey, 0);
-send_addrid_and_key_to_remote_2([#?CLUSTER_MEMBER{
-                                     node = Node,
-                                     port = Port}|Rest] = ClusterMembes,
-                                ListAddrIdAndKey, RetryTimes) ->
-    Node_1 = list_to_atom(lists:append([atom_to_list(Node),
-                                        ":",
-                                        integer_to_list(Port)])),
-    case leo_rpc:call(Node_1, erlang, node, []) of
-        Msg when Msg == timeout orelse
-                 element(1, Msg) == badrpc ->
-            send_addrid_and_key_to_remote_2(ClusterMembes, ListAddrIdAndKey, RetryTimes + 1);
-        _ ->
-            Timeout = ?env_mdcr_req_timeout(),
-            Ret = case leo_rpc:call(Node_1, ?MODULE, get_metadatas,
-                                    [ListAddrIdAndKey], Timeout) of
-                      {ok, RetL} ->
-                          {ok, RetL};
-                      {error, Cause} ->
-                          {error, Cause};
-                      {badrpc, Cause} ->
-                          {error, Cause};
-                      timeout = Cause ->
-                          {error, Cause}
-                  end,
-
-            case Ret of
-                {ok, _} ->
-                    Ret;
-                {error,_Cause} ->
-                    send_addrid_and_key_to_remote_2(Rest, ListAddrIdAndKey, 0)
-            end
-    end.
