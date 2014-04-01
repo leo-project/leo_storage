@@ -341,6 +341,57 @@
  ]}.
 
 
+%% @doc MQ sync obj with dc
+{mapping,
+ "mq.sync_obj_with_dc.num_of_batch_process",
+ "leo_storage.cns_num_of_batch_process_sync_obj_with_dc",
+ [
+  {datatype, integer},
+  {default, 1}
+ ]}.
+
+{mapping,
+ "mq.sync_obj_with_dc.interval_min",
+ "leo_storage.cns_interval_sync_obj_with_dc_min",
+ [
+  {datatype, integer},
+  {default, 8}
+ ]}.
+
+{mapping,
+ "mq.sync_obj_with_dc.interval_max",
+ "leo_storage.cns_interval_sync_obj_with_dc_max",
+ [
+  {datatype, integer},
+  {default, 32}
+ ]}.
+
+%% @doc MQ compare metadata with dc
+{mapping,
+ "mq.comp_meta_with_dc.num_of_batch_process",
+ "leo_storage.cns_num_of_batch_process_comp_meta_with_dc",
+ [
+  {datatype, integer},
+  {default, 1}
+ ]}.
+
+{mapping,
+ "mq.comp_meta_with_dc.interval_min",
+ "leo_storage.cns_interval_comp_meta_with_dc_min",
+ [
+  {datatype, integer},
+  {default, 8}
+ ]}.
+
+{mapping,
+ "mq.comp_meta_with_dc.interval_max",
+ "leo_storage.cns_interval_comp_meta_with_dc_max",
+ [
+  {datatype, integer},
+  {default, 32}
+ ]}.
+
+
 %% --------------------------------------------------------------------
 %% STORAGE - Replication/Recover
 %% --------------------------------------------------------------------
@@ -363,13 +414,13 @@
   {default, 33554432}
  ]}.
 
-%% @doc Stacking timeout (msec)
+%% @doc Stacking timeout (sec)
 {mapping,
  "replication.recovery.stacking_timeout",
  "leo_storage.stacking_timeout",
  [
   {datatype, integer},
-  {default, 5000}
+  {default, 5}
  ]}.
 
 

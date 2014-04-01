@@ -202,7 +202,7 @@
 
 -define(env_stacking_timeout(),
         case application:get_env(leo_storage, stacking_timeout) of
-            {ok, StackingTimeout} -> StackingTimeout;
+            {ok, StackingTimeout} -> timer:seconds(StackingTimeout);
             _ -> 1000 %% 1sec
         end).
 
@@ -354,7 +354,7 @@
 %% For Multi-DC Replication
 -define(DEF_PREFIX_MDCR_SYNC_PROC_1, "leo_mdcr_sync_w1_").
 -define(DEF_PREFIX_MDCR_SYNC_PROC_2, "leo_mdcr_sync_w2_").
--define(DEF_MDCR_SYNC_PROC_BUFSIZE, 1024 * 1024 * 64).  %% 64MB
+-define(DEF_MDCR_SYNC_PROC_BUFSIZE, 1024 * 1024 * 32).  %% 32MB
 -define(DEF_MDCR_SYNC_PROC_TIMEOUT, timer:seconds(30)). %% 30sec
 -define(DEF_MDCR_REQ_TIMEOUT,       timer:seconds(30)). %% 30sec
 -define(DEF_MDCR_SYNC_PROCS, 1).
