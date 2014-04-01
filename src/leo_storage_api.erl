@@ -37,7 +37,7 @@
 %% API
 -export([register_in_monitor/1, register_in_monitor/2,
          get_routing_table_chksum/0,
-         update_manager_nodes/1,
+         update_manager_nodes/1, recover_remote/2,
          start/1, start/2, start/3, stop/0, attach/1, synchronize/1, synchronize/2,
          compact/1, compact/3, get_node_status/0,
          rebalance/1, rebalance/3]).
@@ -357,3 +357,16 @@ rebalance_1([]) ->
 rebalance_1([{VNodeId, Node}|T]) ->
     ok = leo_storage_mq_client:publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, VNodeId, Node),
     rebalance_1(T).
+
+%% recover a remote cluster's object
+-spec(recover_remote(integer(), binary()) ->
+             ok | {error, any()}).
+recover_remote(AddrId, Key) ->
+    case leo_object_storage_api:get({AddrId, Key}) of
+        {ok, _Metadata, Object} ->
+            leo_sync_remote_cluster:defer_stack(Object);
+        not_found = Cause ->
+            {error, Cause};
+        {error, Cause} ->
+            {error, Cause}
+    end.
