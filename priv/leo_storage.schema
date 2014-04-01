@@ -567,19 +567,14 @@
  end}.
 
 
-%% @doc Request timeout (msec)
-%% @doc leo-redundant-manager.norify_mf
+%% @doc leo-redundant-manager.sync_new_cluster_mf
 {mapping,
- "leo_redundant_manager.sync_new_cluster_mf",
- "leo_redundant_manager.sync_new_cluster_mf",
+ "leo_redundant_manager.sync_new_cluster_mod",
+ "leo_redundant_manager.sync_new_cluster_mod",
  [
-  {default, []}
+  {datatype, atom},
+  {default, 'leo_storage_handle_sync'}
  ]}.
-
-{translation, "leo_redundant_manager.sync_new_cluster_mf",
- fun(_Conf) ->
-         [leo_storage_api, sync_new_cluster]
- end}.
 
 
 %% --------------------------------------------------------------------
@@ -599,7 +594,7 @@
  "leo_rpc.num_of_acceptors",
  [
   {datatype, integer},
-  {default, 16}
+  {default, 128}
  ]}.
 
 %% @doc
@@ -608,7 +603,7 @@
  "leo_rpc.listen_port",
  [
   {datatype, integer},
-  {default, 13075}
+  {default, 13077}
  ]}.
 
 %% @doc
@@ -626,7 +621,7 @@
  "leo_rpc.connection_pool_size",
  [
   {datatype, integer},
-  {default, 16}
+  {default, 8}
  ]}.
 
 %% @doc
@@ -635,7 +630,7 @@
  "leo_rpc.connection_buffer_size",
  [
   {datatype, integer},
-  {default, 16}
+  {default, 8}
  ]}.
 
 

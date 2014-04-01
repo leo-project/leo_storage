@@ -32,7 +32,8 @@
 
 -export([start_link/0, start_link/1, stop/1,
          defer_stack/1, stack/1, stack/2, store/2,
-         gen_id/0, gen_id/1]).
+         gen_id/0, gen_id/1,
+         get_cluster_members/1, compare_metadata/1]).
 -export([handle_send/3,
          handle_fail/2]).
 
@@ -135,6 +136,91 @@ gen_id({cluster_id, ClusterId}) ->
                       false -> ClusterId
                   end,
     list_to_atom(lists:append([?DEF_PREFIX_MDCR_SYNC_PROC_2, ClusterId_1])).
+
+
+%% @doc Retrieve cluster members
+%%
+get_cluster_members(undefined) ->
+    case leo_mdcr_tbl_cluster_info:all() of
+        {ok, ClusterInfoList} ->
+            get_cluster_members_1(ClusterInfoList);
+        {error, Cause} ->
+            {error, Cause}
+    end;
+get_cluster_members(ClusterId) ->
+    get_cluster_members_1([#?CLUSTER_INFO{cluster_id = ClusterId}]).
+
+%% @private
+get_cluster_members_1(ClusterInfoList) ->
+    case leo_cluster_tbl_conf:get() of
+        {ok, #?SYSTEM_CONF{num_of_dc_replicas = NumOfReplicas}} ->
+            case get_cluster_members_2(ClusterInfoList, NumOfReplicas, []) of
+                {ok, MDCR_Info} ->
+                    {ok,  MDCR_Info};
+                {error, Cause} ->
+                    {error, Cause}
+            end;
+        {error, Cause} ->
+            {error, Cause}
+    end.
+
+%% @private
+get_cluster_members_2([],_NumOfReplicas, Acc) ->
+    {ok, Acc};
+get_cluster_members_2([#?CLUSTER_INFO{cluster_id = ClusterId}|Rest],
+                      NumOfReplicas, Acc) ->
+    case leo_cluster_tbl_conf:get() of
+        {ok, #?SYSTEM_CONF{cluster_id = ClusterId}} ->
+            get_cluster_members_2(Rest, NumOfReplicas, Acc);
+        _ ->
+            case leo_mdcr_tbl_cluster_member:find_by_limit_with_rnd(
+                   ClusterId, ?DEF_NUM_OF_REMOTE_MEMBERS) of
+                {ok, ClusterMembers} ->
+                    get_cluster_members_2(Rest, NumOfReplicas,
+                                          [#mdc_replication_info{cluster_id = ClusterId,
+                                                                 num_of_replicas = NumOfReplicas,
+                                                                 cluster_members = ClusterMembers}
+                                           |Acc]);
+                not_found = Cause ->
+                    {error, Cause};
+                {error, Cause} ->
+                    {error, Cause}
+            end
+    end.
+
+
+%% @doc Compare a local-metadata with a remote-metadata
+%%      If it's inconsistent, the metadata is put into the queue
+%%
+-spec(compare_metadata(list(#?METADATA{})) ->
+             ok).
+compare_metadata([]) ->
+    ok;
+compare_metadata([#?METADATA{cluster_id = ClusterId,
+                             addr_id    = AddrId,
+                             key        = Key,
+                             clock      = Clock,
+                             del        = Del}|Rest]) ->
+    case leo_object_storage_api:head({AddrId, Key}) of
+        {ok, MetaBin} ->
+            #?METADATA{clock = Clock_1,
+                       del   = Del_1} = binary_to_term(MetaBin),
+            case (Clock == Clock_1 andalso
+                  Del   == Del_1) of
+                true ->
+                    void;
+                false ->
+                    leo_storage_mq_client:publish(
+                      ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key)
+            end;
+        not_found ->
+            leo_storage_mq_client:publish(
+              ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key, ?DEL_TRUE);
+        {error, Cause} ->
+            ?warn("comapare_metadata/1",
+                  "key:~s, cause:~p", [binary_to_list(Key), Cause])
+    end,
+    compare_metadata(Rest).
 
 
 %%--------------------------------------------------------------------
@@ -296,57 +382,6 @@ get_cluster_id_from_uid(_) ->
     undefined.
 
 
-%% @doc Retrieve cluster members
-%% @private
-get_cluster_members(undefined) ->
-    case leo_mdcr_tbl_cluster_info:all() of
-        {ok, ClusterInfoList} ->
-            get_cluster_members_1(ClusterInfoList);
-        {error, Cause} ->
-            {error, Cause}
-    end;
-get_cluster_members(ClusterId) ->
-    get_cluster_members_1([#?CLUSTER_INFO{cluster_id = ClusterId}]).
-
-%% @private
-get_cluster_members_1(ClusterInfoList) ->
-    case leo_cluster_tbl_conf:get() of
-        {ok, #?SYSTEM_CONF{num_of_dc_replicas = NumOfReplicas}} ->
-            case get_cluster_members_2(ClusterInfoList, NumOfReplicas, []) of
-                {ok, MDCR_Info} ->
-                    {ok,  MDCR_Info};
-                {error, Cause} ->
-                    {error, Cause}
-            end;
-        {error, Cause} ->
-            {error, Cause}
-    end.
-
-%% @private
-get_cluster_members_2([],_NumOfReplicas, Acc) ->
-    {ok, Acc};
-get_cluster_members_2([#?CLUSTER_INFO{cluster_id = ClusterId}|Rest],
-                      NumOfReplicas, Acc) ->
-    case leo_cluster_tbl_conf:get() of
-        {ok, #?SYSTEM_CONF{cluster_id = ClusterId}} ->
-            get_cluster_members_2(Rest, NumOfReplicas, Acc);
-        _ ->
-            case leo_mdcr_tbl_cluster_member:find_by_limit_with_rnd(
-                   ClusterId, ?DEF_NUM_OF_REMOTE_MEMBERS) of
-                {ok, ClusterMembers} ->
-                    get_cluster_members_2(Rest, NumOfReplicas,
-                                          [#mdc_replication_info{cluster_id = ClusterId,
-                                                                 num_of_replicas = NumOfReplicas,
-                                                                 cluster_members = ClusterMembers}
-                                           |Acc]);
-                not_found = Cause ->
-                    {error, Cause};
-                {error, Cause} ->
-                    {error, Cause}
-            end
-    end.
-
-
 %% Send stacked objects to remote-members with leo-rpc
 %% @private
 send([],_StackedInfo,_CompressedObjs) ->
@@ -400,40 +435,6 @@ send_1([#?CLUSTER_MEMBER{node = Node,
                            StackedInfo, CompressedObjs, 0)
             end
     end.
-
-
-%% @doc Compare a local-metadata with a remote-metadata
-%%      If it's inconsistent, the metadata is put into the queue
-%% @private
--spec(compare_metadata(list(#?METADATA{})) ->
-             ok).
-compare_metadata([]) ->
-    ok;
-compare_metadata([#?METADATA{cluster_id = ClusterId,
-                             addr_id    = AddrId,
-                             key        = Key,
-                             clock      = Clock,
-                             del        = Del}|Rest]) ->
-    case leo_object_storage_api:head({AddrId, Key}) of
-        {ok, MetaBin} ->
-            #?METADATA{clock = Clock_1,
-                       del   = Del_1} = binary_to_term(MetaBin),
-            case (Clock == Clock_1 andalso
-                  Del   == Del_1) of
-                true ->
-                    void;
-                false ->
-                    leo_storage_mq_client:publish(
-                      ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key)
-            end;
-        not_found ->
-            leo_storage_mq_client:publish(
-              ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key, ?DEL_TRUE);
-        {error, Cause} ->
-            ?warn("comapare_metadata/1",
-                  "key:~s, cause:~p", [binary_to_list(Key), Cause])
-    end,
-    compare_metadata(Rest).
 
 
 %% @doc Put messages of fail replication into the queue

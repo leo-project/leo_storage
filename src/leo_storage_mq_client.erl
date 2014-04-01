@@ -358,28 +358,35 @@ handle_call({consume, ?QUEUE_ID_SYNC_OBJ_WITH_DC, MessageBin}) ->
 -spec(recover_node(atom()) ->
              ok).
 recover_node(Node) ->
-    Fun = fun(Key, V, Acc) ->
-                  Metadata_1 = binary_to_term(V),
-                  Metadata_2 = leo_object_storage_transformer:transform_metadata(Metadata_1),
-                  #?METADATA{addr_id = AddrId} = Metadata_2,
-
-                  case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
-                      {ok, #redundancies{nodes = Redundancies}} ->
-                          Nodes = [N || #redundant_node{node = N} <- Redundancies],
-                          case lists:member(Node, Nodes) of
-                              true ->
-                                  ?MODULE:publish(?QUEUE_TYPE_PER_OBJECT,
-                                                  AddrId, Key, ?ERR_TYPE_RECOVER_DATA);
-                              false  ->
-                                  void
-                          end,
-                          Acc;
-                      _Other ->
-                          Acc
-                  end
-          end,
-    _ = leo_object_storage_api:fetch_by_addr_id(0, Fun),
+    Callback = recover_node_callback(Node),
+    _ = leo_object_storage_api:fetch_by_addr_id(0, Callback),
     ok.
+
+%% @private
+-spec(recover_node_callback(atom()) ->
+             list()).
+recover_node_callback(Node) ->
+    fun(K, V, Acc) ->
+            Metadata_1 = binary_to_term(V),
+            Metadata_2 = leo_object_storage_transformer:transform_metadata(Metadata_1),
+            #?METADATA{addr_id = AddrId} = Metadata_2,
+
+            case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
+                {ok, #redundancies{nodes = Redundancies}} ->
+                    Nodes = [N || #redundant_node{node = N} <- Redundancies],
+                    case lists:member(Node, Nodes) of
+                        true ->
+                            ?MODULE:publish(?QUEUE_TYPE_PER_OBJECT,
+                                            AddrId, K, ?ERR_TYPE_RECOVER_DATA);
+                        false  ->
+                            void
+                    end,
+                    Acc;
+                _Other ->
+                    Acc
+            end
+    end.
+
 
 %% @doc synchronize by vnode-id.
 %%
@@ -388,37 +395,43 @@ recover_node(Node) ->
 sync_vnodes(_, _, []) ->
     ok;
 sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
-    Fun = fun(Key, V, Acc) ->
-                  %% Note: An object of copy is NOT equal current ring-hash.
-                  %%       Then a message in the rebalance-queue.
-                  #?METADATA{addr_id = AddrId} = binary_to_term(V),
-
-                  case (AddrId >= FromAddrId andalso
-                        AddrId =< ToAddrId) of
-                      true ->
-                          case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
-                              {ok, #redundancies{nodes = Redundancies}} ->
-                                  Nodes = [N || #redundant_node{node = N} <- Redundancies],
-                                  case lists:member(Node, Nodes) of
-                                      true ->
-                                          VNodeId = ToAddrId,
-                                          ?MODULE:publish(?QUEUE_TYPE_REBALANCE, Node, VNodeId, AddrId, Key),
-                                          Acc;
-                                      false ->
-                                          Acc
-                                  end,
-                                  Acc;
-                              _ ->
-                                  Acc
-                          end;
-                      false ->
-                          Acc
-                  end
-          end,
-
-    catch leo_object_storage_api:fetch_by_addr_id(FromAddrId, Fun),
+    Callback = sync_vnodes_callback(Node, FromAddrId, ToAddrId),
+    catch leo_object_storage_api:fetch_by_addr_id(FromAddrId, Callback),
     catch notify_message_to_manager(?env_manager_nodes(leo_storage), ToAddrId, erlang:node()),
     sync_vnodes(Node, RingHash, T).
+
+%% @private
+-spec(sync_vnodes_callback(atom(), pos_integer(), pos_integer()) ->
+             list()).
+sync_vnodes_callback(Node, FromAddrId, ToAddrId)->
+    fun(K, V, Acc) ->
+            %% Note: An object of copy is NOT equal current ring-hash.
+            %%       Then a message in the rebalance-queue.
+            #?METADATA{addr_id = AddrId} = binary_to_term(V),
+
+            case (AddrId >= FromAddrId andalso
+                  AddrId =< ToAddrId) of
+                true ->
+                    case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
+                        {ok, #redundancies{nodes = Redundancies}} ->
+                            Nodes = [N || #redundant_node{node = N} <- Redundancies],
+                            case lists:member(Node, Nodes) of
+                                true ->
+                                    VNodeId = ToAddrId,
+                                    ?MODULE:publish(?QUEUE_TYPE_REBALANCE, Node,
+                                                    VNodeId, AddrId, K),
+                                    Acc;
+                                false ->
+                                    Acc
+                            end,
+                            Acc;
+                        _ ->
+                            Acc
+                    end;
+                false ->
+                    Acc
+            end
+    end.
 
 
 %% @doc Remove a node from redundancies
