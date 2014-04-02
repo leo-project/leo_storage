@@ -269,16 +269,30 @@ handle_fail(UId, [{AddrId, Key}|Rest] = _StackInfo) ->
              ok | {error, any()}).
 stack_fun(ClusterId, #?OBJECT{addr_id = AddrId,
                               key     = Key} = Object) ->
-    ObjBin  = term_to_binary(Object),
-    ObjSize = byte_size(ObjBin),
-    Data    = << ObjSize:?DEF_BIN_OBJ_SIZE, ObjBin/binary,
-                 ?DEF_BIN_PADDING/binary >>,
-    UId = case ClusterId of
-              undefined -> gen_id();
-              _  -> gen_id({cluster_id, ClusterId})
-          end,
-    stack_fun(UId, AddrId, Key, Data).
-
+    case leo_cluster_tbl_conf:get() of
+        {ok, #?SYSTEM_CONF{
+                 cluster_id = MDC_ClusterId,
+                 num_of_dc_replicas = MDC_NumOfReplicas}} ->
+            CMetaBin = leo_object_storage_transformer:list_to_cmeta_bin(
+                         [{?PROP_CMETA_CLUSTER_ID, MDC_ClusterId},
+                          {?PROP_CMETA_NUM_OF_REPLICAS, MDC_NumOfReplicas}]),
+            CMetaLen = byte_size(CMetaBin),
+            Object_1 =  Object#?OBJECT{cluster_id = MDC_ClusterId,
+                                       num_of_replicas = MDC_NumOfReplicas,
+                                       msize = CMetaLen,
+                                       meta  = CMetaBin},
+            ObjBin  = term_to_binary(Object_1),
+            ObjSize = byte_size(ObjBin),
+            Data    = << ObjSize:?DEF_BIN_OBJ_SIZE, ObjBin/binary,
+                         ?DEF_BIN_PADDING/binary >>,
+            UId = case ClusterId of
+                      undefined -> gen_id();
+                      _  -> gen_id({cluster_id, ClusterId})
+                  end,
+            stack_fun(UId, AddrId, Key, Data);
+        _Other ->
+            {error, ?ERROR_COULD_NOT_GET_SYSTEM_CONF}
+    end.
 
 stack_fun(UId, AddrId, Key, Data) ->
     case leo_ordning_reda_api:stack(UId, AddrId, Key, Data) of

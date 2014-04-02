@@ -76,7 +76,8 @@
 %% @doc error messages.
 %%
 -define(ERROR_COULD_NOT_GET_DATA,       "Could not get data").
--define(ERROR_COULD_NOT_GET_META,       "Could not get metadata").
+-define(ERROR_COULD_NOT_GET_META,       "Could not get a metadata").
+-define(ERROR_COULD_NOT_GET_SYSTEM_CONF,"Could not get the system configuration").
 -define(ERROR_RECOVER_FAILURE,          "Recover failure").
 -define(ERROR_REPLICATE_FAILURE,        "Replicate failure").
 -define(ERROR_META_NOT_FOUND,           "Metadata not found").

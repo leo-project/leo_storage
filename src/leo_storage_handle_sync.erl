@@ -37,7 +37,7 @@
         ]).
 -export([handle_call/1]).
 
--define(DEF_THRESHOLD_LEN, 100).
+-define(DEF_THRESHOLD_LEN, 1000).
 
 %%--------------------------------------------------------------------
 %% API
@@ -82,7 +82,7 @@ send_addrid_and_key_to_remote(ClusterId, ListAddrIdAndKey) ->
             send_addrid_and_key_to_remote_1(
               ListMembers, ClusterId, ListAddrIdAndKey);
         {error, Cause} ->
-            ?warn("send_addrid_and_key_callback/1",
+            ?warn("send_addrid_and_key_to_remote/1",
                   "cause:~p", [Cause]),
             ok
     end.
@@ -178,6 +178,7 @@ send_metadata(ClusterId) ->
 send_addrid_and_key_callback(ClusterId) ->
     fun(K, V, Acc) when length(Acc) >= ?DEF_THRESHOLD_LEN ->
             ok = send_addrid_and_key_to_remote(ClusterId, Acc),
+            timer:sleep(timer:seconds(1)),
             send_addrid_and_key_callback_1(K, V, []);
        (K, V, Acc) ->
             send_addrid_and_key_callback_1(K, V, Acc)
