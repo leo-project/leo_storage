@@ -65,7 +65,16 @@ get_metadatas_1([AddrAndKey|Rest], Acc) ->
 -spec(force_sync(atom()) ->
              ok).
 force_sync(ClusterId) when is_atom(ClusterId) ->
-    handle_call(ClusterId);
+    case leo_mdcr_tbl_cluster_stat:get(ClusterId) of
+        {ok, #?CLUSTER_STAT{state = ?STATE_RUNNING}} ->
+            handle_call(ClusterId);
+        {ok,_} ->
+            {error, "Not running"};
+        not_found ->
+            {error, "Not found"};
+        Error ->
+            Error
+    end;
 force_sync(_) ->
     {error, invalid_parameter}.
 
