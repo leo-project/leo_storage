@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012-2013 Rakuten, Inc.
+%% Copyright (c) 2012-2014 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -37,7 +37,7 @@
 %% API
 -export([register_in_monitor/1, register_in_monitor/2,
          get_routing_table_chksum/0,
-         update_manager_nodes/1,
+         update_manager_nodes/1, recover_remote/2,
          start/1, start/2, start/3, stop/0, attach/1, synchronize/1, synchronize/2,
          compact/1, compact/3, get_node_status/0,
          rebalance/1, rebalance/3]).
@@ -73,10 +73,11 @@ register_in_monitor(Pid, RequestedTimes) ->
                           GroupL1 = ?env_grp_level_1(),
                           GroupL2 = ?env_grp_level_2(),
                           NumOfNodes = ?env_num_of_vnodes(),
+                          RPCPort = ?env_rpc_port(),
 
                           case rpc:call(Node1, leo_manager_api, register,
                                         [RequestedTimes, Pid, erlang:node(), storage,
-                                         GroupL1, GroupL2, NumOfNodes],
+                                         GroupL1, GroupL2, NumOfNodes, RPCPort],
                                         ?DEF_REQ_TIMEOUT) of
                               ok ->
                                   true;
@@ -203,11 +204,11 @@ attach(SystemConf) ->
 synchronize(Node) ->
     leo_storage_mq_client:publish(?QUEUE_TYPE_RECOVERY_NODE, Node).
 
--spec(synchronize(list() | string(), #metadata{} | atom()) ->
+-spec(synchronize(list() | string(), #?METADATA{} | atom()) ->
              ok | {error, any()}).
-synchronize(InconsistentNodes, #metadata{addr_id = AddrId,
-                                         key     = Key}) ->
-    leo_storage_handler_object:copy(InconsistentNodes, AddrId, Key);
+synchronize(InconsistentNodes, #?METADATA{addr_id = AddrId,
+                                          key     = Key}) ->
+    leo_storage_handler_object:replicate(InconsistentNodes, AddrId, Key);
 
 synchronize(Key, ErrorType) ->
     {ok, #redundancies{vnode_id_to = VNodeId}} = leo_redundant_manager_api:get_redundancies_by_key(Key),
@@ -240,7 +241,7 @@ compact(start, NumOfTargets, MaxProc) ->
                               _Other -> lists:sublist(TargetPids1, NumOfTargets)
                           end,
             leo_compaction_manager_fsm:start(
-              TargetPids2, MaxProc, fun leo_redundant_manager_api:has_charge_of_node/1)
+              TargetPids2, MaxProc, fun leo_redundant_manager_api:has_charge_of_node/2)
     end.
 
 compact(suspend) ->
@@ -356,3 +357,16 @@ rebalance_1([]) ->
 rebalance_1([{VNodeId, Node}|T]) ->
     ok = leo_storage_mq_client:publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, VNodeId, Node),
     rebalance_1(T).
+
+%% recover a remote cluster's object
+-spec(recover_remote(integer(), binary()) ->
+             ok | {error, any()}).
+recover_remote(AddrId, Key) ->
+    case leo_object_storage_api:get({AddrId, Key}) of
+        {ok, _Metadata, Object} ->
+            leo_sync_remote_cluster:defer_stack(Object);
+        not_found = Cause ->
+            {error, Cause};
+        {error, Cause} ->
+            {error, Cause}
+    end.

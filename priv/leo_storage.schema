@@ -122,7 +122,7 @@
  "leo_storage.system_version",
  [
   {datatype, string},
-  {default, "1.0.0-pre3"}
+  {default, "1.0.0"}
  ]}.
 
 %% @doc Path of object-container
@@ -341,6 +341,57 @@
  ]}.
 
 
+%% @doc MQ sync obj with dc
+{mapping,
+ "mq.sync_obj_with_dc.num_of_batch_process",
+ "leo_storage.cns_num_of_batch_process_sync_obj_with_dc",
+ [
+  {datatype, integer},
+  {default, 1}
+ ]}.
+
+{mapping,
+ "mq.sync_obj_with_dc.interval_min",
+ "leo_storage.cns_interval_sync_obj_with_dc_min",
+ [
+  {datatype, integer},
+  {default, 8}
+ ]}.
+
+{mapping,
+ "mq.sync_obj_with_dc.interval_max",
+ "leo_storage.cns_interval_sync_obj_with_dc_max",
+ [
+  {datatype, integer},
+  {default, 32}
+ ]}.
+
+%% @doc MQ compare metadata with dc
+{mapping,
+ "mq.comp_meta_with_dc.num_of_batch_process",
+ "leo_storage.cns_num_of_batch_process_comp_meta_with_dc",
+ [
+  {datatype, integer},
+  {default, 1}
+ ]}.
+
+{mapping,
+ "mq.comp_meta_with_dc.interval_min",
+ "leo_storage.cns_interval_comp_meta_with_dc_min",
+ [
+  {datatype, integer},
+  {default, 8}
+ ]}.
+
+{mapping,
+ "mq.comp_meta_with_dc.interval_max",
+ "leo_storage.cns_interval_comp_meta_with_dc_max",
+ [
+  {datatype, integer},
+  {default, 32}
+ ]}.
+
+
 %% --------------------------------------------------------------------
 %% STORAGE - Replication/Recover
 %% --------------------------------------------------------------------
@@ -360,16 +411,56 @@
  "leo_storage.size_of_stacked_objs",
  [
   {datatype, integer},
-  {default, 67108864}
+  {default, 33554432}
  ]}.
 
-%% @doc Stacking timeout (msec)
+%% @doc Stacking timeout (sec)
 {mapping,
  "replication.recovery.stacking_timeout",
  "leo_storage.stacking_timeout",
  [
   {datatype, integer},
-  {default, 5000}
+  {default, 5}
+ ]}.
+
+
+%% --------------------------------------------------------------------
+%% STORAGE - MDC-Replication
+%% --------------------------------------------------------------------
+%% @doc Size of stacked objects (bytes)
+{mapping,
+ "mdc_replication.size_of_stacked_objs",
+ "leo_storage.mdcr_size_of_stacked_objs",
+ [
+  {datatype, integer},
+  {default, 33554432}
+ ]}.
+
+%% @doc Stacking timeout (sec)
+{mapping,
+ "mdc_replication.stacking_timeout",
+ "leo_storage.mdcr_stacking_timeout",
+ [
+  {datatype, integer},
+  {default, 30}
+ ]}.
+
+%% @doc Request timeout (msec)
+{mapping,
+ "mdc_replication.req_timeout",
+ "leo_storage.mdcr_req_timeout",
+ [
+  {datatype, integer},
+  {default, 30000}
+ ]}.
+
+%% @doc Request timeout (msec)
+{mapping,
+ "mdc_replication.stacking_procs",
+ "leo_storage.mdcr_stacking_procs",
+ [
+  {datatype, integer},
+  {default, 1}
  ]}.
 
 
@@ -448,38 +539,11 @@
  ]}.
 
 
-
 %%======================================================================
 %% Other libs
 %%======================================================================
-%% @doc
-{mapping,
- "leo_backend_db.profile",
- "leo_backend_db.profile",
- [
-  {datatype, {enum, [true, false]}},
-  {default, false}
- ]}.
-
-%% @doc
-{mapping,
- "leo_logger.profile",
- "leo_logger.profile",
- [
-  {datatype, {enum, [true, false]}},
-  {default, false}
- ]}.
-
-%% @doc
-{mapping,
- "leo_mq.profile",
- "leo_mq.profile",
- [
-  {datatype, {enum, [true, false]}},
-  {default, false}
- ]}.
-
-%% @doc
+%% Leo' MQ
+%% @doc leo-mq.backend_db
 {mapping,
  "leo_mq.backend_db",
  "leo_mq.backend_db",
@@ -488,16 +552,8 @@
   {default, 'bitcask'}
  ]}.
 
-%% @doc
-{mapping,
- "leo_object_storage.profile",
- "leo_object_storage.profile",
- [
-  {datatype, {enum, [true, false]}},
-  {default, false}
- ]}.
-
-%% @doc
+%% Leo' Object-Storage
+%% @doc leo-object-storage.metadata_storage
 {mapping,
  "leo_object_storage.metadata_storage",
  "leo_object_storage.metadata_storage",
@@ -506,7 +562,7 @@
   {default, 'leveldb'}
  ]}.
 
-%% @doc
+%% @doc leo-object-storage.is_strict_check
 {mapping,
  "leo_object_storage.is_strict_check",
  "leo_object_storage.is_strict_check",
@@ -515,16 +571,8 @@
   {default, false}
  ]}.
 
-%% @doc
-{mapping,
- "leo_ordning_reda.profile",
- "leo_ordning_reda.profile",
- [
-  {datatype, {enum, [true, false]}},
-  {default, false}
- ]}.
-
-%% @doc
+%% Leo' Ordning-Reda
+%% @doc leo-ordning-reda.send_after_interval
 {mapping,
  "leo_ordning_reda.send_after_interval",
  "leo_ordning_reda.send_after_interval",
@@ -533,7 +581,8 @@
   {default, 100}
  ]}.
 
-%% @doc
+%% Leo' Redundant-Manager
+%% @doc leo-redundant-manager.profile
 {mapping,
  "leo_redundant_manager.profile",
  "leo_redundant_manager.profile",
@@ -542,7 +591,7 @@
   {default, false}
  ]}.
 
-%% @doc
+%% @doc leo-redundant-manager.norify_mf
 {mapping,
  "leo_redundant_manager.notify_mf",
  "leo_redundant_manager.notify_mf",
@@ -555,7 +604,7 @@
          [leo_manager_api, notify]
  end}.
 
-%% @doc
+%% @doc leo-redundant-manager.sync_mf
 {mapping,
  "leo_redundant_manager.sync_mf",
  "leo_redundant_manager.sync_mf",
@@ -568,7 +617,132 @@
          [leo_manager_api, synchronize]
  end}.
 
+
+%% @doc leo-redundant-manager.sync_new_cluster_mf
+{mapping,
+ "leo_redundant_manager.sync_new_cluster_mod",
+ "leo_redundant_manager.sync_new_cluster_mod",
+ [
+  {datatype, atom},
+  {default, 'leo_storage_handle_sync'}
+ ]}.
+
+
+%% --------------------------------------------------------------------
+%% RPC
+%% --------------------------------------------------------------------
+%% @doc leo-rpc.node
+{translation, "leo_rpc.node",
+ fun(Conf) ->
+         NodeName = cuttlefish_util:conf_get_value("nodename", Conf),
+         PortNum  = cuttlefish_util:conf_get_value("rpc.server.listen_port", Conf),
+         list_to_atom(lists:append([NodeName, ":", integer_to_list(PortNum)]))
+ end}.
+
 %% @doc
+{mapping,
+ "rpc.server.acceptors",
+ "leo_rpc.num_of_acceptors",
+ [
+  {datatype, integer},
+  {default, 128}
+ ]}.
+
+%% @doc
+{mapping,
+ "rpc.server.listen_port",
+ "leo_rpc.listen_port",
+ [
+  {datatype, integer},
+  {default, 13077}
+ ]}.
+
+%% @doc
+{mapping,
+ "rpc.server.listen_timeout",
+ "leo_rpc.listen_timeout",
+ [
+  {datatype, integer},
+  {default, 30000}
+ ]}.
+
+%% @doc
+{mapping,
+ "rpc.client.connection_pool_size",
+ "leo_rpc.connection_pool_size",
+ [
+  {datatype, integer},
+  {default, 8}
+ ]}.
+
+%% @doc
+{mapping,
+ "rpc.client.connection_buffer_size",
+ "leo_rpc.connection_buffer_size",
+ [
+  {datatype, integer},
+  {default, 8}
+ ]}.
+
+
+%%======================================================================
+%% Profiling
+%%======================================================================
+%% @doc leo-backend-db.profile
+{mapping,
+ "leo_backend_db.profile",
+ "leo_backend_db.profile",
+ [
+  {datatype, {enum, [true, false]}},
+  {default, false}
+ ]}.
+
+%% @doc leo-logger.profile
+{mapping,
+ "leo_logger.profile",
+ "leo_logger.profile",
+ [
+  {datatype, {enum, [true, false]}},
+  {default, false}
+ ]}.
+
+%% @doc leo-mq.profile
+{mapping,
+ "leo_mq.profile",
+ "leo_mq.profile",
+ [
+  {datatype, {enum, [true, false]}},
+  {default, false}
+ ]}.
+
+%% @doc leo-object-storage.profile
+{mapping,
+ "leo_object_storage.profile",
+ "leo_object_storage.profile",
+ [
+  {datatype, {enum, [true, false]}},
+  {default, false}
+ ]}.
+
+%% @doc leo-ordning-reda.profile
+{mapping,
+ "leo_ordning_reda.profile",
+ "leo_ordning_reda.profile",
+ [
+  {datatype, {enum, [true, false]}},
+  {default, false}
+ ]}.
+
+%% @doc leo-rpc.profile
+{mapping,
+ "leo_rpc.profile",
+ "leo_rpc.profile",
+ [
+  {datatype, {enum, [true, false]}},
+  {default, false}
+ ]}.
+
+%% @doc leo-statistics.profile
 {mapping,
  "leo_statistics.profile",
  "leo_statistics.profile",

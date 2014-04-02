@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012-2013 Rakuten, Inc.
+%% Copyright (c) 2012-2014 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -40,7 +40,7 @@
                 key               :: string(),
                 read_quorum = 0   :: integer(),
                 redundancies = [] :: list(),
-                metadata          :: #metadata{},
+                metadata          :: #?METADATA{},
                 rpc_key           :: rpc:key(),
                 req_id = 0        :: integer()
                }).
@@ -50,13 +50,13 @@
 %%--------------------------------------------------------------------
 %% @doc Repair an object.
 %% @end
--spec(repair(#read_parameter{}, #redundant_node{}, #metadata{}, function()) ->
+-spec(repair(#read_parameter{}, #redundant_node{}, #?METADATA{}, function()) ->
              {ok, reference()} | {error, reference(),  any()}).
 repair(#read_parameter{quorum = ReadQuorum,
                        req_id = ReqId}, Redundancies, Metadata, Callback) ->
     From   = self(),
-    AddrId = Metadata#metadata.addr_id,
-    Key    = Metadata#metadata.key,
+    AddrId = Metadata#?METADATA.addr_id,
+    Key    = Metadata#?METADATA.key,
     Params = #state{read_quorum  = ReadQuorum,
                     redundancies = Redundancies,
                     metadata     = Metadata,
@@ -113,15 +113,15 @@ loop(R, From, NumOfNodes, {ReqId, Key, Errors} = Args, Callback) ->
 %% @private
 -spec(compare(pid(), pid(), atom(), #state{}) ->
              ok).
-compare(Pid, RPCKey, Node, #state{metadata = #metadata{addr_id = AddrId,
-                                                       key     = Key,
-                                                       clock   = Clock}}) ->
+compare(Pid, RPCKey, Node, #state{metadata = #?METADATA{addr_id = AddrId,
+                                                        key     = Key,
+                                                        clock   = Clock}}) ->
     Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
-              {value, {ok, #metadata{clock = RemoteClock}}} when Clock == RemoteClock ->
+              {value, {ok, #?METADATA{clock = RemoteClock}}} when Clock == RemoteClock ->
                   ok;
-              {value, {ok, #metadata{clock = RemoteClock}}} when Clock  > RemoteClock ->
+              {value, {ok, #?METADATA{clock = RemoteClock}}} when Clock  > RemoteClock ->
                   {error, {Node, secondary_inconsistency}};
-              {value, {ok, #metadata{clock = RemoteClock}}} when Clock  < RemoteClock ->
+              {value, {ok, #?METADATA{clock = RemoteClock}}} when Clock  < RemoteClock ->
                   {error, {Node, primary_inconsistency}};
               {value, {error, Cause}} ->
                   {error, {Node, Cause}};

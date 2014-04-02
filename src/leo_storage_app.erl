@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012-2013 Rakuten, Inc.
+%% Copyright (c) 2012-2014 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -89,6 +89,16 @@ after_proc({ok, Pid}) ->
     ok = leo_metrics_vm:start_link(?SNMP_SYNC_INTERVAL_10S),
     ok = leo_metrics_req:start_link(?SNMP_SYNC_INTERVAL_60S),
     ok = leo_storage_statistics:start_link(?SNMP_SYNC_INTERVAL_60S),
+
+    %% Create cluster-related tables
+    ok = leo_cluster_tbl_conf:create_table(ram_copies, [node()]),
+    ok = leo_mdcr_tbl_cluster_info:create_table(ram_copies, [node()]),
+    ok = leo_mdcr_tbl_cluster_stat:create_table(ram_copies, [node()]),
+    ok = leo_mdcr_tbl_cluster_mgr:create_table(ram_copies, [node()]),
+    ok = leo_mdcr_tbl_cluster_member:create_table(ram_copies, [node()]),
+
+    %% Launch leo-rpc
+    ok = leo_rpc:start(),
     {ok, Pid};
 
 after_proc(Error) ->

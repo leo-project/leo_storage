@@ -2,7 +2,7 @@
 %%
 %% Leo Storage
 %%
-%% Copyright (c) 2012-2013 Rakuten, Inc.
+%% Copyright (c) 2012-2014 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -17,14 +17,8 @@
 %% KIND, either express or implied.  See the License for the
 %% specific language governing permissions and limitations
 %% under the License.
-%%
-%% ---------------------------------------------------------------------
-%% Leo Storage - OrdningReda Client
-%% @doc
-%% @end
 %%======================================================================
--module(leo_storage_ordning_reda_client).
-
+-module(leo_sync_local_cluster).
 -author('Yosuke Hara').
 
 -behaviour(leo_ordning_reda_behaviour).
@@ -36,14 +30,10 @@
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
--export([start_link/3, stop/1, stack/5,  request/1]).
--export([handle_send/2,
+-export([start_link/3, stop/1, stack/5,  store/1]).
+-export([handle_send/3,
          handle_fail/2]).
 
--define(BIN_META_SIZE, 16). %% metadata-size
--define(BIN_OBJ_SIZE,  32). %% object-size
--define(LEN_PADDING,    8). %% footer-size
--define(BIN_PADDING, <<0:64>>). %% footer
 
 %%--------------------------------------------------------------------
 %% API
@@ -53,16 +43,16 @@
 -spec(start_link(atom(), integer(), integer()) ->
              ok | {error, any()}).
 start_link(Node, BufSize, Timeout) ->
-    leo_ordning_reda_api:add_container(stack, Node, [{module,      ?MODULE},
-                                                     {buffer_size, BufSize},
-                                                     {timeout,     Timeout}]).
+    leo_ordning_reda_api:add_container(Node, [{module,      ?MODULE},
+                                              {buffer_size, BufSize},
+                                              {timeout,     Timeout}]).
 
 %% @doc Remove a container from the supervisor
 %%
 -spec(stop(atom()) ->
              ok | {error, any()}).
 stop(Node) ->
-    leo_ordning_reda_api:remove_container(stack, Node).
+    leo_ordning_reda_api:remove_container(Node).
 
 
 %% @doc Stack a object into the ordning&reda
@@ -73,14 +63,14 @@ stack(DestNodes, AddrId, Key, Metadata, Object) ->
     stack_fun(DestNodes, AddrId, Key, Metadata, Object, []).
 
 
-%% Request from a remote-node
+%% Store stacked objects
 %%
--spec(request(binary()) ->
+-spec(store(binary()) ->
              ok | {error, any()}).
-request(CompressedObjs) ->
+store(CompressedObjs) ->
     case catch lz4:unpack(CompressedObjs) of
         {ok, OriginalObjects} ->
-            case slice_and_store(OriginalObjects) of
+            case slice_and_replicate(OriginalObjects) of
                 ok ->
                     ok;
                 {error, _Cause} ->
@@ -96,8 +86,8 @@ request(CompressedObjs) ->
 %%--------------------------------------------------------------------
 %% @doc Handle send object to a remote-node.
 %%
-handle_send(Node, CompressedObjs) ->
-    RPCKey = rpc:async_call(Node, ?MODULE, request, [CompressedObjs]),
+handle_send(Node,_StackedInfo, CompressedObjs) ->
+    RPCKey = rpc:async_call(Node, ?MODULE, store, [CompressedObjs]),
     case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
         {value, ok} ->
             ok;
@@ -141,8 +131,9 @@ stack_fun([Node|Rest] = NodeList, AddrId, Key, Metadata, Object, E) ->
             MetaBin  = term_to_binary(Metadata),
             MetaSize = byte_size(MetaBin),
             ObjSize  = byte_size(Object),
-            Data = << MetaSize:?BIN_META_SIZE, MetaBin/binary,
-                      ObjSize:?BIN_OBJ_SIZE, Object/binary, ?BIN_PADDING/binary >>,
+            Data = << MetaSize:?DEF_BIN_META_SIZE, MetaBin/binary,
+                      ObjSize:?DEF_BIN_OBJ_SIZE, Object/binary,
+                      ?DEF_BIN_PADDING/binary >>,
 
             case leo_ordning_reda_api:stack(Node, AddrId, Key, Data) of
                 ok ->
@@ -173,53 +164,65 @@ node_state(Node) ->
 
 %% @doc Slicing objects and Store objects
 %%
--spec(slice_and_store(binary()) ->
+-spec(slice_and_replicate(binary()) ->
              ok | {error, any()}).
-slice_and_store(Objects) ->
-    slice_and_store(Objects, []).
+slice_and_replicate(Objects) ->
+    slice_and_replicate(Objects, []).
 
--spec(slice_and_store(binary(), list()) ->
+-spec(slice_and_replicate(binary(), list()) ->
              ok | {error, any()}).
-slice_and_store(<<>>, []) ->
+slice_and_replicate(<<>>, []) ->
     ok;
-slice_and_store(<<>>, Errors) ->
+slice_and_replicate(<<>>, Errors) ->
     {error, Errors};
-slice_and_store(Objects, Errors) ->
-    %% metadata
-    <<MetaSize:?BIN_META_SIZE, Rest0/binary>> = Objects,
-    MetaBin  = binary:part(Rest0, {0, MetaSize}),
-    Rest1    = binary:part(Rest0, {MetaSize, byte_size(Rest0) - MetaSize}),
-    Metadata = binary_to_term(MetaBin),
-
-    %% object
-    <<ObjSize:?BIN_OBJ_SIZE, Rest2/binary>> = Rest1,
-    Object = binary:part(Rest2, {0, ObjSize}),
-    Rest3  = binary:part(Rest2, {ObjSize, byte_size(Rest2) - ObjSize}),
-
-    %% footer
-    <<_Fotter:64, Rest4/binary>> = Rest3,
+slice_and_replicate(Objects, Errors) ->
+    %% Retrieve metadata, object and pending objects
+    {ok, Metadata, Object, Rest_5} = slice(Objects),
 
     %% store an object to object-storage
-    case leo_storage_handler_object:head(Metadata#metadata.addr_id,
-                                         Metadata#metadata.key) of
-        {ok, #metadata{clock = Clock}} when Clock >= Metadata#metadata.clock ->
-            slice_and_store(Rest4, Errors);
+    case leo_storage_handler_object:head(Metadata#?METADATA.addr_id,
+                                         Metadata#?METADATA.key) of
+        {ok, #?METADATA{clock = Clock}} when Clock >= Metadata#?METADATA.clock ->
+            slice_and_replicate(Rest_5, Errors);
         _ ->
             case leo_misc:get_env(leo_redundant_manager, ?PROP_RING_HASH) of
                 {ok, RingHashCur} ->
-                    case leo_object_storage_api:store(Metadata#metadata{ring_hash = RingHashCur},
+                    case leo_object_storage_api:store(Metadata#?METADATA{ring_hash = RingHashCur},
                                                       Object) of
                         ok ->
-                            slice_and_store(Rest4, Errors);
+                            slice_and_replicate(Rest_5, Errors);
                         {error, Cause} ->
-                            ?warn("slice_and_store/2","key:~s, cause:~p",
-                                  [binary_to_list(Metadata#metadata.key), Cause]),
-                            slice_and_store(Rest4, [Metadata|Errors])
+                            ?warn("slice_and_replicate/2","key:~s, cause:~p",
+                                  [binary_to_list(Metadata#?METADATA.key), Cause]),
+                            slice_and_replicate(Rest_5, [Metadata|Errors])
                     end;
                 _ ->
-                    ?warn("slice_and_store/2","key:~s, cause:~p",
-                          [binary_to_list(Metadata#metadata.key),
+                    ?warn("slice_and_replicate/2","key:~s, cause:~p",
+                          [binary_to_list(Metadata#?METADATA.key),
                            "Current ring-hash is not found"]),
-                    slice_and_store(Rest4, [Metadata|Errors])
+                    slice_and_replicate(Rest_5, [Metadata|Errors])
             end
+    end.
+
+
+slice(Objects) ->
+    try
+        %% Retrieve metadata
+        <<MetaSize:?DEF_BIN_META_SIZE, Rest_1/binary>> = Objects,
+        MetaBin  = binary:part(Rest_1, {0, MetaSize}),
+        Rest_2   = binary:part(Rest_1, {MetaSize, byte_size(Rest_1) - MetaSize}),
+        Metadata = binary_to_term(MetaBin),
+
+        %% Retrieve object
+        <<ObjSize:?DEF_BIN_OBJ_SIZE, Rest_3/binary>> = Rest_2,
+        Object = binary:part(Rest_3, {0, ObjSize}),
+        Rest_4  = binary:part(Rest_3, {ObjSize, byte_size(Rest_3) - ObjSize}),
+
+        %% Retrieve footer
+        <<_Fotter:64, Rest_5/binary>> = Rest_4,
+        {ok, Metadata, Object, Rest_5}
+    catch
+        _:Cause ->
+            ?error("slice/1","cause:~p",[Cause]),
+            {error, invalid_format}
     end.

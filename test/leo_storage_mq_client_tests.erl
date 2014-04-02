@@ -24,7 +24,7 @@
 %% @end
 %%====================================================================
 -module(leo_storage_mq_client_tests).
--author('yosuke hara').
+-author('Yosuke Hara').
 
 -include("leo_storage.hrl").
 -include_lib("leo_mq/include/leo_mq.hrl").
@@ -48,16 +48,16 @@
                                                       addr_id  = ?TEST_VNODE_ID,
                                                       key      = ?TEST_KEY_1})).
 
--define(TEST_META_1, #metadata{key       = ?TEST_KEY_1,
-                               addr_id   = 1,
-                               clock     = 9,
-                               timestamp = 8,
-                               checksum  = 7}).
--define(TEST_META_2, #metadata{key       = ?TEST_KEY_1,
-                               addr_id   = 1,
-                               clock     = 8,
-                               timestamp = 7,
-                               checksum  = 5}).
+-define(TEST_META_1, #?METADATA{key       = ?TEST_KEY_1,
+                                addr_id   = 1,
+                                clock     = 9,
+                                timestamp = 8,
+                                checksum  = 7}).
+-define(TEST_META_2, #?METADATA{key       = ?TEST_KEY_1,
+                                addr_id   = 1,
+                                clock     = 8,
+                                timestamp = 7,
+                                checksum  = 5}).
 
 %%--------------------------------------------------------------------
 %% TEST FUNCTIONS
@@ -206,6 +206,12 @@ subscribe_0_({Test0Node, Test1Node}) ->
                         {ok, #member{state = ?STATE_RUNNING}}
                 end),
 
+    meck:new(leo_object_storage_api),
+    meck:expect(leo_object_storage_api, head,
+                fun({_AddrId, _Key}) ->
+                        {ok, term_to_binary(#?METADATA{num_of_replicas = 0})}
+                end),
+
     timer:sleep(100),
     leo_storage_mq_client:handle_call({consume, ?QUEUE_ID_PER_OBJECT, ?TEST_MSG_1}),
 
@@ -237,6 +243,13 @@ subscribe_1_({Test0Node, Test1Node}) ->
                 fun(_Node) ->
                         {ok, #member{state = ?STATE_RUNNING}}
                 end),
+
+    meck:new(leo_object_storage_api),
+    meck:expect(leo_object_storage_api, head,
+                fun({_AddrId, _Key}) ->
+                        {ok, term_to_binary(#?METADATA{num_of_replicas = 0})}
+                end),
+
     timer:sleep(100),
     leo_storage_mq_client:handle_call({consume, ?QUEUE_ID_PER_OBJECT, ?TEST_MSG_1}),
 
@@ -265,6 +278,12 @@ subscribe_2_({Test0Node, _Test1Node}) ->
                         {ok, #redundancies{nodes = [{Test0Node, true}]}}
                 end),
 
+    meck:new(leo_object_storage_api),
+    meck:expect(leo_object_storage_api, head,
+                fun({_AddrId, _Key}) ->
+                        {ok, term_to_binary(#?METADATA{num_of_replicas = 0})}
+                end),
+
     timer:sleep(100),
     leo_storage_mq_client:handle_call({consume, ?QUEUE_ID_REBALANCE, ?TEST_MSG_3}),
 
@@ -279,7 +298,7 @@ subscribe_3_({_Test0Node, _Test1Node}) ->
     meck:new(leo_object_storage_api),
     meck:expect(leo_object_storage_api, fetch_by_addr_id,
                 fun(_FromVNodeId, Fun) ->
-                        Fun(<<"key">>, term_to_binary(#metadata{ring_hash = 0}), []),
+                        Fun(<<"key">>, term_to_binary(#?METADATA{ring_hash = 0}), []),
                         ok
                 end),
     meck:expect(leo_redundant_manager_api, get_member_by_node,
