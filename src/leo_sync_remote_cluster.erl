@@ -201,7 +201,7 @@ compare_metadata([#?METADATA{cluster_id = ClusterId,
                              key        = Key,
                              clock      = Clock,
                              del        = Del}|Rest]) ->
-    case leo_object_storage_api:head({AddrId, Key}) of
+    case catch leo_object_storage_api:head({AddrId, Key}) of
         {ok, MetaBin} ->
             #?METADATA{clock = Clock_1,
                        del   = Del_1} = binary_to_term(MetaBin),
@@ -216,9 +216,11 @@ compare_metadata([#?METADATA{cluster_id = ClusterId,
         not_found ->
             leo_storage_mq_client:publish(
               ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key, ?DEL_TRUE);
-        {error, Cause} ->
+        {_, Cause} ->
             ?warn("comapare_metadata/1",
-                  "key:~s, cause:~p", [binary_to_list(Key), Cause])
+                  "key:~s, cause:~p", [binary_to_list(Key), Cause]),
+            leo_storage_mq_client:publish(
+              ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key)
     end,
     compare_metadata(Rest).
 

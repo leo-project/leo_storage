@@ -49,11 +49,11 @@ get_metadatas(ListAddrAndKey) ->
 get_metadatas_1([], Acc) ->
     {ok, Acc};
 get_metadatas_1([AddrAndKey|Rest], Acc) ->
-    case leo_object_storage_api:head(AddrAndKey) of
+    case catch leo_object_storage_api:head(AddrAndKey) of
         {ok, MetaBin} ->
             Metadata = binary_to_term(MetaBin),
             get_metadatas_1(Rest, [Metadata|Acc]);
-        _ ->
+        _Other ->
             {AddrId, Key} = AddrAndKey,
             get_metadatas_1(Rest, [#?METADATA{addr_id = AddrId,
                                               key = Key}|Acc])
@@ -172,11 +172,13 @@ handle_call(ClusterId) ->
              ok).
 send_metadata(ClusterId) ->
     Callback = send_addrid_and_key_callback(ClusterId),
-    case leo_object_storage_api:fetch_by_addr_id(0, Callback) of
+    case catch leo_object_storage_api:fetch_by_addr_id(0, Callback) of
         {ok, []} ->
             ok;
         {ok, RetL} ->
             send_addrid_and_key_to_remote(ClusterId, RetL);
+        {'EXIT', Cause} ->
+            {error, Cause};
         Error ->
             Error
     end.
