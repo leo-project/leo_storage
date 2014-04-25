@@ -51,7 +51,8 @@
           key          :: binary(),
           num_of_nodes :: pos_integer(),
           callback     :: function(),
-          errors = []  :: list()
+          errors = []  :: list(),
+          is_reply = false ::boolean()
          }).
 
 
@@ -66,16 +67,29 @@ replicate(Method, Quorum, Nodes, Object, Callback) ->
     AddrId = Object#?OBJECT.addr_id,
     Key    = Object#?OBJECT.key,
     ReqId  = Object#?OBJECT.req_id,
+    NumOfNodes = erlang:length(Nodes),
     From = self(),
 
-    ok = replicate_1(Nodes, From, AddrId, Key, Object, ReqId),
+    Pid = spawn(fun() ->
+                        loop(NumOfNodes, Quorum, [],
+                             From, #state{method       = Method,
+                                          addr_id      = AddrId,
+                                          key          = Key,
+                                          num_of_nodes = NumOfNodes,
+                                          callback     = Callback,
+                                          errors       = [],
+                                          is_reply     = false
+                                         })
+                end),
 
-    loop(Quorum, From, [], #state{method       = Method,
-                                  addr_id      = AddrId,
-                                  key          = Key,
-                                  num_of_nodes = erlang:length(Nodes),
-                                  callback     = Callback,
-                                  errors       = []}).
+    ok = replicate_1(Nodes, Pid, AddrId, Key, Object, ReqId),
+    receive
+        Reply ->
+            Callback(Reply)
+    after
+        ?DEF_REQ_TIMEOUT ->
+            Callback({error, timeout})
+    end.
 
 %% @private
 replicate_1([],_From,_AddrId,_Key,_Object,_ReqId) ->
@@ -107,30 +121,34 @@ replicate_1([#redundant_node{node = Node,
 
 %% @doc Waiting for messages (replication)
 %% @private
-loop(0,_From, ResL, #state{method = Method,
-                           callback = Callback}) ->
-    Callback({ok, Method, hd(ResL)});
+loop(0, 0,_ResL,_From, #state{is_reply = true}) ->
+    ok;
+loop(0, 0, ResL, From, #state{method = Method}) ->
+    erlang:send(From, {ok, Method, hd(ResL)});
+loop(N, 0, ResL, From, #state{method = Method} = State) ->
+    erlang:send(From, {ok, Method, hd(ResL)}),
+    loop(N - 1, 0, ResL, From, State#state{is_reply = true});
 
-loop(W,_From,_ResL, #state{num_of_nodes = NumOfNodes,
-                           callback = Callback,
-                           errors = Errors}) when (NumOfNodes - W) < length(Errors) ->
-    Callback({error, Errors});
+loop(_, W,_ResL, From, #state{num_of_nodes = N,
+                              errors = E}) when (N - W) < length(E) ->
+    erlang:send(From, {error, E});
 
-loop(W, From, ResL, #state{addr_id = AddrId,
-                           key = Key,
-                           callback = Callback,
-                           errors = Errors} = State) ->
+loop(N, W, ResL, From, #state{addr_id = AddrId,
+                              key = Key,
+                              errors = E} = State) ->
     receive
         {ok, Checksum} ->
-            loop(W-1, From, [Checksum|ResL], State);
+            ResL_1 = [Checksum|ResL],
+            loop(N-1, W-1, ResL_1, From, State);
         {error, {Node, Cause}} ->
             ok = enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
-            loop(W, From, ResL, State#state{errors = [{Node, Cause}|Errors]})
+            State_1 = State#state{errors = [{Node, Cause}|E]},
+            loop(N-1, W, ResL, From, State_1)
     after
         ?DEF_REQ_TIMEOUT ->
             case (W >= 0) of
                 true ->
-                    Callback({error, timeout});
+                    erlang:send(From, {error, timeout});
                 false ->
                     void
             end
