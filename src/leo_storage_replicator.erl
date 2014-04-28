@@ -94,6 +94,7 @@ replicate(Method, Quorum, Nodes, Object, Callback) ->
 %% @private
 replicate_1([],_From,_AddrId,_Key,_Object,_ReqId) ->
     ok;
+%% for local-node
 replicate_1([#redundant_node{node = Node,
                              available = true}|Rest],
             From, AddrId, Key, Object, ReqId) when Node == erlang:node() ->
@@ -105,13 +106,13 @@ replicate_1([#redundant_node{node = Node,
                                                    req_id  = ReqId})
           end),
     replicate_1(Rest, From, AddrId, Key, Object, ReqId);
-
+%% for remote-node
 replicate_1([#redundant_node{node = Node,
                              available = true}|Rest],
             From, AddrId, Key, Object, ReqId) ->
     true = rpc:cast(Node, leo_storage_handler_object, put, [From, Object, ReqId]),
     replicate_1(Rest, From, AddrId, Key, Object, ReqId);
-
+%% for unavailable node
 replicate_1([#redundant_node{node = Node,
                              available = false}|Rest],
             From, AddrId, Key, Object, ReqId) ->
@@ -125,21 +126,28 @@ loop(0, 0,_ResL,_From, #state{is_reply = true}) ->
     ok;
 loop(0, 0, ResL, From, #state{method = Method}) ->
     erlang:send(From, {ok, Method, hd(ResL)});
-loop(N, 0, ResL, From, #state{method = Method} = State) ->
-    erlang:send(From, {ok, Method, hd(ResL)}),
-    loop(N - 1, 0, ResL, From, State#state{is_reply = true});
-
 loop(_, W,_ResL, From, #state{num_of_nodes = N,
                               errors = E}) when (N - W) < length(E) ->
     erlang:send(From, {error, E});
-
-loop(N, W, ResL, From, #state{addr_id = AddrId,
+loop(N, W, ResL, From, #state{method = Method,
+                              addr_id = AddrId,
                               key = Key,
-                              errors = E} = State) ->
+                              errors = E,
+                              is_reply = IsReply} = State) ->
     receive
         {ok, Checksum} ->
             ResL_1 = [Checksum|ResL],
-            loop(N-1, W-1, ResL_1, From, State);
+            {W_1, State_1} =
+                case ((W - 1) < 1) of
+                    true when IsReply == false ->
+                        erlang:send(From, {ok, Method, hd(ResL_1)}),
+                        {0, State#state{is_reply = true}};
+                    true ->
+                        {0, State};
+                    false ->
+                        {W - 1, State}
+                end,
+            loop(N-1, W_1, ResL_1, From, State_1);
         {error, {Node, Cause}} ->
             ok = enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
             State_1 = State#state{errors = [{Node, Cause}|E]},
