@@ -228,117 +228,139 @@
 -define(DEF_MQ_INTERVAL_MAX, 32).
 -define(DEF_MQ_INTERVAL_MIN,  8).
 
+-define(PROP_MQ_PER_OBJ_1,   cns_num_of_batch_process_per_object).
+-define(PROP_MQ_PER_OBJ_2,   cns_interval_per_object_max).
+-define(PROP_MQ_PER_OBJ_3,   cns_interval_per_object_min).
+-define(PROP_MQ_SYNC_VN_1,   cns_num_of_batch_process_sync_by_vnode_id).
+-define(PROP_MQ_SYNC_VN_2,   cns_interval_sync_by_vnode_id_max).
+-define(PROP_MQ_SYNC_VN_3,   cns_interval_sync_by_vnode_id_min).
+-define(PROP_MQ_REBALANCE_1, cns_num_of_batch_process_rebalance).
+-define(PROP_MQ_REBALANCE_2, cns_interval_rebalance_max).
+-define(PROP_MQ_REBALANCE_3, cns_interval_rebalance_min).
+-define(PROP_MQ_DELETE_1,    cns_num_of_batch_process_async_deletion).
+-define(PROP_MQ_DELETE_2,    cns_interval_async_deletion_max).
+-define(PROP_MQ_DELETE_3,    cns_interval_async_deletion_min).
+-define(PROP_MQ_RECOVERY_1,  cns_num_of_batch_process_recovery_node).
+-define(PROP_MQ_RECOVERY_2,  cns_interval_recovery_node_max).
+-define(PROP_MQ_RECOVERY_3,  cns_interval_recovery_node_min).
+-define(PROP_MQ_SYNC_DC_1,   cns_num_of_batch_process_sync_obj_with_dc).
+-define(PROP_MQ_SYNC_DC_2,   cns_interval_sync_obj_with_dc_max).
+-define(PROP_MQ_SYNC_DC_3,   cns_interval_sync_obj_with_dc_min).
+-define(PROP_MQ_COMP_DC_1,   cns_num_of_batch_process_comp_meta_with_dc).
+-define(PROP_MQ_COMP_DC_2,   cns_interval_comp_meta_with_dc_max).
+-define(PROP_MQ_COMP_DC_3,   cns_interval_comp_meta_with_dc_min).
+
 -define(env_mq_consumption_intervals(),
         [
          %% per_object
-         {cns_num_of_batch_process_per_object,
-          case application:get_env(leo_storage, cns_num_of_batch_process_per_object) of
+         {?PROP_MQ_PER_OBJ_1,
+          case application:get_env(leo_storage, ?PROP_MQ_PER_OBJ_1) of
               {ok, _CnsNumofBatchProc1} -> _CnsNumofBatchProc1;
               _ -> ?DEF_MQ_NUM_OF_BATCH_PROC
           end},
-         {cns_interval_per_object_min,
-          case application:get_env(leo_storage, cns_interval_per_object_min) of
+         {?PROP_MQ_PER_OBJ_2,
+          case application:get_env(leo_storage, ?PROP_MQ_PER_OBJ_2) of
               {ok, _CnsInterval1_Min} -> _CnsInterval1_Min;
               _ -> ?DEF_MQ_INTERVAL_MIN
           end},
-         {cns_interval_per_object_max,
-          case application:get_env(leo_storage, cns_interval_per_object_max) of
+         {?PROP_MQ_PER_OBJ_3,
+          case application:get_env(leo_storage, ?PROP_MQ_PER_OBJ_3) of
               {ok, _CnsInterval1_Max} -> _CnsInterval1_Max;
               _ -> ?DEF_MQ_INTERVAL_MAX
           end},
          %% sync_by_vnode_id
-         {cns_num_of_batch_process_sync_by_vnode_id,
-          case application:get_env(leo_storage, cns_num_of_batch_process_sync_by_vnode_id) of
+         {?PROP_MQ_SYNC_VN_1,
+          case application:get_env(leo_storage, ?PROP_MQ_SYNC_VN_1) of
               {ok, _CnsNumofBatchProc2} -> _CnsNumofBatchProc2;
               _ -> ?DEF_MQ_NUM_OF_BATCH_PROC
           end},
-         {cns_interval_sync_by_vnode_id_min,
-          case application:get_env(leo_storage, cns_interval_sync_by_vnode_id_min) of
+         {?PROP_MQ_SYNC_VN_2,
+          case application:get_env(leo_storage, ?PROP_MQ_SYNC_VN_2) of
               {ok, _CnsInterval2_Min} -> _CnsInterval2_Min;
               _ -> ?DEF_MQ_INTERVAL_MIN
           end},
-         {cns_interval_sync_by_vnode_id_max,
-          case application:get_env(leo_storage, cns_interval_sync_by_vnode_id_max) of
+         {?PROP_MQ_SYNC_VN_3,
+          case application:get_env(leo_storage, ?PROP_MQ_SYNC_VN_3) of
               {ok, _CnsInterval2_Max} -> _CnsInterval2_Max;
               _ -> ?DEF_MQ_INTERVAL_MAX
           end},
          %% for rebalance
-         {cns_num_of_batch_process_rebalance,
-          case application:get_env(leo_storage, cns_num_of_batch_process_rebalance) of
+         {?PROP_MQ_REBALANCE_1,
+          case application:get_env(leo_storage, ?PROP_MQ_REBALANCE_1) of
               {ok, _CnsNumofBatchProc3} -> _CnsNumofBatchProc3;
               _ -> ?DEF_MQ_NUM_OF_BATCH_PROC
           end},
-         {cns_interval_rebalance_min,
-          case application:get_env(leo_storage, cns_interval_rebalance_min) of
+         {?PROP_MQ_REBALANCE_2,
+          case application:get_env(leo_storage, ?PROP_MQ_REBALANCE_2) of
               {ok, _CnsInterval3_Min} -> _CnsInterval3_Min;
               _ -> ?DEF_MQ_INTERVAL_MIN
           end},
-         {cns_interval_rebalance_max,
-          case application:get_env(leo_storage, cns_interval_rebalance_max) of
+         {?PROP_MQ_REBALANCE_3,
+          case application:get_env(leo_storage, ?PROP_MQ_REBALANCE_3) of
               {ok, _CnsInterval3_Max} -> _CnsInterval3_Max;
               _ -> ?DEF_MQ_INTERVAL_MAX
           end},
          %% async deletion objects (after remove a bucket)
-         {cns_num_of_batch_process_async_deletion,
-          case application:get_env(leo_storage, cns_num_of_batch_process_async_deletion) of
+         {?PROP_MQ_DELETE_1,
+          case application:get_env(leo_storage, ?PROP_MQ_DELETE_1) of
               {ok, _CnsNumofBatchProc4} -> _CnsNumofBatchProc4;
               _ -> ?DEF_MQ_NUM_OF_BATCH_PROC
           end},
-         {cns_interval_async_deletion_min,
-          case application:get_env(leo_storage, cns_interval_async_deletion_min) of
+         {?PROP_MQ_DELETE_2,
+          case application:get_env(leo_storage, ?PROP_MQ_DELETE_2) of
               {ok, _CnsInterval3_Min} -> _CnsInterval3_Min;
               _ -> ?DEF_MQ_INTERVAL_MIN
           end},
-         {cns_interval_async_deletion_max,
-          case application:get_env(leo_storage, cns_interval_async_deletion_max) of
+         {?PROP_MQ_DELETE_3,
+          case application:get_env(leo_storage, ?PROP_MQ_DELETE_3) of
               {ok, _CnsInterval3_Max} -> _CnsInterval3_Max;
               _ -> ?DEF_MQ_INTERVAL_MAX
           end},
          %% recovery node
-         {cns_num_of_batch_process_recovery_node,
-          case application:get_env(leo_storage, cns_num_of_batch_process_recovery_node) of
+         {?PROP_MQ_RECOVERY_1,
+          case application:get_env(leo_storage, ?PROP_MQ_RECOVERY_1) of
               {ok, _CnsNumofBatchProc5} -> _CnsNumofBatchProc5;
               _ -> ?DEF_MQ_NUM_OF_BATCH_PROC
           end},
-         {cns_interval_recovery_node_min,
-          case application:get_env(leo_storage, cns_interval_recovery_node_min) of
+         {?PROP_MQ_RECOVERY_2,
+          case application:get_env(leo_storage, ?PROP_MQ_RECOVERY_2) of
               {ok, _CnsInterval4_Min} -> _CnsInterval4_Min;
               _ -> ?DEF_MQ_INTERVAL_MIN
           end},
-         {cns_interval_recovery_node_max,
-          case application:get_env(leo_storage, cns_interval_recovery_node_max) of
+         {?PROP_MQ_RECOVERY_3,
+          case application:get_env(leo_storage, ?PROP_MQ_RECOVERY_3) of
               {ok, _CnsInterval4_Max} -> _CnsInterval4_Max;
               _ -> ?DEF_MQ_INTERVAL_MAX
           end},
          %% sync obj with dc
-         {cns_num_of_batch_process_sync_obj_with_dc,
-          case application:get_env(leo_storage, cns_num_of_batch_process_sync_obj_with_dc) of
+         {?PROP_MQ_SYNC_DC_1,
+          case application:get_env(leo_storage, ?PROP_MQ_SYNC_DC_1) of
               {ok, _CnsNumofBatchProc6} -> _CnsNumofBatchProc6;
               _ -> ?DEF_MQ_INTERVAL_MIN
           end},
-         {cns_interval_sync_obj_with_dc_min,
-          case application:get_env(leo_storage, cns_interval_sync_obj_with_dc_min) of
+         {?PROP_MQ_SYNC_DC_2,
+          case application:get_env(leo_storage, ?PROP_MQ_SYNC_DC_2) of
               {ok, _CnsInterval5_Min} -> _CnsInterval5_Min;
               _ -> ?DEF_MQ_INTERVAL_MIN
           end},
-         {cns_interval_sync_obj_with_dc_max,
-          case application:get_env(leo_storage, cns_interval_sync_obj_with_dc_max) of
+         {?PROP_MQ_SYNC_DC_3,
+          case application:get_env(leo_storage, ?PROP_MQ_SYNC_DC_3) of
               {ok, _CnsInterval5_Max} -> _CnsInterval5_Max;
               _ -> ?DEF_MQ_INTERVAL_MAX
           end},
          %% compare metadata with dc
-         {cns_num_of_batch_process_comp_meta_with_dc,
-          case application:get_env(leo_storage, cns_num_of_batch_process_comp_meta_with_dc) of
+         {?PROP_MQ_COMP_DC_1,
+          case application:get_env(leo_storage, ?PROP_MQ_COMP_DC_1) of
               {ok, _CnsNumofBatchProc7} -> _CnsNumofBatchProc7;
               _ -> ?DEF_MQ_INTERVAL_MIN
           end},
-         {cns_interval_comp_meta_with_dc_min,
-          case application:get_env(leo_storage, cns_interval_comp_meta_with_dc_min) of
+         {?PROP_MQ_COMP_DC_2,
+          case application:get_env(leo_storage, ?PROP_MQ_COMP_DC_2) of
               {ok, _CnsInterval6_Min} -> _CnsInterval6_Min;
               _ -> ?DEF_MQ_INTERVAL_MIN
           end},
-         {cns_interval_comp_meta_with_dc_max,
-          case application:get_env(leo_storage, cns_interval_comp_meta_with_dc_max) of
+         {?PROP_MQ_COMP_DC_3,
+          case application:get_env(leo_storage, ?PROP_MQ_COMP_DC_3) of
               {ok, _CnsInterval6_Max} -> _CnsInterval6_Max;
               _ -> ?DEF_MQ_INTERVAL_MAX
           end}

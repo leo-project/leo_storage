@@ -202,7 +202,7 @@ attach(SystemConf) ->
 -spec(synchronize(atom()) ->
              ok | {error, any()}).
 synchronize(Node) ->
-    leo_storage_mq_client:publish(?QUEUE_TYPE_RECOVERY_NODE, Node).
+    leo_storage_mq:publish(?QUEUE_TYPE_RECOVERY_NODE, Node).
 
 -spec(synchronize(list() | string(), #?METADATA{} | atom()) ->
              ok | {error, any()}).
@@ -212,7 +212,7 @@ synchronize(InconsistentNodes, #?METADATA{addr_id = AddrId,
 
 synchronize(Key, ErrorType) ->
     {ok, #redundancies{vnode_id_to = VNodeId}} = leo_redundant_manager_api:get_redundancies_by_key(Key),
-    leo_storage_mq_client:publish(?QUEUE_TYPE_PER_OBJECT, VNodeId, Key, ErrorType).
+    leo_storage_mq:publish(?QUEUE_TYPE_PER_OBJECT, VNodeId, Key, ErrorType).
 
 
 %%--------------------------------------------------------------------
@@ -355,7 +355,7 @@ rebalance(RebalanceList, MembersCur, MembersPrev) ->
 rebalance_1([]) ->
     ok;
 rebalance_1([{VNodeId, Node}|T]) ->
-    ok = leo_storage_mq_client:publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, VNodeId, Node),
+    ok = leo_storage_mq:publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, VNodeId, Node),
     rebalance_1(T).
 
 %% recover a remote cluster's object

@@ -537,7 +537,7 @@ prefix_search_and_remove_objects(ParentDir) ->
 
                   case (Pos1 == 0) of
                       true when Metadata#?METADATA.del == ?DEL_FALSE ->
-                          leo_storage_mq_client:publish(
+                          leo_storage_mq:publish(
                             ?QUEUE_TYPE_ASYNC_DELETION, AddrId, Key);
                       _ ->
                           Acc

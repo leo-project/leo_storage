@@ -77,7 +77,7 @@ after_proc({ok, Pid}) ->
     ok = leo_ordning_reda_api:start(),
 
     Intervals = ?env_mq_consumption_intervals(),
-    ok = leo_storage_mq_client:start(Pid, Intervals, QueueDir),
+    ok = leo_storage_mq:start(Pid, Intervals, QueueDir),
 
     %% After processing
     ensure_started(rex, rpc, start_link, worker, 2000),

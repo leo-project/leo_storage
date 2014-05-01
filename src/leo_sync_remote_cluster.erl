@@ -210,16 +210,16 @@ compare_metadata([#?METADATA{cluster_id = ClusterId,
                 true ->
                     void;
                 false ->
-                    leo_storage_mq_client:publish(
+                    leo_storage_mq:publish(
                       ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key)
             end;
         not_found ->
-            leo_storage_mq_client:publish(
+            leo_storage_mq:publish(
               ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key, ?DEL_TRUE);
         {_, Cause} ->
             ?warn("comapare_metadata/1",
                   "key:~s, cause:~p", [binary_to_list(Key), Cause]),
-            leo_storage_mq_client:publish(
+            leo_storage_mq:publish(
               ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key)
     end,
     compare_metadata(Rest).
@@ -253,10 +253,10 @@ handle_fail(UId, [{AddrId, Key}|Rest] = _StackInfo) ->
     ?warn("handle_fail/2", "uid:~w, addr-id:~w, key:~p", [UId, AddrId, Key]),
     case get_cluster_id_from_uid(UId) of
         undefined ->
-            ok = leo_storage_mq_client:publish(
+            ok = leo_storage_mq:publish(
                    ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, AddrId, Key);
         ClusterId ->
-            ok = leo_storage_mq_client:publish(
+            ok = leo_storage_mq:publish(
                    ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key)
     end,
     handle_fail(UId, Rest).
@@ -458,6 +458,6 @@ send_1([#?CLUSTER_MEMBER{node = Node,
 enqueue_fail_replication([],_ClusterId) ->
     ok;
 enqueue_fail_replication([{AddrId, Key}|Rest], ClusterId) ->
-    ok = leo_storage_mq_client:publish(
+    ok = leo_storage_mq:publish(
            ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key),
     enqueue_fail_replication(Rest, ClusterId).

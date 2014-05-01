@@ -113,7 +113,7 @@ send_addrid_and_key_to_remote_1([#mdc_replication_info{
 %% @private
 send_addrid_and_key_to_remote_2([], ClusterId, ListAddrIdAndKey,_RetryTimes) ->
     %% Enqueue a fail msg
-    ok = leo_storage_mq_client:publish(
+    ok = leo_storage_mq:publish(
            ?QUEUE_TYPE_COMP_META_WITH_DC, ClusterId, ListAddrIdAndKey),
     ok;
 send_addrid_and_key_to_remote_2([_|Rest], ClusterId, ListAddrIdAndKey, ?DEF_MAX_RETRY_TIMES) ->

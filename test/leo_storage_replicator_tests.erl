@@ -154,8 +154,8 @@ replicate_obj_2_({Test0Node, Test1Node}) ->
 %%--------------------------------------------------------------------
 %% for object-operation #1.
 gen_mock_2(object, {_Test0Node, _Test1Node}, Case) ->
-    meck:new(leo_storage_mq_client),
-    meck:expect(leo_storage_mq_client, publish,
+    meck:new(leo_storage_mq),
+    meck:expect(leo_storage_mq, publish,
                 fun(Type, VNodeId, Key, _ErrorType) ->
                         ?assertEqual(?QUEUE_TYPE_PER_OBJECT, Type),
                         ?assertEqual(?TEST_RING_ID_1,        VNodeId),
