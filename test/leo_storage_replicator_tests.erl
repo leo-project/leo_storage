@@ -174,10 +174,10 @@ gen_mock_2(object, {_Test0Node, _Test1Node}, Case) ->
                         end
                 end),
     meck:expect(leo_storage_handler_object, put,
-                fun(From, _Object, _ReqId) ->
+                fun(Ref, From, _Object, _ReqId) ->
                         case Case of
-                            ok   -> From ! {ok, 1};
-                            fail -> From ! {error, {node(), []}}
+                            ok   -> erlang:send(From, {Ref, {ok, 1}});
+                            fail -> erlang:send(From, {Ref, {error, {node(), []}}})
                         end
                 end),
     ok.
@@ -200,10 +200,10 @@ gen_mock_3(object, Test1Node, Case) ->
                                                     end
                                             end]),
     ok = rpc:call(Test1Node, meck, expect, [leo_storage_handler_object, put,
-                                            fun(From,_Object,_ReqId) ->
+                                            fun(Ref, From,_Object,_ReqId) ->
                                                     case Case of
-                                                        ok   -> From ! {ok, 1};
-                                                        fail -> From ! {error, {node(),[]}}
+                                                        ok   -> erlang:send(From, {Ref, {ok, 1}});
+                                                        fail -> erlang:send(From, {Ref, {error, {node(),[]}}})
                                                     end
                                             end]),
     ok.

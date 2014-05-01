@@ -37,7 +37,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -export([get/1, get/2, get/3, get/4, get/5,
-         put/1, put/2, put/3,
+         put/1, put/2, put/4,
          delete/1, delete/2,
          head/2,
          head_with_calc_md5/3,
@@ -215,19 +215,19 @@ put(_,_) ->
 
 %% @doc Insert an  object (request from remote-storage-nodes/replicator).
 %%
--spec(put(pid(), #?OBJECT{}, integer()) ->
+-spec(put(reference(), pid(), #?OBJECT{}, integer()) ->
              {ok, atom()} | {error, any()}).
-put(From, Object, ReqId) ->
+put(Ref, From, Object, ReqId) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
     case replicate_fun(?REP_REMOTE, ?CMD_PUT, Object) of
         {ok, ETag} ->
-            erlang:send(From, {ok, ETag});
+            erlang:send(From, {Ref, {ok, ETag}});
 
         %% not found an object (during rebalance and delete-operation)
         {error, not_found} when ReqId == 0 ->
-            erlang:send(From, {ok, 0});
+            erlang:send(From, {Ref, {ok, 0}});
         {error, Cause} ->
-            erlang:send(From, {error, {node(), Cause}})
+            erlang:send(From, {Ref, {error, {node(), Cause}}})
     end.
 
 
@@ -709,8 +709,8 @@ replicate_fun(?REP_LOCAL, Method, AddrId, Object) ->
               Method, ?quorum(Method, WriteQuorum, DeleteQuorum),
               Redundancies, Object#?OBJECT{ring_hash = RingHash},
               replicate_callback(Object));
-        _Error ->
-            {error, ?ERROR_META_NOT_FOUND}
+        {error,_Cause} ->
+            {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
     end;
 replicate_fun(_,_,_,_) ->
     {error, badarg}.
