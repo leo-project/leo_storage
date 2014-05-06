@@ -46,8 +46,8 @@ start(_Type, _Args) ->
     after_proc(Res).
 
 prep_stop(_State) ->
+    catch leo_mq_sup:stop(),
     catch leo_storage_sup:stop(),
-    catch leo_logger_sup:stop(),
     ok.
 
 stop(_State) ->
