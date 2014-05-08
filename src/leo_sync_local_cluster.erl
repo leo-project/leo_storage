@@ -109,7 +109,7 @@ handle_fail(_, []) ->
 handle_fail(Node, [{AddrId, Key}|Rest]) ->
     ?warn("handle_fail/2","node:~w, addr-id:~w, key:~s", [Node, AddrId, Key]),
 
-    ok = leo_storage_mq_client:publish(
+    ok = leo_storage_mq:publish(
            ?QUEUE_TYPE_PER_OBJECT, AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
     handle_fail(Node, Rest).
 
@@ -181,7 +181,7 @@ slice_and_replicate(Objects, Errors) ->
 
     %% store an object to object-storage
     case leo_storage_handler_object:head(Metadata#?METADATA.addr_id,
-                                         Metadata#?METADATA.key) of
+                                         Metadata#?METADATA.key, false) of
         {ok, #?METADATA{clock = Clock}} when Clock >= Metadata#?METADATA.clock ->
             slice_and_replicate(Rest_5, Errors);
         _ ->

@@ -37,9 +37,9 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -export([get/1, get/2, get/3, get/4, get/5,
-         put/1, put/2, put/3,
+         put/1, put/2, put/4,
          delete/1, delete/2,
-         head/2,
+         head/2, head/3,
          head_with_calc_md5/3,
          replicate/1, replicate/3,
          prefix_search/3, prefix_search_and_remove_objects/1,
@@ -215,19 +215,19 @@ put(_,_) ->
 
 %% @doc Insert an  object (request from remote-storage-nodes/replicator).
 %%
--spec(put(pid(), #?OBJECT{}, integer()) ->
+-spec(put(reference(), pid(), #?OBJECT{}, integer()) ->
              {ok, atom()} | {error, any()}).
-put(From, Object, ReqId) ->
+put(Ref, From, Object, ReqId) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
     case replicate_fun(?REP_REMOTE, ?CMD_PUT, Object) of
         {ok, ETag} ->
-            erlang:send(From, {ok, ETag});
+            erlang:send(From, {Ref, {ok, ETag}});
 
         %% not found an object (during rebalance and delete-operation)
         {error, not_found} when ReqId == 0 ->
-            erlang:send(From, {ok, 0});
+            erlang:send(From, {Ref, {ok, 0}});
         {error, Cause} ->
-            erlang:send(From, {error, {node(), Cause}})
+            erlang:send(From, {Ref, {error, {node(), Cause}}})
     end.
 
 
@@ -284,12 +284,13 @@ delete(Object) ->
 delete(Object, ReqId) when is_integer(ReqId) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
     replicate_fun(?REP_LOCAL, ?CMD_DELETE,
-                  Object#?OBJECT.addr_id, Object#?OBJECT{method   = ?CMD_DELETE,
-                                                         data     = <<>>,
-                                                         dsize    = 0,
-                                                         clock    = leo_date:clock(),
-                                                         req_id   = ReqId,
-                                                         del      = ?DEL_TRUE});
+                  Object#?OBJECT.addr_id,
+                  Object#?OBJECT{method   = ?CMD_DELETE,
+                                 data     = <<>>,
+                                 dsize    = 0,
+                                 clock    = leo_date:clock(),
+                                 req_id   = ReqId,
+                                 del      = ?DEL_TRUE});
 
 delete(Object, Ref) when is_reference(Ref) ->
     AddrId = Object#?OBJECT.addr_id,
@@ -322,6 +323,20 @@ delete(_,_) ->
 -spec(head(integer(), string()) ->
              {ok, #?METADATA{}} | {error, any}).
 head(AddrId, Key) ->
+    %% Do retry when being invoked as usual method
+    head(AddrId, Key, true).
+
+-spec(head(integer(), string(), DoRetry::boolean()) ->
+             {ok, #?METADATA{}} | {error, any}).
+head(AddrId, Key, false) ->
+    %% No retry when being invoked from recover/rebalance
+    case leo_object_storage_api:head({AddrId, Key}) of
+        {ok, MetaBin} ->
+            {ok, binary_to_term(MetaBin)};
+        Error ->
+            Error
+    end;
+head(AddrId, Key, true) ->
     case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
         {ok, #redundancies{nodes = Redundancies}} ->
             head_1(Redundancies, AddrId, Key);
@@ -412,11 +427,12 @@ replicate(DestNodes, AddrId, Key) ->
                 #?METADATA{del = ?DEL_FALSE} = Metadata ->
                     case ?MODULE:get({Ref, Key}) of
                         {ok, Ref, Metadata, Bin} ->
-                            leo_sync_local_cluster:stack(
-                              DestNodes, AddrId, Key, Metadata, Bin),
+                            Ret = leo_sync_local_cluster:stack(
+                                    DestNodes, AddrId, Key, Metadata, Bin),
                             Object_1 = leo_object_storage_transformer:metadata_to_object(Metadata),
                             Object_2 = Object_1#?OBJECT{data = Bin},
-                            leo_sync_remote_cluster:defer_stack(Object_2);
+                            _ = leo_sync_remote_cluster:defer_stack(Object_2),
+                            Ret;
                         {error, Ref, Cause} ->
                             {error, Cause}
                     end;
@@ -449,7 +465,6 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
 
                   Token0 = leo_misc:binary_tokens(ParentDir, ?DEF_DELIMITER),
                   Token1 = leo_misc:binary_tokens(Key,       ?DEF_DELIMITER),
-
                   Length0 = erlang:length(Token0),
                   Length1 = Length0 + 1,
                   Length2 = erlang:length(Token1),
@@ -537,7 +552,7 @@ prefix_search_and_remove_objects(ParentDir) ->
 
                   case (Pos1 == 0) of
                       true when Metadata#?METADATA.del == ?DEL_FALSE ->
-                          leo_storage_mq_client:publish(
+                          leo_storage_mq:publish(
                             ?QUEUE_TYPE_ASYNC_DELETION, AddrId, Key);
                       _ ->
                           Acc
@@ -709,8 +724,8 @@ replicate_fun(?REP_LOCAL, Method, AddrId, Object) ->
               Method, ?quorum(Method, WriteQuorum, DeleteQuorum),
               Redundancies, Object#?OBJECT{ring_hash = RingHash},
               replicate_callback(Object));
-        _Error ->
-            {error, ?ERROR_META_NOT_FOUND}
+        {error,_Cause} ->
+            {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
     end;
 replicate_fun(_,_,_,_) ->
     {error, badarg}.
@@ -725,8 +740,8 @@ replicate_fun(?REP_REMOTE, Method, Object) ->
           end,
     case Ret of
         %% Put
-        {ok, Ref, ETag} ->
-            {ok, ETag};
+        {ok, Ref, Checksum} ->
+            {ok, Checksum};
         %% Delete
         {ok, Ref} ->
             ok;
@@ -750,13 +765,13 @@ replicate_callback() ->
 -spec(replicate_callback(#?OBJECT{}|null) ->
              function()).
 replicate_callback(Object) ->
-    fun({ok, ?CMD_PUT, ETag}) ->
+    fun({ok, ?CMD_PUT, Checksum}) ->
             ok = leo_sync_remote_cluster:defer_stack(Object),
-            {ok, ETag};
-       ({ok,?CMD_DELETE,_ETag}) ->
+            {ok, Checksum};
+       ({ok,?CMD_DELETE,_Checksum}) ->
             ok = leo_sync_remote_cluster:defer_stack(Object),
             ok;
-       ({ok,_,_ETag}) ->
+       ({ok,_,_Checksum}) ->
             ok = leo_sync_remote_cluster:defer_stack(Object),
             ok;
        ({error, Cause}) ->

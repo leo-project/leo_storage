@@ -69,7 +69,7 @@ teardown(Node) ->
 
 suite_regular_1_(Node) ->
     ok = meck:new(leo_storage_handler_object),
-    ok = meck:expect(leo_storage_handler_object, head, 2, {ok, #?METADATA{clock = -1}}),
+    ok = meck:expect(leo_storage_handler_object, head, 3, {ok, #?METADATA{clock = -1}}),
 
     ok = meck:new(leo_object_storage_api),
     ok = meck:expect(leo_object_storage_api, store,

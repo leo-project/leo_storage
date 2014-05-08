@@ -23,7 +23,7 @@
 %% @doc
 %% @end
 %%====================================================================
--module(leo_storage_mq_client).
+-module(leo_storage_mq).
 
 -author('Yosuke Hara').
 
@@ -102,53 +102,108 @@ start(RefSup, Intervals, RootPath0) ->
 
     ?TBL_REBALANCE_COUNTER = ets:new(?TBL_REBALANCE_COUNTER,
                                      [named_table, public, {read_concurrency, true}]),
-    lists:foreach(
-      fun({Id, Path, NumOfBatchProcs, MaxInterval, MinInterval}) ->
-              leo_mq_api:new(RefMqSup, Id, [{?MQ_PROP_MOD,          ?MODULE},
-                                            {?MQ_PROP_FUN,          ?MQ_SUBSCRIBE_FUN},
-                                            {?MQ_PROP_ROOT_PATH,    RootPath1 ++ Path},
-                                            {?MQ_PROP_DB_PROCS,     ?env_num_of_mq_procs()},
-                                            {?MQ_PROP_NUM_OF_BATCH_PROC, NumOfBatchProcs},
-                                            {?MQ_PROP_MAX_INTERVAL, MaxInterval},
-                                            {?MQ_PROP_MIN_INTERVAL, MinInterval}
-                                           ])
-      end, [{?QUEUE_ID_PER_OBJECT, ?MSG_PATH_PER_OBJECT,
-             leo_misc:get_value(cns_num_of_batch_process_per_object, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC),
-             leo_misc:get_value(cns_interval_per_object_max, Intervals, ?DEF_MQ_INTERVAL_MAX),
-             leo_misc:get_value(cns_interval_per_object_min, Intervals, ?DEF_MQ_INTERVAL_MIN)
-            },
-            {?QUEUE_ID_SYNC_BY_VNODE_ID, ?MSG_PATH_SYNC_VNODE_ID,
-             leo_misc:get_value(cns_num_of_batch_process_sync_by_vnode_id, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC),
-             leo_misc:get_value(cns_interval_sync_by_vnode_id_max, Intervals, ?DEF_MQ_INTERVAL_MAX),
-             leo_misc:get_value(cns_interval_sync_by_vnode_id_min, Intervals, ?DEF_MQ_INTERVAL_MIN)
-            },
-            {?QUEUE_ID_REBALANCE, ?MSG_PATH_REBALANCE,
-             leo_misc:get_value(cns_num_of_batch_process_rebalance, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC),
-             leo_misc:get_value(cns_interval_rebalance_max, Intervals, ?DEF_MQ_INTERVAL_MAX),
-             leo_misc:get_value(cns_interval_rebalance_min, Intervals, ?DEF_MQ_INTERVAL_MIN)
-            },
-            {?QUEUE_ID_ASYNC_DELETION, ?MSG_PATH_ASYNC_DELETION,
-             leo_misc:get_value(cns_num_of_batch_process_async_deletion, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC),
-             leo_misc:get_value(cns_interval_async_deletion_max, Intervals, ?DEF_MQ_INTERVAL_MAX),
-             leo_misc:get_value(cns_interval_async_deletion_min, Intervals, ?DEF_MQ_INTERVAL_MIN)
-            },
-            {?QUEUE_ID_RECOVERY_NODE, ?MSG_PATH_RECOVERY_NODE,
-             leo_misc:get_value(cns_num_of_batch_process_recovery_node, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC),
-             leo_misc:get_value(cns_interval_recovery_node_max, Intervals, ?DEF_MQ_INTERVAL_MAX),
-             leo_misc:get_value(cns_interval_recovery_node_min, Intervals, ?DEF_MQ_INTERVAL_MIN)
-            },
-            {?QUEUE_ID_SYNC_OBJ_WITH_DC, ?MSG_PATH_SYNC_OBJ_WITH_DC,
-             leo_misc:get_value(cns_num_of_batch_process_sync_obj_with_dc, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC),
-             leo_misc:get_value(cns_interval_sync_obj_with_dc_max, Intervals, ?DEF_MQ_INTERVAL_MAX),
-             leo_misc:get_value(cns_interval_sync_obj_with_dc_min, Intervals, ?DEF_MQ_INTERVAL_MIN)
-            },
-            {?QUEUE_ID_COMP_META_WITH_DC, ?MSG_PATH_COMP_META_WITH_DC,
-             leo_misc:get_value(cns_num_of_batch_process_comp_meta_with_dc, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC),
-             leo_misc:get_value(cns_interval_comp_meta_with_dc_max, Intervals, ?DEF_MQ_INTERVAL_MAX),
-             leo_misc:get_value(cns_interval_comp_meta_with_dc_min, Intervals, ?DEF_MQ_INTERVAL_MIN)
-            }
-           ]),
-    ok.
+    start_1([{?QUEUE_ID_PER_OBJECT, ?MSG_PATH_PER_OBJECT,
+              get_queue(?PROP_MQ_PER_OBJ_1, Intervals),
+              get_queue(?PROP_MQ_PER_OBJ_2, Intervals),
+              get_queue(?PROP_MQ_PER_OBJ_3, Intervals)
+             },
+             {?QUEUE_ID_SYNC_BY_VNODE_ID, ?MSG_PATH_SYNC_VNODE_ID,
+              get_queue(?PROP_MQ_SYNC_VN_1, Intervals),
+              get_queue(?PROP_MQ_SYNC_VN_2, Intervals),
+              get_queue(?PROP_MQ_SYNC_VN_3, Intervals)
+             },
+             {?QUEUE_ID_REBALANCE, ?MSG_PATH_REBALANCE,
+              get_queue(?PROP_MQ_REBALANCE_1, Intervals),
+              get_queue(?PROP_MQ_REBALANCE_2, Intervals),
+              get_queue(?PROP_MQ_REBALANCE_3, Intervals)
+             },
+             {?QUEUE_ID_ASYNC_DELETION, ?MSG_PATH_ASYNC_DELETION,
+              get_queue(?PROP_MQ_DELETE_1, Intervals),
+              get_queue(?PROP_MQ_DELETE_2, Intervals),
+              get_queue(?PROP_MQ_DELETE_3, Intervals)
+             },
+             {?QUEUE_ID_RECOVERY_NODE, ?MSG_PATH_RECOVERY_NODE,
+              get_queue(?PROP_MQ_RECOVERY_1, Intervals),
+              get_queue(?PROP_MQ_RECOVERY_2, Intervals),
+              get_queue(?PROP_MQ_RECOVERY_3, Intervals)
+             },
+             {?QUEUE_ID_SYNC_OBJ_WITH_DC, ?MSG_PATH_SYNC_OBJ_WITH_DC,
+              get_queue(?PROP_MQ_SYNC_DC_1, Intervals),
+              get_queue(?PROP_MQ_SYNC_DC_2, Intervals),
+              get_queue(?PROP_MQ_SYNC_DC_3, Intervals)
+             },
+             {?QUEUE_ID_COMP_META_WITH_DC, ?MSG_PATH_COMP_META_WITH_DC,
+              get_queue(?PROP_MQ_COMP_DC_1, Intervals),
+              get_queue(?PROP_MQ_COMP_DC_2, Intervals),
+              get_queue(?PROP_MQ_COMP_DC_3, Intervals)
+             }
+            ], RefMqSup, RootPath1).
+
+%% @private
+start_1([],_,_) ->
+    ok;
+start_1([{Id, Path, NumOfBatchProcs, MaxInterval, MinInterval}|Rest], Sup, Root) ->
+    leo_mq_api:new(Sup, Id, [{?MQ_PROP_MOD,          ?MODULE},
+                             {?MQ_PROP_FUN,          ?MQ_SUBSCRIBE_FUN},
+                             {?MQ_PROP_ROOT_PATH,    Root ++ Path},
+                             {?MQ_PROP_DB_PROCS,     ?env_num_of_mq_procs()},
+                             {?MQ_PROP_NUM_OF_BATCH_PROC, NumOfBatchProcs},
+                             {?MQ_PROP_MAX_INTERVAL, MaxInterval},
+                             {?MQ_PROP_MIN_INTERVAL, MinInterval}
+                            ]),
+    start_1(Rest, Sup, Root).
+
+
+%% @private
+get_queue(?PROP_MQ_PER_OBJ_1 = Id, Intervals) ->
+    leo_misc:get_value(Id, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC);
+get_queue(?PROP_MQ_PER_OBJ_2 = Id, Intervals) ->
+    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MAX);
+get_queue(?PROP_MQ_PER_OBJ_3 = Id, Intervals) ->
+    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MIN);
+
+get_queue(?PROP_MQ_SYNC_VN_1 = Id, Intervals) ->
+    leo_misc:get_value(Id, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC);
+get_queue(?PROP_MQ_SYNC_VN_2 = Id, Intervals) ->
+    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MAX);
+get_queue(?PROP_MQ_SYNC_VN_3 = Id, Intervals) ->
+    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MIN);
+
+get_queue(?PROP_MQ_REBALANCE_1 = Id, Intervals) ->
+    leo_misc:get_value(Id, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC);
+get_queue(?PROP_MQ_REBALANCE_2 = Id, Intervals) ->
+    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MAX);
+get_queue(?PROP_MQ_REBALANCE_3 = Id, Intervals) ->
+    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MIN);
+
+get_queue(?PROP_MQ_DELETE_1 = Id, Intervals) ->
+    leo_misc:get_value(Id, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC);
+get_queue(?PROP_MQ_DELETE_2 = Id, Intervals) ->
+    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MAX);
+get_queue(?PROP_MQ_DELETE_3 = Id, Intervals) ->
+    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MIN);
+
+get_queue(?PROP_MQ_RECOVERY_1 = Id, Intervals) ->
+    leo_misc:get_value(Id, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC);
+get_queue(?PROP_MQ_RECOVERY_2 = Id, Intervals) ->
+    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MAX);
+get_queue(?PROP_MQ_RECOVERY_3 = Id, Intervals) ->
+    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MIN);
+
+get_queue(?PROP_MQ_SYNC_DC_1 = Id, Intervals) ->
+    leo_misc:get_value(Id, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC);
+get_queue(?PROP_MQ_SYNC_DC_2 = Id, Intervals) ->
+    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MAX);
+get_queue(?PROP_MQ_SYNC_DC_3 = Id, Intervals) ->
+    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MIN);
+
+get_queue(?PROP_MQ_COMP_DC_1 = Id, Intervals) ->
+    leo_misc:get_value(Id, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC);
+get_queue(?PROP_MQ_COMP_DC_2 = Id, Intervals) ->
+    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MAX);
+get_queue(?PROP_MQ_COMP_DC_3 = Id, Intervals) ->
+    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MIN).
+
 
 %% @doc Input a message into the queue.
 %%
@@ -315,8 +370,8 @@ handle_call({consume, ?QUEUE_ID_SYNC_BY_VNODE_ID, MessageBin}) ->
                 Error ->
                     ?error("handle_call/1 - QUEUE_ID_SYNC_BY_VNODE_ID",
                            "error:~p", [Error]),
-                    ok = leo_storage_mq_client:publish(
-                           ?QUEUE_TYPE_SYNC_BY_VNODE_ID, ToVNodeId, Node),
+                    ok = publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID,
+                                 ToVNodeId, Node),
                     Error
             end;
         _ ->
@@ -428,11 +483,22 @@ recover_node_callback(Node) ->
 
             case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
                 {ok, #redundancies{nodes = Redundancies}} ->
-                    Nodes = [N || #redundant_node{node = N} <- Redundancies],
+                    % The target `Node` must be included regardless of its available value
+                    % Other nodes must be available.
+                    Nodes = [N || #redundant_node{node = N, available = A}
+                                  <- Redundancies,
+                                  (N == Node) orelse (N /= Node andalso A == true)],
                     case lists:member(Node, Nodes) of
                         true ->
-                            ?MODULE:publish(?QUEUE_TYPE_PER_OBJECT,
-                                            AddrId, K, ?ERR_TYPE_RECOVER_DATA);
+                            Candidate = hd(lists:delete(Node, Nodes)),
+                            case (Candidate == erlang:node()) orelse
+                                (leo_misc:node_existence(Candidate) == false) of
+                                true ->
+                                    ?MODULE:publish(?QUEUE_TYPE_PER_OBJECT,
+                                                    AddrId, K, ?ERR_TYPE_RECOVER_DATA);
+                                false ->
+                                    void
+                            end;
                         false  ->
                             void
                     end,
@@ -568,13 +634,17 @@ correct_redundancies_1(Key, AddrId, [#redundant_node{node = Node}|T], Metadatas,
     case leo_redundant_manager_api:get_member_by_node(Node) of
         {ok, #member{state = ?STATE_RUNNING}} ->
             %% Retrieve a metadata from remote-node
-            RPCKey = rpc:async_call(Node, leo_storage_handler_object, head, [AddrId, Key]),
+            %% invoke head with NO retry option
+            RPCKey = rpc:async_call(Node, leo_storage_handler_object,
+                                    head, [AddrId, Key, false]),
 
             case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
                 {value, {ok, Metadata}} ->
-                    correct_redundancies_1(Key, AddrId, T, [{Node, Metadata}|Metadatas], ErrorNodes);
+                    correct_redundancies_1(Key, AddrId, T,
+                                           [{Node, Metadata}|Metadatas], ErrorNodes);
                 _Error ->
-                    correct_redundancies_1(Key, AddrId, T, Metadatas, [Node|ErrorNodes])
+                    correct_redundancies_1(Key, AddrId, T,
+                                           Metadatas, [Node|ErrorNodes])
             end;
         {ok, #member{state = ?STATE_DETACHED}} ->
             correct_redundancies_1(Key, AddrId, T, Metadatas, ErrorNodes);
@@ -607,7 +677,6 @@ correct_redundancies_2(ListOfMetadata, ErrorNodes) ->
                                                                              Clock =/= DestClock ->
                   {Dest, C, [Node|R]}
           end, {H, [], []}, ListOfMetadata),
-
     correct_redundancies_3(ErrorNodes ++ InconsistentNodes, CorrectNodes, Metadata).
 
 
@@ -632,7 +701,6 @@ correct_redundancies_3(InconsistentNodes, [Node|Rest], Metadata) ->
               timeout = Cause->
                   {error, Cause}
           end,
-
     case Ret of
         ok ->
             Ret;
@@ -661,8 +729,8 @@ rebalance_1(#rebalance_message{node = Node,
                     ok
             end;
         _ ->
-            ok = leo_storage_mq_client:publish(
-                   ?QUEUE_TYPE_PER_OBJECT, AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
+            ok = publish(?QUEUE_TYPE_PER_OBJECT,
+                         AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
             {error, inactive}
     end.
 
@@ -680,9 +748,8 @@ rebalance_2({ok, Redundancies}, #rebalance_message{node = Node,
                 ok ->
                     ok;
                 Error ->
-                    ok = leo_storage_mq_client:publish(
-                           ?QUEUE_TYPE_PER_OBJECT,
-                           AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
+                    ok = publish(?QUEUE_TYPE_PER_OBJECT,
+                                 AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
                     Error
             end;
         false ->

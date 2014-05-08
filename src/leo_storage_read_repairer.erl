@@ -54,6 +54,7 @@
              {ok, reference()} | {error, reference(),  any()}).
 repair(#read_parameter{quorum = ReadQuorum,
                        req_id = ReqId}, Redundancies, Metadata, Callback) ->
+    Ref    = make_ref(),
     From   = self(),
     AddrId = Metadata#?METADATA.addr_id,
     Key    = Metadata#?METADATA.key,
@@ -71,30 +72,30 @@ repair(#read_parameter{quorum = ReadQuorum,
                           can_read_repair = true}) ->
               spawn(fun() ->
                             RPCKey = rpc:async_call(
-                                       Node, leo_storage_handler_object, head, [AddrId, Key]),
-                            compare(From, RPCKey, Node, Params)
+                                       Node, leo_storage_handler_object,
+                                       head, [AddrId, Key]),
+                            compare(Ref, From, RPCKey, Node, Params)
                     end);
          (#redundant_node{}) ->
               void
       end, Redundancies),
-    loop(ReadQuorum, From, NumOfNodes, {ReqId, Key, []}, Callback).
+    loop(ReadQuorum, Ref, From, NumOfNodes, {ReqId, Key, []}, Callback).
 
 
 %% @doc Waiting for messages (compare a metadata)
 %%
--spec(loop(integer(), pid(), list(), tuple(), function()) ->
+-spec(loop(reference(), integer(), pid(), list(), tuple(), function()) ->
              ok).
-loop(0,_From,_NumOfNodes, {_,_,_Errors}, Callback) ->
+loop(0,_Ref,_From,_NumOfNodes, {_,_,_E}, Callback) ->
     Callback(ok);
-loop(R,_From, NumOfNodes, {_,_, Errors}, Callback) when (NumOfNodes - R) < length(Errors) ->
-    Callback({error, Errors});
-
-loop(R, From, NumOfNodes, {ReqId, Key, Errors} = Args, Callback) ->
+loop(R,_Ref,_From, NumOfNodes, {_,_, E}, Callback) when (NumOfNodes - R) < length(E) ->
+    Callback({error, E});
+loop(R, Ref, From, NumOfNodes, {ReqId, Key, E} = Args, Callback) ->
     receive
-        ok ->
-            loop(R-1, From, NumOfNodes, Args, Callback);
-        {error, {Node, Cause}} ->
-            loop(R,   From, NumOfNodes, {ReqId, Key, [{Node, Cause}|Errors]}, Callback)
+        {Ref, ok} ->
+            loop(R-1, Ref, From, NumOfNodes, Args, Callback);
+        {Ref, {error, {Node, Cause}}} ->
+            loop(R,   Ref, From, NumOfNodes, {ReqId, Key, [{Node, Cause}|E]}, Callback)
     after
         ?DEF_REQ_TIMEOUT ->
             case (R >= 0) of
@@ -111,11 +112,11 @@ loop(R, From, NumOfNodes, {ReqId, Key, Errors} = Args, Callback) ->
 %%--------------------------------------------------------------------
 %% @doc Compare local-metadata with remote-metadata
 %% @private
--spec(compare(pid(), pid(), atom(), #state{}) ->
+-spec(compare(reference(), pid(), pid(), atom(), #state{}) ->
              ok).
-compare(Pid, RPCKey, Node, #state{metadata = #?METADATA{addr_id = AddrId,
-                                                        key     = Key,
-                                                        clock   = Clock}}) ->
+compare(Ref, Pid, RPCKey, Node, #state{metadata = #?METADATA{addr_id = AddrId,
+                                                             key     = Key,
+                                                             clock   = Clock}}) ->
     Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
               {value, {ok, #?METADATA{clock = RemoteClock}}} when Clock == RemoteClock ->
                   ok;
@@ -139,7 +140,7 @@ compare(Pid, RPCKey, Node, #state{metadata = #?METADATA{addr_id = AddrId,
                   [Node, AddrId, Key, Clock, Reason]),
             enqueue(AddrId, Key)
     end,
-    erlang:send(Pid, Ret).
+    erlang:send(Pid, {Ref, Ret}).
 
 
 %% @doc Insert a message into the queue
@@ -147,5 +148,5 @@ compare(Pid, RPCKey, Node, #state{metadata = #?METADATA{addr_id = AddrId,
 -spec(enqueue(integer(), string()) ->
              ok | {error, any()}).
 enqueue(AddrId, Key) ->
-    leo_storage_mq_client:publish(
+    leo_storage_mq:publish(
       ?QUEUE_TYPE_PER_OBJECT, AddrId, Key, ?ERR_TYPE_RECOVER_DATA).

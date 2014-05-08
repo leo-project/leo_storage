@@ -202,7 +202,7 @@ attach(SystemConf) ->
 -spec(synchronize(atom()) ->
              ok | {error, any()}).
 synchronize(Node) ->
-    leo_storage_mq_client:publish(?QUEUE_TYPE_RECOVERY_NODE, Node).
+    leo_storage_mq:publish(?QUEUE_TYPE_RECOVERY_NODE, Node).
 
 -spec(synchronize(list() | string(), #?METADATA{} | atom()) ->
              ok | {error, any()}).
@@ -212,7 +212,7 @@ synchronize(InconsistentNodes, #?METADATA{addr_id = AddrId,
 
 synchronize(Key, ErrorType) ->
     {ok, #redundancies{vnode_id_to = VNodeId}} = leo_redundant_manager_api:get_redundancies_by_key(Key),
-    leo_storage_mq_client:publish(?QUEUE_TYPE_PER_OBJECT, VNodeId, Key, ErrorType).
+    leo_storage_mq:publish(?QUEUE_TYPE_PER_OBJECT, VNodeId, Key, ErrorType).
 
 
 %%--------------------------------------------------------------------
@@ -222,33 +222,52 @@ synchronize(Key, ErrorType) ->
 %%
 -spec(compact(atom(), 'all' | integer(), integer()) -> ok | {error, any()}).
 compact(start, NumOfTargets, MaxProc) ->
-    TargetPids1 =
-        case leo_compaction_manager_fsm:status() of
-            {ok, #compaction_stats{status = Status,
-                                   pending_targets = PendingTargets}} when Status == ?COMPACTION_STATUS_SUSPEND;
-                                                                           Status == ?COMPACTION_STATUS_IDLE ->
-                PendingTargets;
-            _ ->
-                []
-        end,
+    case leo_redundant_manager_api:get_member_by_node(erlang:node()) of
+        {ok, #member{state = ?STATE_RUNNING}} ->
+            TargetPids1 =
+                case leo_compaction_manager_fsm:status() of
+                    {ok, #compaction_stats{status = Status,
+                                           pending_targets = PendingTargets}}
+                      when Status == ?COMPACTION_STATUS_SUSPEND;
+                           Status == ?COMPACTION_STATUS_IDLE ->
+                        PendingTargets;
+                    _ ->
+                        []
+                end,
 
-    case TargetPids1 of
-        [] ->
-            {error, "Not exists compaction-targets"};
+            case TargetPids1 of
+                [] ->
+                    {error, "Not exists compaction-targets"};
+                _ ->
+                    TargetPids2 =
+                        case NumOfTargets of
+                            'all' ->
+                                TargetPids1;
+                            _Other ->
+                                lists:sublist(TargetPids1, NumOfTargets)
+                        end,
+                    leo_compaction_manager_fsm:start(
+                      TargetPids2, MaxProc,
+                      fun leo_redundant_manager_api:has_charge_of_node/2)
+            end;
         _ ->
-            TargetPids2 = case NumOfTargets of
-                              'all'  -> TargetPids1;
-                              _Other -> lists:sublist(TargetPids1, NumOfTargets)
-                          end,
-            leo_compaction_manager_fsm:start(
-              TargetPids2, MaxProc, fun leo_redundant_manager_api:has_charge_of_node/2)
+            {error,'not_running'}
     end.
 
-compact(suspend) ->
+compact(Method) ->
+    case leo_redundant_manager_api:get_member_by_node(erlang:node()) of
+        {ok, #member{state = ?STATE_RUNNING}} ->
+            compact_1(Method);
+        _ ->
+            {error,'not_running'}
+    end.
+
+%% @private
+compact_1(suspend) ->
     leo_compaction_manager_fsm:suspend();
-compact(resume) ->
+compact_1(resume) ->
     leo_compaction_manager_fsm:resume();
-compact(status) ->
+compact_1(status) ->
     leo_compaction_manager_fsm:status().
 
 
@@ -355,7 +374,7 @@ rebalance(RebalanceList, MembersCur, MembersPrev) ->
 rebalance_1([]) ->
     ok;
 rebalance_1([{VNodeId, Node}|T]) ->
-    ok = leo_storage_mq_client:publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, VNodeId, Node),
+    ok = leo_storage_mq:publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, VNodeId, Node),
     rebalance_1(T).
 
 %% recover a remote cluster's object

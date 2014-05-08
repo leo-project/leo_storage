@@ -51,7 +51,8 @@
           key          :: binary(),
           num_of_nodes :: pos_integer(),
           callback     :: function(),
-          errors = []  :: list()
+          errors = []  :: list(),
+          is_reply = false ::boolean()
          }).
 
 
@@ -66,71 +67,97 @@ replicate(Method, Quorum, Nodes, Object, Callback) ->
     AddrId = Object#?OBJECT.addr_id,
     Key    = Object#?OBJECT.key,
     ReqId  = Object#?OBJECT.req_id,
+    NumOfNodes = erlang:length(Nodes),
+
+    Ref  = make_ref(),
     From = self(),
+    Pid  = spawn(fun() ->
+                         loop(NumOfNodes, Quorum, [],
+                              Ref, From, #state{method       = Method,
+                                                addr_id      = AddrId,
+                                                key          = Key,
+                                                num_of_nodes = NumOfNodes,
+                                                callback     = Callback,
+                                                errors       = [],
+                                                is_reply     = false
+                                               })
+                 end),
 
-    ok = replicate_1(Nodes, From, AddrId, Key, Object, ReqId),
-
-    loop(Quorum, From, [], #state{method       = Method,
-                                  addr_id      = AddrId,
-                                  key          = Key,
-                                  num_of_nodes = erlang:length(Nodes),
-                                  callback     = Callback,
-                                  errors       = []}).
+    ok = replicate_1(Nodes, Ref, Pid, AddrId, Key, Object, ReqId),
+    receive
+        {Ref, Reply} ->
+            Callback(Reply)
+    after
+        (?DEF_REQ_TIMEOUT + timer:seconds(1)) ->
+            Callback({error, timeout})
+    end.
 
 %% @private
-replicate_1([],_From,_AddrId,_Key,_Object,_ReqId) ->
+replicate_1([],_Ref,_From,_AddrId,_Key,_Object,_ReqId) ->
     ok;
+%% for local-node
 replicate_1([#redundant_node{node = Node,
                              available = true}|Rest],
-            From, AddrId, Key, Object, ReqId) when Node == erlang:node() ->
+            Ref, From, AddrId, Key, Object, ReqId) when Node == erlang:node() ->
     spawn(fun() ->
-                  replicate_fun(local, #req_params{pid     = From,
-                                                   addr_id = AddrId,
-                                                   key     = Key,
-                                                   object  = Object,
-                                                   req_id  = ReqId})
+                  replicate_fun(Ref, #req_params{pid     = From,
+                                                 addr_id = AddrId,
+                                                 key     = Key,
+                                                 object  = Object,
+                                                 req_id  = ReqId})
           end),
-    replicate_1(Rest, From, AddrId, Key, Object, ReqId);
-
+    replicate_1(Rest, Ref, From, AddrId, Key, Object, ReqId);
+%% for remote-node
 replicate_1([#redundant_node{node = Node,
                              available = true}|Rest],
-            From, AddrId, Key, Object, ReqId) ->
-    true = rpc:cast(Node, leo_storage_handler_object, put, [From, Object, ReqId]),
-    replicate_1(Rest, From, AddrId, Key, Object, ReqId);
-
+            Ref, From, AddrId, Key, Object, ReqId) ->
+    true = rpc:cast(Node, leo_storage_handler_object, put, [Ref, From, Object, ReqId]),
+    replicate_1(Rest, Ref, From, AddrId, Key, Object, ReqId);
+%% for unavailable node
 replicate_1([#redundant_node{node = Node,
                              available = false}|Rest],
-            From, AddrId, Key, Object, ReqId) ->
-    erlang:send(From, {error, {Node, nodedown}}),
-    replicate_1(Rest, From, AddrId, Key, Object, ReqId).
+            Ref, From, AddrId, Key, Object, ReqId) ->
+    erlang:send(From, {Ref, {error, {Node, nodedown}}}),
+    replicate_1(Rest, Ref, From, AddrId, Key, Object, ReqId).
 
 
 %% @doc Waiting for messages (replication)
 %% @private
-loop(0,_From, ResL, #state{method = Method,
-                           callback = Callback}) ->
-    Callback({ok, Method, hd(ResL)});
-
-loop(W,_From,_ResL, #state{num_of_nodes = NumOfNodes,
-                           callback = Callback,
-                           errors = Errors}) when (NumOfNodes - W) < length(Errors) ->
-    Callback({error, Errors});
-
-loop(W, From, ResL, #state{addr_id = AddrId,
-                           key = Key,
-                           callback = Callback,
-                           errors = Errors} = State) ->
+loop(0, 0,_ResL,_Ref,_From, #state{is_reply = true}) ->
+    ok;
+loop(0, 0, ResL, Ref, From, #state{method = Method}) ->
+    erlang:send(From, {Ref, {ok, Method, hd(ResL)}});
+loop(_, W,_ResL, Ref, From, #state{num_of_nodes = N,
+                                   errors = E}) when (N - W) < length(E) ->
+    erlang:send(From, {Ref, {error, E}});
+loop(N, W, ResL, Ref, From, #state{method = Method,
+                                   addr_id = AddrId,
+                                   key = Key,
+                                   errors = E,
+                                   is_reply = IsReply} = State) ->
     receive
-        {ok, Checksum} ->
-            loop(W-1, From, [Checksum|ResL], State);
-        {error, {Node, Cause}} ->
+        {Ref, {ok, Checksum}} ->
+            ResL_1 = [Checksum|ResL],
+            {W_1, State_1} =
+                case ((W - 1) < 1) of
+                    true when IsReply == false ->
+                        erlang:send(From, {Ref, {ok, Method, hd(ResL_1)}}),
+                        {0, State#state{is_reply = true}};
+                    true ->
+                        {0, State};
+                    false ->
+                        {W - 1, State}
+                end,
+            loop(N-1, W_1, ResL_1, Ref, From, State_1);
+        {Ref, {error, {Node, Cause}}} ->
             ok = enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
-            loop(W, From, ResL, State#state{errors = [{Node, Cause}|Errors]})
+            State_1 = State#state{errors = [{Node, Cause}|E]},
+            loop(N-1, W, ResL, Ref, From, State_1)
     after
         ?DEF_REQ_TIMEOUT ->
             case (W >= 0) of
                 true ->
-                    Callback({error, timeout});
+                    erlang:send(From, {Ref, {error, timeout}});
                 false ->
                     void
             end
@@ -142,20 +169,20 @@ loop(W, From, ResL, #state{addr_id = AddrId,
 %%--------------------------------------------------------------------
 %% @doc Request a replication-message for local-node.
 %%
--spec(replicate_fun(local | atom(), #req_params{}) ->
+-spec(replicate_fun(reference(), #req_params{}) ->
              {ok, atom()} | {error, atom(), any()}).
-replicate_fun(local, #req_params{pid     = Pid,
-                                 key     = Key,
-                                 object  = Object,
-                                 req_id  = ReqId}) ->
-    Ref  = make_ref(),
+replicate_fun(Ref, #req_params{pid     = Pid,
+                               key     = Key,
+                               object  = Object,
+                               req_id  = ReqId}) ->
+    %% Ref  = make_ref(),
     Ret  = case leo_storage_handler_object:put(Object, Ref) of
                {ok, Ref, Checksum} ->
-                   {ok, Checksum};
+                   {Ref, {ok, Checksum}};
                {error, Ref, Cause} ->
                    ?warn("replicate_fun/2", "key:~s, node:~w, reqid:~w, cause:~p",
                          [Key, local, ReqId, Cause]),
-                   {error, {node(), Cause}}
+                   {Ref, {error, {node(), Cause}}}
            end,
     erlang:send(Pid, Ret).
 
@@ -165,8 +192,8 @@ replicate_fun(local, #req_params{pid     = Pid,
 -spec(enqueue(error_msg_type(), integer(), string()) ->
              ok | void).
 enqueue(?ERR_TYPE_REPLICATE_DATA = Type,  AddrId, Key) ->
-    leo_storage_mq_client:publish(?QUEUE_TYPE_PER_OBJECT, AddrId, Key, Type);
+    leo_storage_mq:publish(?QUEUE_TYPE_PER_OBJECT, AddrId, Key, Type);
 enqueue(?ERR_TYPE_DELETE_DATA = Type,     AddrId, Key) ->
-    leo_storage_mq_client:publish(?QUEUE_TYPE_PER_OBJECT, AddrId, Key, Type);
+    leo_storage_mq:publish(?QUEUE_TYPE_PER_OBJECT, AddrId, Key, Type);
 enqueue(_,_,_) ->
     void.

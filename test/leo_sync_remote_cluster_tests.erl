@@ -116,12 +116,12 @@ gen_mocks(Node) ->
                              erlang:apply(_Module, _Method, _Args),
                              {ok, []}
                      end),
-    ok = meck:new(leo_storage_mq_client),
-    ok = meck:expect(leo_storage_mq_client, publish,
+    ok = meck:new(leo_storage_mq),
+    ok = meck:expect(leo_storage_mq, publish,
                      fun(_,_,_,_) ->
                              ok
                      end),
-    ok = meck:expect(leo_storage_mq_client, publish,
+    ok = meck:expect(leo_storage_mq, publish,
                      fun(_,_,_,_,_) ->
                              ok
                      end),

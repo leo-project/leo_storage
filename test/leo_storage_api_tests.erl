@@ -205,12 +205,12 @@ synchronize_([Node0, _]) ->
                         {ok, #redundancies{vnode_id_to = 12345}}
                 end),
 
-    meck:new(leo_storage_mq_client),
-    meck:expect(leo_storage_mq_client, publish,
+    meck:new(leo_storage_mq),
+    meck:expect(leo_storage_mq, publish,
                 fun(_Q, _VNodeId, _Key, _ErrorType) ->
                         ok
                 end),
-    meck:expect(leo_storage_mq_client, publish,
+    meck:expect(leo_storage_mq, publish,
                 fun(_Q, _VNodeId, _Node) ->
                         ok
                 end),
@@ -224,7 +224,7 @@ synchronize_([Node0, _]) ->
 
     %% 2.
     ok = leo_storage_api:synchronize(Key, []),
-    Res1 = meck:history(leo_storage_mq_client),
+    Res1 = meck:history(leo_storage_mq),
     ?assertEqual(1, length(Res1)),
 
     meck:unload(),
@@ -250,8 +250,8 @@ get_node_status_(_) ->
     ok.
 
 rebalance_([Node0, Node1]) ->
-    meck:new(leo_storage_mq_client),
-    meck:expect(leo_storage_mq_client, publish,
+    meck:new(leo_storage_mq),
+    meck:expect(leo_storage_mq, publish,
                 fun(_Q, _VNodeId, _Node) ->
                         ok
                 end),
@@ -264,7 +264,7 @@ rebalance_([Node0, Node1]) ->
 
     ok = leo_storage_api:rebalance([{0,   Node0},
                                     {255, Node1}]),
-    Res = meck:history(leo_storage_mq_client),
+    Res = meck:history(leo_storage_mq),
     ?assertEqual(2, length(Res)),
 
     meck:unload(),

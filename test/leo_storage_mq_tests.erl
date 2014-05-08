@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012
+%% Copyright (c) 2012-2014 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -23,7 +23,7 @@
 %% @doc
 %% @end
 %%====================================================================
--module(leo_storage_mq_client_tests).
+-module(leo_storage_mq_tests).
 -author('Yosuke Hara').
 
 -include("leo_storage.hrl").
@@ -154,7 +154,7 @@ start_(_) ->
     %%              Pid ->
     %%                  Pid
     %%          end,
-    %% ok = leo_storage_mq_client:start(RefSup, "queue"),
+    %% ok = leo_storage_mq:start(RefSup, "queue"),
     %% Res = meck:history(leo_mq_api),
     %% ?assertEqual(4, length(Res)),
     ok.
@@ -163,20 +163,20 @@ start_(_) ->
 publish_({_, Test1Node}) ->
     ?TBL_REBALANCE_COUNTER = ets:new(?TBL_REBALANCE_COUNTER, [named_table, public]),
 
-    ok = leo_storage_mq_client:publish(
+    ok = leo_storage_mq:publish(
            ?QUEUE_TYPE_SYNC_BY_VNODE_ID, ?TEST_VNODE_ID, Test1Node),
-    ok = leo_storage_mq_client:publish(
+    ok = leo_storage_mq:publish(
            ?QUEUE_TYPE_REBALANCE, Test1Node, ?TEST_VNODE_ID, ?TEST_VNODE_ID, ?TEST_KEY_1),
 
-    ok = leo_storage_mq_client:publish(
+    ok = leo_storage_mq:publish(
            ?QUEUE_TYPE_PER_OBJECT, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_REPLICATE_DATA),
-    ok = leo_storage_mq_client:publish(
+    ok = leo_storage_mq:publish(
            ?QUEUE_TYPE_PER_OBJECT, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_DELETE_DATA),
-    ok = leo_storage_mq_client:publish(
+    ok = leo_storage_mq:publish(
            ?QUEUE_TYPE_PER_OBJECT, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_REPLICATE_INDEX),
-    ok = leo_storage_mq_client:publish(
+    ok = leo_storage_mq:publish(
            ?QUEUE_TYPE_PER_OBJECT, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_DELETE_INDEX),
-    ok = leo_storage_mq_client:publish(
+    ok = leo_storage_mq:publish(
            ?QUEUE_TYPE_PER_OBJECT, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_RECOVER_DATA),
 
     History0 = meck:history(leo_mq_api),
@@ -213,7 +213,7 @@ subscribe_0_({Test0Node, Test1Node}) ->
                 end),
 
     timer:sleep(100),
-    leo_storage_mq_client:handle_call({consume, ?QUEUE_ID_PER_OBJECT, ?TEST_MSG_1}),
+    leo_storage_mq:handle_call({consume, ?QUEUE_ID_PER_OBJECT, ?TEST_MSG_1}),
 
     true = ets:delete(?TBL_REBALANCE_COUNTER),
     ok.
@@ -225,12 +225,12 @@ subscribe_1_({Test0Node, Test1Node}) ->
     %% case-1.
     ok = rpc:call(Test0Node, meck, new,    [leo_storage_handler_object, [no_link]]),
     ok = rpc:call(Test0Node, meck, expect, [leo_storage_handler_object, head,
-                                            fun(_Key, _VNodeId) ->
+                                            fun(_Key, _VNodeId, _DoRetry) ->
                                                     {ok, ?TEST_META_1}
                                             end]),
     ok = rpc:call(Test1Node, meck, new,    [leo_storage_handler_object, [no_link]]),
     ok = rpc:call(Test1Node, meck, expect, [leo_storage_handler_object, head,
-                                            fun(_Key, _VNodeId) ->
+                                            fun(_Key, _VNodeId, _DoRetry) ->
                                                     {ok, ?TEST_META_2}
                                             end]),
 
@@ -251,7 +251,7 @@ subscribe_1_({Test0Node, Test1Node}) ->
                 end),
 
     timer:sleep(100),
-    leo_storage_mq_client:handle_call({consume, ?QUEUE_ID_PER_OBJECT, ?TEST_MSG_1}),
+    leo_storage_mq:handle_call({consume, ?QUEUE_ID_PER_OBJECT, ?TEST_MSG_1}),
 
     History1 = rpc:call(Test0Node, meck, history, [leo_storage_api]),
     ?assertEqual(1, length(History1)),
@@ -285,7 +285,7 @@ subscribe_2_({Test0Node, _Test1Node}) ->
                 end),
 
     timer:sleep(100),
-    leo_storage_mq_client:handle_call({consume, ?QUEUE_ID_REBALANCE, ?TEST_MSG_3}),
+    leo_storage_mq:handle_call({consume, ?QUEUE_ID_REBALANCE, ?TEST_MSG_3}),
 
     true = ets:delete(?TBL_REBALANCE_COUNTER),
     ok.
@@ -307,7 +307,7 @@ subscribe_3_({_Test0Node, _Test1Node}) ->
                 end),
 
     timer:sleep(100),
-    leo_storage_mq_client:handle_call({consume, ?QUEUE_ID_SYNC_BY_VNODE_ID, ?TEST_MSG_2}),
+    leo_storage_mq:handle_call({consume, ?QUEUE_ID_SYNC_BY_VNODE_ID, ?TEST_MSG_2}),
 
     [{_, {leo_object_storage_api,fetch_by_addr_id,
           [340121982302782409338486978520692208515,_]}, ok},
