@@ -581,6 +581,14 @@
   {default, 100}
  ]}.
 
+{mapping,
+ "leo_ordning_reda.temp_stacked_dir",
+ "leo_ordning_reda.temp_stacked_dir",
+ [
+  {datatype, string},
+  {default, "work/ord_reda/"}
+ ]}.
+
 %% Leo' Redundant-Manager
 %% @doc leo-redundant-manager.profile
 {mapping,
