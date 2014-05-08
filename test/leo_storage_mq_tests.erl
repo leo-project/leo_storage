@@ -225,12 +225,12 @@ subscribe_1_({Test0Node, Test1Node}) ->
     %% case-1.
     ok = rpc:call(Test0Node, meck, new,    [leo_storage_handler_object, [no_link]]),
     ok = rpc:call(Test0Node, meck, expect, [leo_storage_handler_object, head,
-                                            fun(_Key, _VNodeId) ->
+                                            fun(_Key, _VNodeId, _DoRetry) ->
                                                     {ok, ?TEST_META_1}
                                             end]),
     ok = rpc:call(Test1Node, meck, new,    [leo_storage_handler_object, [no_link]]),
     ok = rpc:call(Test1Node, meck, expect, [leo_storage_handler_object, head,
-                                            fun(_Key, _VNodeId) ->
+                                            fun(_Key, _VNodeId, _DoRetry) ->
                                                     {ok, ?TEST_META_2}
                                             end]),
 

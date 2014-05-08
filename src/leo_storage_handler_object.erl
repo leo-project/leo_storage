@@ -39,7 +39,7 @@
 -export([get/1, get/2, get/3, get/4, get/5,
          put/1, put/2, put/4,
          delete/1, delete/2,
-         head/2,
+         head/2, head/3,
          head_with_calc_md5/3,
          replicate/1, replicate/3,
          prefix_search/3, prefix_search_and_remove_objects/1,
@@ -323,6 +323,20 @@ delete(_,_) ->
 -spec(head(integer(), string()) ->
              {ok, #?METADATA{}} | {error, any}).
 head(AddrId, Key) ->
+    %% Do retry when being invoked as usual method
+    head(AddrId, Key, true).
+
+-spec(head(integer(), string(), DoRetry::boolean()) ->
+             {ok, #?METADATA{}} | {error, any}).
+head(AddrId, Key, false) ->
+    %% No retry when being invoked from recover/rebalance
+    case leo_object_storage_api:head({AddrId, Key}) of
+        {ok, MetaBin} ->
+            {ok, binary_to_term(MetaBin)};
+        Error ->
+            Error
+    end;
+head(AddrId, Key, true) ->
     case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
         {ok, #redundancies{nodes = Redundancies}} ->
             head_1(Redundancies, AddrId, Key);

@@ -634,7 +634,8 @@ correct_redundancies_1(Key, AddrId, [#redundant_node{node = Node}|T], Metadatas,
     case leo_redundant_manager_api:get_member_by_node(Node) of
         {ok, #member{state = ?STATE_RUNNING}} ->
             %% Retrieve a metadata from remote-node
-            RPCKey = rpc:async_call(Node, leo_storage_handler_object, head, [AddrId, Key]),
+            %% invoke head with NO retry option
+            RPCKey = rpc:async_call(Node, leo_storage_handler_object, head, [AddrId, Key, false]),
 
             case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
                 {value, {ok, Metadata}} ->
