@@ -483,11 +483,22 @@ recover_node_callback(Node) ->
 
             case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
                 {ok, #redundancies{nodes = Redundancies}} ->
-                    Nodes = [N || #redundant_node{node = N} <- Redundancies],
+                    % The target `Node` must be included regardless of its available value
+                    % Other nodes must be available.
+                    Nodes = [N || #redundant_node{node = N, available = A} 
+                                  <- Redundancies, 
+                                  (N == Node) orelse (N /= Node andalso A == true)],
                     case lists:member(Node, Nodes) of
                         true ->
-                            ?MODULE:publish(?QUEUE_TYPE_PER_OBJECT,
-                                            AddrId, K, ?ERR_TYPE_RECOVER_DATA);
+                            Candidate = hd(lists:delete(Node, Nodes)),
+                            case (Candidate == erlang:node()) orelse 
+                                (leo_misc:node_existence(Candidate) == false) of
+                                true ->
+                                    ?MODULE:publish(?QUEUE_TYPE_PER_OBJECT,
+                                                    AddrId, K, ?ERR_TYPE_RECOVER_DATA);
+                                false ->
+                                    void
+                            end;
                         false  ->
                             void
                     end,
