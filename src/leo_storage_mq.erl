@@ -485,13 +485,13 @@ recover_node_callback(Node) ->
                 {ok, #redundancies{nodes = Redundancies}} ->
                     % The target `Node` must be included regardless of its available value
                     % Other nodes must be available.
-                    Nodes = [N || #redundant_node{node = N, available = A} 
-                                  <- Redundancies, 
+                    Nodes = [N || #redundant_node{node = N, available = A}
+                                  <- Redundancies,
                                   (N == Node) orelse (N /= Node andalso A == true)],
                     case lists:member(Node, Nodes) of
                         true ->
                             Candidate = hd(lists:delete(Node, Nodes)),
-                            case (Candidate == erlang:node()) orelse 
+                            case (Candidate == erlang:node()) orelse
                                 (leo_misc:node_existence(Candidate) == false) of
                                 true ->
                                     ?MODULE:publish(?QUEUE_TYPE_PER_OBJECT,
@@ -635,13 +635,16 @@ correct_redundancies_1(Key, AddrId, [#redundant_node{node = Node}|T], Metadatas,
         {ok, #member{state = ?STATE_RUNNING}} ->
             %% Retrieve a metadata from remote-node
             %% invoke head with NO retry option
-            RPCKey = rpc:async_call(Node, leo_storage_handler_object, head, [AddrId, Key, false]),
+            RPCKey = rpc:async_call(Node, leo_storage_handler_object,
+                                    head, [AddrId, Key, false]),
 
             case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
                 {value, {ok, Metadata}} ->
-                    correct_redundancies_1(Key, AddrId, T, [{Node, Metadata}|Metadatas], ErrorNodes);
+                    correct_redundancies_1(Key, AddrId, T,
+                                           [{Node, Metadata}|Metadatas], ErrorNodes);
                 _Error ->
-                    correct_redundancies_1(Key, AddrId, T, Metadatas, [Node|ErrorNodes])
+                    correct_redundancies_1(Key, AddrId, T,
+                                           Metadatas, [Node|ErrorNodes])
             end;
         {ok, #member{state = ?STATE_DETACHED}} ->
             correct_redundancies_1(Key, AddrId, T, Metadatas, ErrorNodes);
@@ -674,7 +677,6 @@ correct_redundancies_2(ListOfMetadata, ErrorNodes) ->
                                                                              Clock =/= DestClock ->
                   {Dest, C, [Node|R]}
           end, {H, [], []}, ListOfMetadata),
-
     correct_redundancies_3(ErrorNodes ++ InconsistentNodes, CorrectNodes, Metadata).
 
 
@@ -699,7 +701,6 @@ correct_redundancies_3(InconsistentNodes, [Node|Rest], Metadata) ->
               timeout = Cause->
                   {error, Cause}
           end,
-
     case Ret of
         ok ->
             Ret;

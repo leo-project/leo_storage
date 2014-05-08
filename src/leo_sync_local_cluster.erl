@@ -181,7 +181,7 @@ slice_and_replicate(Objects, Errors) ->
 
     %% store an object to object-storage
     case leo_storage_handler_object:head(Metadata#?METADATA.addr_id,
-                                         Metadata#?METADATA.key) of
+                                         Metadata#?METADATA.key, false) of
         {ok, #?METADATA{clock = Clock}} when Clock >= Metadata#?METADATA.clock ->
             slice_and_replicate(Rest_5, Errors);
         _ ->
