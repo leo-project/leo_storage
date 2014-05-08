@@ -76,12 +76,13 @@ after_proc({ok, Pid}) ->
     ensure_started(net_sup, erl_distribution, start_link, supervisor, infinity),
 
     %% Launch servers
-    QueueDir = ?env_queue_dir(leo_storage),
-    Managers = ?env_manager_nodes(leo_storage),
     ok = launch_logger(),
     ok = launch_object_storage(Pid),
-    ok = launch_redundant_manager(Pid, Managers, QueueDir),
     ok = leo_ordning_reda_api:start(),
+
+    QueueDir = ?env_queue_dir(leo_storage),
+    Managers = ?env_manager_nodes(leo_storage),
+    ok = launch_redundant_manager(Pid, Managers, QueueDir),
 
     Intervals = ?env_mq_consumption_intervals(),
     ok = leo_storage_mq:start(Pid, Intervals, QueueDir),
