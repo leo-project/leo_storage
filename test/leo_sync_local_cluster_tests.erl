@@ -53,7 +53,7 @@ setup() ->
     leo_sync_local_cluster:start_link(Node, 1024, 5000),
 
     %% mock
-    ok = meck:new(leo_redundant_manager_api),
+    ok = meck:new(leo_redundant_manager_api, [non_strict]),
     ok = meck:expect(leo_redundant_manager_api, get_member_by_node,
                      fun(_Node) ->
                              {ok, #member{state = ?STATE_RUNNING}}
@@ -68,15 +68,15 @@ teardown(Node) ->
     ok.
 
 suite_regular_1_(Node) ->
-    ok = meck:new(leo_storage_handler_object),
+    ok = meck:new(leo_storage_handler_object, [non_strict]),
     ok = meck:expect(leo_storage_handler_object, head, 3, {ok, #?METADATA{clock = -1}}),
 
-    ok = meck:new(leo_object_storage_api),
+    ok = meck:new(leo_object_storage_api, [non_strict]),
     ok = meck:expect(leo_object_storage_api, store,
                      fun(_Metadata, _Object) ->
                              ok
                      end),
-    ok = meck:new(leo_misc),
+    ok = meck:new(leo_misc, [non_strict]),
     ok = meck:expect(leo_misc, get_env,
                      fun(_,_) ->
                              {ok, 12345}
@@ -88,16 +88,16 @@ suite_regular_1_(Node) ->
     ok.
 
 suite_regular_2_(Node) ->
-    ok = meck:new(leo_storage_handler_object),
+    ok = meck:new(leo_storage_handler_object, [non_strict]),
     ok = meck:expect(leo_storage_handler_object, head, 2, {ok, #?METADATA{clock = 5}}),
 
-    ok = meck:new(leo_object_storage_api),
+    ok = meck:new(leo_object_storage_api, [non_strict]),
     ok = meck:expect(leo_object_storage_api, store,
                      fun(_Metadata, _Object) ->
                              ok
                      end),
 
-    ok = meck:new(leo_misc),
+    ok = meck:new(leo_misc, [non_strict]),
     ok = meck:expect(leo_misc, get_env,
                      fun(_,_) ->
                              {ok, 12345}
@@ -109,16 +109,16 @@ suite_regular_2_(Node) ->
     ok.
 
 suite_error_(Node) ->
-    ok = meck:new(leo_storage_handler_object),
+    ok = meck:new(leo_storage_handler_object, [non_strict]),
     ok = meck:expect(leo_storage_handler_object, head, 2, {ok, #?METADATA{clock = -1}}),
 
-    ok = meck:new(leo_object_storage_api),
+    ok = meck:new(leo_object_storage_api, [non_strict]),
     ok = meck:expect(leo_object_storage_api, store,
                      fun(_Metadata, _Object) ->
                              {error, "Not stored"}
                      end),
 
-    ok = meck:new(leo_misc),
+    ok = meck:new(leo_misc, [non_strict]),
     ok = meck:expect(leo_misc, get_env,
                      fun(_,_) ->
                              {ok, 12345}

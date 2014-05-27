@@ -56,7 +56,7 @@ read_repair_test_() ->
                           ]]}.
 
 setup() ->
-    meck:new(leo_logger),
+    meck:new(leo_logger, [non_strict]),
     meck:expect(leo_logger, append, fun(_,_,_) ->
                                             ok
                                     end),
@@ -83,15 +83,15 @@ teardown({_Test0Node, Test1Node}) ->
 
 
 regular_({Test0Node, Test1Node}) ->
-    meck:new(leo_storage_handler_object),
+    meck:new(leo_storage_handler_object, [non_strict]),
     meck:expect(leo_storage_handler_object, head, fun(_,_) ->
                                                           {ok, ?TEST_META_1}
                                                   end),
-    ok = rpc:call(Test1Node, meck, new,    [leo_storage_handler_object, [no_link]]),
+    ok = rpc:call(Test1Node, meck, new,    [leo_storage_handler_object, [no_link, non_strict]]),
     ok = rpc:call(Test1Node, meck, expect, [leo_storage_handler_object, head, fun(_, _) ->
                                                                                       {ok, ?TEST_META_1}
                                                                               end]),
-    meck:new(leo_storage_mq),
+    meck:new(leo_storage_mq, [non_strict]),
     meck:expect(leo_storage_mq, publish,
                 fun(_,_,_,_) ->
                         ok
@@ -106,15 +106,15 @@ regular_({Test0Node, Test1Node}) ->
     ok.
 
 fail_1_({Test0Node, Test1Node}) ->
-    meck:new(leo_storage_handler_object),
+    meck:new(leo_storage_handler_object, [non_strict]),
     meck:expect(leo_storage_handler_object, head, fun(_,_) ->
                                                           {ok, ?TEST_META_1}
                                                   end),
-    ok = rpc:call(Test1Node, meck, new,    [leo_storage_handler_object, [no_link]]),
+    ok = rpc:call(Test1Node, meck, new,    [leo_storage_handler_object, [no_link, non_strict]]),
     ok = rpc:call(Test1Node, meck, expect, [leo_storage_handler_object, head, fun(_, _) ->
                                                                                       {ok, ?TEST_META_2}
                                                                               end]),
-    meck:new(leo_storage_mq),
+    meck:new(leo_storage_mq, [non_strict]),
     meck:expect(leo_storage_mq, publish,
                 fun(_,_,_,_) ->
                         ok
@@ -129,15 +129,15 @@ fail_1_({Test0Node, Test1Node}) ->
     ok.
 
 fail_2_({Test0Node, Test1Node}) ->
-    meck:new(leo_storage_handler_object),
+    meck:new(leo_storage_handler_object, [non_strict]),
     meck:expect(leo_storage_handler_object, head, fun(_,_) ->
                                                           {ok, ?TEST_META_2}
                                                   end),
-    ok = rpc:call(Test1Node, meck, new,    [leo_storage_handler_object, [no_link]]),
+    ok = rpc:call(Test1Node, meck, new,    [leo_storage_handler_object, [no_link, non_strict]]),
     ok = rpc:call(Test1Node, meck, expect, [leo_storage_handler_object, head, fun(_, _) ->
                                                                                       {ok, ?TEST_META_1}
                                                                               end]),
-    meck:new(leo_storage_mq),
+    meck:new(leo_storage_mq, [non_strict]),
     meck:expect(leo_storage_mq, publish,
                 fun(_,_,_,_) ->
                         ok
