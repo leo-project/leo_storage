@@ -39,7 +39,7 @@
 
 -export([start/2, start/3,
          publish/2, publish/3, publish/4, publish/5]).
--export([init/0, handle_call/1]).
+-export([init/0, handle_call/1, handle_call/3]).
 
 -define(SLASH, "/").
 -define(MSG_PATH_PER_OBJECT,        "1").
@@ -210,12 +210,12 @@ get_queue(?PROP_MQ_COMP_DC_3 = Id, Intervals) ->
 -spec(publish(queue_type(), atom()) ->
              ok).
 publish(?QUEUE_TYPE_RECOVERY_NODE = Id, Node) ->
-    KeyBin     = term_to_binary(Node),
-    MessageBin = term_to_binary(
-                   #recovery_node_message{id        = leo_date:clock(),
-                                          node      = Node,
-                                          timestamp = leo_date:now()}),
-    leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
+    KeyBin = term_to_binary(Node),
+    MsgBin = term_to_binary(
+               #recovery_node_message{id        = leo_date:clock(),
+                                      node      = Node,
+                                      timestamp = leo_date:now()}),
+    leo_mq_api:publish(queue_id(Id), KeyBin, MsgBin);
 publish(_,_) ->
     {error, badarg}.
 
@@ -458,6 +458,9 @@ handle_call({consume, ?QUEUE_ID_COMP_META_WITH_DC, MessageBin}) ->
         _ ->
             {error, ?ERROR_COULD_MATCH}
     end.
+
+handle_call(_,_,_) ->
+    ok.
 
 
 %%--------------------------------------------------------------------
@@ -889,4 +892,3 @@ queue_id(?QUEUE_TYPE_SYNC_OBJ_WITH_DC) ->
     ?QUEUE_ID_SYNC_OBJ_WITH_DC;
 queue_id(?QUEUE_TYPE_COMP_META_WITH_DC) ->
     ?QUEUE_ID_COMP_META_WITH_DC.
-
