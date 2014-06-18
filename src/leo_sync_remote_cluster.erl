@@ -297,7 +297,7 @@ stack_fun(ClusterId, #?OBJECT{addr_id = AddrId,
     end.
 
 stack_fun(UId, AddrId, Key, Data) ->
-    case leo_ordning_reda_api:stack(UId, AddrId, Key, Data) of
+    case leo_ordning_reda_api:stack(UId, {AddrId, Key}, Data) of
         ok ->
             ok;
         {error, undefined} ->

@@ -127,7 +127,7 @@ gen_mocks(Node) ->
                      end),
     ok = meck:new(leo_ordning_reda_api, [non_strict]),
     ok = meck:expect(leo_ordning_reda_api, stack,
-                     fun(_,_,_,_) ->
+                     fun(_,_,_) ->
                              ok
                      end),
     ok.

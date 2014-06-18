@@ -661,7 +661,7 @@ copy_({Node0, Node1}) ->
                         ok
                 end),
     meck:expect(leo_ordning_reda_api, stack,
-                fun(_,_,_,_) ->
+                fun(_,_,_) ->
                         ok
                 end),
     meck:new(leo_metrics_req, [non_strict]),
