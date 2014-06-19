@@ -36,6 +36,7 @@
 
 %% API
 -export([register_in_monitor/1, register_in_monitor/2,
+         get_disk_usage/0,
          get_routing_table_chksum/0,
          update_manager_nodes/1, recover_remote/2,
          start/1, start/2, start/3, stop/0, attach/1, synchronize/1, synchronize/2,
@@ -389,3 +390,33 @@ recover_remote(AddrId, Key) ->
         {error, Cause} ->
             {error, Cause}
     end.
+
+%% @doc
+%% Get the disk usage(Total, Free) on leo_storage in KByte
+-spec(get_disk_usage() -> {ok, {Total::pos_integer(), Free::pos_integer()}}).
+get_disk_usage() ->
+    PathList = case ?env_storage_device() of
+        [] -> [];
+        Devices ->
+            lists:map(fun(Item) ->
+                              leo_misc:get_value(path, Item)
+                      end, Devices)
+    end,
+    get_disk_usage(PathList, dict:new()).
+get_disk_usage([], Dict) ->
+    Ret = dict:fold(fun(_MountPath, {Total, Free}, {SumTotal, SumFree}) ->
+                        {SumTotal + Total, SumFree + Free}
+                    end,
+                    {0, 0},
+                    Dict),
+    {ok, Ret};
+get_disk_usage([Path|Rest], Dict) ->
+    case leo_file:file_get_mount_path(Path) of 
+        {ok, {MountPath, TotalSize, UsedPercentage}} ->
+            FreeSize = TotalSize * (100 - UsedPercentage) / 100,
+            NewDict = dict:store(MountPath, {TotalSize, FreeSize}, Dict),
+            get_disk_usage(Rest, NewDict);
+        Error ->
+            {error, Error}
+end.
+
