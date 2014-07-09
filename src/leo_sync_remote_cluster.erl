@@ -75,7 +75,16 @@ defer_stack(#?OBJECT{} = Object) ->
                   %% Check whether stack an object or not
                   case leo_mdcr_tbl_cluster_stat:find_by_state(?STATE_RUNNING) of
                       {ok, _} ->
-                          stack(Object);
+                          case stack(Object) of
+                              ok -> void;
+                              {error, Cause}->
+                                  ?warn("defer_stack/1", "key:~s, cause:~p",
+                                      [binary_to_list(Object#?OBJECT.key), Cause]),
+                                  ok = leo_storage_mq:publish(
+                                       ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, 
+                                       Object#?OBJECT.addr_id, 
+                                       Object#?OBJECT.key)
+                          end;
                       not_found ->
                           void;
                       {error, Cause} ->
