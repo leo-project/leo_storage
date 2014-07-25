@@ -104,7 +104,7 @@ defer_stack(_) ->
 stack(Object) ->
     stack(undefined, Object).
 
--spec(stack(string(), #?OBJECT{}) ->
+-spec(stack(atom(), #?OBJECT{}) ->
              ok | {error, any()}).
 stack(ClusterId, Object) ->
     stack_fun(ClusterId, Object).
@@ -135,7 +135,7 @@ store(ClusterId, CompressedObjs) ->
 gen_id() ->
     gen_id(erlang:phash2(leo_date:clock(),
                          ?env_num_of_mdcr_sync_procs()) + 1).
--spec(gen_id(pos_integer()) ->
+-spec(gen_id(pos_integer() | {'cluster_id', pos_integer()}) ->
              atom()).
 gen_id(Id) when is_integer(Id) ->
     list_to_atom(lists:append([?DEF_PREFIX_MDCR_SYNC_PROC_1, integer_to_list(Id)]));
