@@ -271,16 +271,17 @@ delete_chunked_objects(CIndex, ParentKey) ->
 %%--------------------------------------------------------------------
 %% @doc Remove an object (request from remote-storage-nodes).
 %%
--spec(delete(#?OBJECT{}) ->
-             ok | {error, any()}).
-delete(Object) ->
-    ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
-    replicate_fun(?REP_REMOTE, ?CMD_DELETE, Object).
+ -spec(delete(#?OBJECT{}) ->
+              ok | {error, any()}).
+ delete(Object) ->
+     ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
+     replicate_fun(?REP_REMOTE, ?CMD_DELETE, Object).
 
 %% @doc Remova an object (request from gateway)
 %%
 -spec(delete(#?OBJECT{}, integer()|reference()) ->
-             ok | {error, any()}).
+             ok | {error, any()} | % when the second argument is integer
+             {ok, reference()} | {error, reference(), any()}). % when the second argument is reference
 delete(Object, ReqId) when is_integer(ReqId) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
     replicate_fun(?REP_LOCAL, ?CMD_DELETE,
@@ -384,7 +385,7 @@ head_with_calc_md5(AddrId, Key, MD5Context) ->
 %% @doc Replicate an object, which is requested from remote-cluster
 %%
 -spec(replicate(#?OBJECT{}) ->
-             ok | {ok, atom()} | {error, any()}).
+             ok | {ok, reference()} | {error, reference()|any()}).
 replicate(Object) ->
     %% Transform an object to a metadata
     Metadata = leo_object_storage_transformer:object_to_metadata(Object),
@@ -713,7 +714,7 @@ read_and_repair_1(_,_,_) ->
 %% @doc Replicate an object from local-node to remote node
 %% @private
 -spec(replicate_fun(replication(), put | delete, integer(), #?OBJECT{}) ->
-             ok | {ok, pos_integer()} | {error, any()}).
+             ok | {error, any()}).
 replicate_fun(?REP_LOCAL, Method, AddrId, Object) ->
     case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
         {ok, #redundancies{nodes     = Redundancies,

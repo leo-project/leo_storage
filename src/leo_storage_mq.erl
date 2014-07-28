@@ -191,7 +191,7 @@ get_queue(?PROP_MQ_COMP_DC_3 = Id, Intervals) ->
 %% @doc Input a message into the queue.
 %%
 -spec(publish(queue_type(), atom()) ->
-             ok).
+             ok | {error, any()}).
 publish(?QUEUE_TYPE_RECOVERY_NODE = Id, Node) ->
     KeyBin = term_to_binary(Node),
     MsgBin = term_to_binary(
@@ -203,7 +203,7 @@ publish(_,_) ->
     {error, badarg}.
 
 -spec(publish(queue_type(), any(), any()) ->
-             ok).
+             ok | {error, any()}).
 publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID = Id, VNodeId, Node) ->
     Clock = leo_date:clock(),
     KeyBin     = term_to_binary({VNodeId, Node, Clock}),
@@ -239,7 +239,7 @@ publish(_,_,_) ->
     {error, badarg}.
 
 -spec(publish(queue_type(), any(), any(), any()) ->
-             ok).
+             ok | {error, any()}).
 publish(?QUEUE_TYPE_PER_OBJECT = Id, AddrId, Key, ErrorType) ->
     KeyBin = term_to_binary({ErrorType, Key}),
     MessageBin  = term_to_binary(
@@ -265,7 +265,7 @@ publish(_,_,_,_) ->
     {error, badarg}.
 
 -spec(publish(queue_type(), any(), any(), any(), any()) ->
-             ok).
+             ok | {error, any()}).
 publish(?QUEUE_TYPE_REBALANCE = Id, Node, VNodeId, AddrId, Key) ->
     KeyBin     = term_to_binary({Node, AddrId, Key}),
     MessageBin = term_to_binary(
@@ -303,8 +303,7 @@ publish(_,_,_,_,_) ->
 %% -------------------------------------------------------------------
 %% @doc Initializer
 %%
--spec(init() ->
-             ok | {error, any()}).
+-spec(init() -> ok | {error, any()}).
 init() ->
     ok.
 

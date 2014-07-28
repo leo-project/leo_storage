@@ -427,6 +427,7 @@
 %%
 -type(queue_type() :: ?QUEUE_TYPE_PER_OBJECT  |
                       ?QUEUE_TYPE_SYNC_BY_VNODE_ID  |
+                      ?QUEUE_TYPE_REBALANCE |
                       ?QUEUE_TYPE_ASYNC_DELETION |
                       ?QUEUE_TYPE_RECOVERY_NODE |
                       ?QUEUE_TYPE_SYNC_OBJ_WITH_DC |
