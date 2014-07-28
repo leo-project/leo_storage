@@ -271,11 +271,11 @@ delete_chunked_objects(CIndex, ParentKey) ->
 %%--------------------------------------------------------------------
 %% @doc Remove an object (request from remote-storage-nodes).
 %%
- -spec(delete(#?OBJECT{}) ->
-              ok | {error, any()}).
- delete(Object) ->
-     ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
-     replicate_fun(?REP_REMOTE, ?CMD_DELETE, Object).
+-spec(delete(#?OBJECT{}) ->
+             ok | {error, any()}).
+delete(Object) ->
+    ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
+    replicate_fun(?REP_REMOTE, ?CMD_DELETE, Object).
 
 %% @doc Remova an object (request from gateway)
 %%
