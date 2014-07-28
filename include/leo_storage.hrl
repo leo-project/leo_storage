@@ -422,3 +422,23 @@
             _ -> ?DEF_RPC_LISTEN_PORT
         end).
 -endif.
+
+%% @doc types.
+%%
+-type(queue_type() :: ?QUEUE_TYPE_PER_OBJECT  |
+                      ?QUEUE_TYPE_SYNC_BY_VNODE_ID  |
+                      ?QUEUE_TYPE_REBALANCE |
+                      ?QUEUE_TYPE_ASYNC_DELETION |
+                      ?QUEUE_TYPE_RECOVERY_NODE |
+                      ?QUEUE_TYPE_SYNC_OBJ_WITH_DC |
+                      ?QUEUE_TYPE_COMP_META_WITH_DC
+                      ).
+
+-type(queue_id()   :: ?QUEUE_ID_PER_OBJECT |
+                      ?QUEUE_ID_SYNC_BY_VNODE_ID |
+                      ?QUEUE_ID_REBALANCE |
+                      ?QUEUE_ID_ASYNC_DELETION |
+                      ?QUEUE_ID_RECOVERY_NODE |
+                      ?QUEUE_ID_SYNC_OBJ_WITH_DC |
+                      ?QUEUE_ID_COMP_META_WITH_DC
+                      ).

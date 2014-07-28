@@ -104,7 +104,7 @@ defer_stack(_) ->
 stack(Object) ->
     stack(undefined, Object).
 
--spec(stack(string(), #?OBJECT{}) ->
+-spec(stack(atom(), #?OBJECT{}) ->
              ok | {error, any()}).
 stack(ClusterId, Object) ->
     stack_fun(ClusterId, Object).
@@ -112,7 +112,7 @@ stack(ClusterId, Object) ->
 
 %% Store stacked objects
 %%
--spec(store(string(), binary()) ->
+-spec(store(atom(), binary()) ->
              {ok, list(tuple())} | {error, any()}).
 store(ClusterId, CompressedObjs) ->
     case catch lz4:unpack(CompressedObjs) of
@@ -130,12 +130,12 @@ store(ClusterId, CompressedObjs) ->
 
 %% Generate a sync-proc of ID
 %%
--spec(gen_id() ->
-             atom()).
+-spec(gen_id() -> atom()).
 gen_id() ->
     gen_id(erlang:phash2(leo_date:clock(),
                          ?env_num_of_mdcr_sync_procs()) + 1).
--spec(gen_id(pos_integer()) ->
+
+-spec(gen_id(pos_integer() | {'cluster_id', (atom()|string()|pos_integer())}) ->
              atom()).
 gen_id(Id) when is_integer(Id) ->
     list_to_atom(lists:append([?DEF_PREFIX_MDCR_SYNC_PROC_1, integer_to_list(Id)]));
@@ -201,8 +201,7 @@ get_cluster_members_2([#?CLUSTER_INFO{cluster_id = ClusterId}|Rest],
 %% @doc Compare a local-metadata with a remote-metadata
 %%      If it's inconsistent, the metadata is put into the queue
 %%
--spec(compare_metadata(list(#?METADATA{})) ->
-             ok).
+-spec(compare_metadata(list(#?METADATA{})) -> ok).
 compare_metadata([]) ->
     ok;
 compare_metadata([#?METADATA{cluster_id = ClusterId,
@@ -323,7 +322,7 @@ stack_fun(UId, AddrId, Key, Data) ->
 
 %% @doc Slicing objects and Store objects
 %% @private
--spec(slice_and_replicate(string(), binary(), list(tuple())) ->
+-spec(slice_and_replicate(atom(), binary(), list(tuple())) ->
              {ok, list(tuple())} | {error, any()}).
 slice_and_replicate(_, <<>>, Acc) ->
     {ok, lists:flatten(Acc)};
@@ -360,7 +359,7 @@ slice(StackedObjs) ->
 
 %% @doc Replicate an object between clusters
 %% @private
--spec(replicate(string(), #?OBJECT{}) ->
+-spec(replicate(atom(), #?OBJECT{}) ->
              {ok, tuple()} | {error, any()}).
 replicate(ClusterId, Object) ->
     %% Retrieve redundancies of the cluster,

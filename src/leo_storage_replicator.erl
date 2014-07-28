@@ -189,7 +189,7 @@ replicate_fun(Ref, #req_params{pid     = Pid,
 
 %% @doc Input a message into the queue.
 %%
--spec(enqueue(error_msg_type(), integer(), string()) ->
+-spec(enqueue(error_msg_type(), integer(), binary()) ->
              ok | void).
 enqueue(?ERR_TYPE_REPLICATE_DATA = Type,  AddrId, Key) ->
     leo_storage_mq:publish(?QUEUE_TYPE_PER_OBJECT, AddrId, Key, Type);

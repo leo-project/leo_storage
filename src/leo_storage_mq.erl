@@ -50,23 +50,6 @@
 -define(MSG_PATH_SYNC_OBJ_WITH_DC,  "6").
 -define(MSG_PATH_COMP_META_WITH_DC, "7").
 
--type(queue_type() :: ?QUEUE_TYPE_PER_OBJECT  |
-                      ?QUEUE_TYPE_SYNC_BY_VNODE_ID  |
-                      ?QUEUE_TYPE_ASYNC_DELETION |
-                      ?QUEUE_TYPE_RECOVERY_NODE |
-                      ?QUEUE_TYPE_SYNC_OBJ_WITH_DC |
-                      ?QUEUE_TYPE_COMP_META_WITH_DC
-                      ).
-
--type(queue_id()   :: ?QUEUE_ID_PER_OBJECT |
-                      ?QUEUE_ID_SYNC_BY_VNODE_ID |
-                      ?QUEUE_ID_REBALANCE |
-                      ?QUEUE_ID_ASYNC_DELETION |
-                      ?QUEUE_ID_RECOVERY_NODE |
-                      ?QUEUE_ID_SYNC_OBJ_WITH_DC |
-                      ?QUEUE_ID_COMP_META_WITH_DC
-                      ).
-
 %%--------------------------------------------------------------------
 %% API
 %%--------------------------------------------------------------------
@@ -208,7 +191,7 @@ get_queue(?PROP_MQ_COMP_DC_3 = Id, Intervals) ->
 %% @doc Input a message into the queue.
 %%
 -spec(publish(queue_type(), atom()) ->
-             ok).
+             ok | {error, any()}).
 publish(?QUEUE_TYPE_RECOVERY_NODE = Id, Node) ->
     KeyBin = term_to_binary(Node),
     MsgBin = term_to_binary(
@@ -219,8 +202,8 @@ publish(?QUEUE_TYPE_RECOVERY_NODE = Id, Node) ->
 publish(_,_) ->
     {error, badarg}.
 
--spec(publish(queue_type(), integer(), atom()) ->
-             ok).
+-spec(publish(queue_type(), any(), any()) ->
+             ok | {error, any()}).
 publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID = Id, VNodeId, Node) ->
     Clock = leo_date:clock(),
     KeyBin     = term_to_binary({VNodeId, Node, Clock}),
@@ -255,8 +238,8 @@ publish(?QUEUE_TYPE_COMP_META_WITH_DC = Id, ClusterId, AddrAndKeyList) ->
 publish(_,_,_) ->
     {error, badarg}.
 
--spec(publish(queue_type(), integer(), any(), any()) ->
-             ok).
+-spec(publish(queue_type(), any(), any(), any()) ->
+             ok | {error, any()}).
 publish(?QUEUE_TYPE_PER_OBJECT = Id, AddrId, Key, ErrorType) ->
     KeyBin = term_to_binary({ErrorType, Key}),
     MessageBin  = term_to_binary(
@@ -281,6 +264,8 @@ publish(?QUEUE_TYPE_SYNC_OBJ_WITH_DC = Id, ClusterId, AddrId, Key) ->
 publish(_,_,_,_) ->
     {error, badarg}.
 
+-spec(publish(queue_type(), any(), any(), any(), any()) ->
+             ok | {error, any()}).
 publish(?QUEUE_TYPE_REBALANCE = Id, Node, VNodeId, AddrId, Key) ->
     KeyBin     = term_to_binary({Node, AddrId, Key}),
     MessageBin = term_to_binary(
@@ -318,8 +303,7 @@ publish(_,_,_,_,_) ->
 %% -------------------------------------------------------------------
 %% @doc Initializer
 %%
--spec(init() ->
-             ok | {error, any()}).
+-spec(init() -> ok | {error, any()}).
 init() ->
     ok.
 
