@@ -44,6 +44,11 @@
 -define(CMD_PUT,    put).
 -define(CMD_DELETE, delete).
 -define(CMD_HEAD,   head).
+-type(request_verb() :: ?CMD_GET |
+                        ?CMD_PUT |
+                        ?CMD_DELETE |
+                        ?CMD_HEAD
+                        ).
 
 %% @doc queue-related.
 %%
@@ -83,6 +88,7 @@
 -define(ERROR_COULD_NOT_GET_REDUNDANCY, "Could not get redundancy").
 -define(ERROR_COULD_NOT_CONNECT,        "Could not connect").
 -define(ERROR_COULD_MATCH,              "Could not match").
+-define(ERROR_COULD_SEND_OBJ,           "Could not send an object to a remote cluster").
 
 
 %% @doc request parameter for READ
@@ -90,8 +96,8 @@
 -record(read_parameter, {
           ref           :: reference(),
           addr_id       :: integer(),
-          key           :: string(),
-          etag = []     :: string(),
+          key           :: binary(),
+          etag = 0      :: integer(),
           start_pos = 0 :: integer(),
           end_pos   = 0 :: integer(),
           quorum        :: integer(),
@@ -129,7 +135,7 @@
           id = 0                :: integer(),
           vnode_id = 0          :: integer(),
           addr_id = 0           :: integer(),
-          key                   :: string(),
+          key                   :: binary(),
           node                  :: atom(),
           timestamp = 0         :: integer(),
           times = 0             :: integer()
@@ -150,9 +156,9 @@
 
 -record(inconsistent_data_with_dc, {
           id = 0                :: integer(),
-          cluster_id = []       :: string(),
+          cluster_id            :: atom(),
           addr_id = 0           :: integer(),
-          key                   :: any(),
+          key                   :: binary(),
           del = 0               :: integer(), %% del:[0:false, 1:true]
           timestamp = 0         :: integer(),
           times = 0             :: integer()}).
