@@ -51,7 +51,7 @@
 %% @doc Repair an object.
 %% @end
 -spec(repair(#read_parameter{}, [#redundant_node{}], #?METADATA{}, function()) ->
-             {ok, reference()} | {error, reference(),  any()}).
+             any()).
 repair(#read_parameter{quorum = ReadQuorum,
                        req_id = ReqId}, Redundancies, Metadata, Callback) ->
     Ref    = make_ref(),

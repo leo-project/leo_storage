@@ -345,19 +345,11 @@ handle_call({consume, ?QUEUE_ID_SYNC_BY_VNODE_ID, MessageBin}) ->
             {error, Cause};
         #sync_unit_of_vnode_message{vnode_id = ToVNodeId,
                                     node     = Node} ->
-            case leo_redundant_manager_api:range_of_vnodes(ToVNodeId) of
-                {ok, Res} ->
-                    {ok, {CurRingHash, _PrevRingHash}} =
-                        leo_redundant_manager_api:checksum(?CHECKSUM_RING),
-                    ok = sync_vnodes(Node, CurRingHash, Res),
-                    notify_rebalance_message_to_manager(ToVNodeId);
-                Error ->
-                    ?error("handle_call/1 - QUEUE_ID_SYNC_BY_VNODE_ID",
-                           "error:~p", [Error]),
-                    ok = publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID,
-                                 ToVNodeId, Node),
-                    Error
-            end;
+            {ok, Res} = leo_redundant_manager_api:range_of_vnodes(ToVNodeId),
+            {ok, {CurRingHash, _PrevRingHash}} =
+                leo_redundant_manager_api:checksum(?CHECKSUM_RING),
+            ok = sync_vnodes(Node, CurRingHash, Res),
+            notify_rebalance_message_to_manager(ToVNodeId);
         _ ->
             {error, ?ERROR_COULD_MATCH}
     end;
@@ -432,7 +424,7 @@ handle_call({consume, ?QUEUE_ID_COMP_META_WITH_DC, MessageBin}) ->
             %% @doc - condition: if state of a remote-cluster is not 'running',
             %%                   then this queue is removed
             case leo_mdcr_tbl_cluster_stat:find_by_cluster_id(ClusterId) of
-                {ok, [#?CLUSTER_STAT{state = ?STATE_RUNNING}|_]} ->
+                {ok, #?CLUSTER_STAT{state = ?STATE_RUNNING}} ->
                     %% re-compare metadatas
                     leo_storage_handle_sync:send_addrid_and_key_to_remote(
                       ClusterId, AddrAndKeyList);
@@ -461,7 +453,7 @@ recover_node(Node) ->
 
 %% @private
 -spec(recover_node_callback(atom()) ->
-             list()).
+             any()).
 recover_node_callback(Node) ->
     fun(K, V, Acc) ->
             Metadata_1 = binary_to_term(V),
@@ -510,7 +502,7 @@ sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
 
 %% @private
 -spec(sync_vnodes_callback(atom(), pos_integer(), pos_integer()) ->
-             list()).
+             any()).
 sync_vnodes_callback(Node, FromAddrId, ToAddrId)->
     fun(K, V, Acc) ->
             %% Note: An object of copy is NOT equal current ring-hash.
@@ -595,7 +587,7 @@ notify_message_to_manager([Manager|T], VNodeId, Node) ->
 
 %% @doc correct_redundancies/1 - first.
 %%
--spec(correct_redundancies(string()) ->
+-spec(correct_redundancies(binary()) ->
              ok | {error, any()}).
 correct_redundancies(Key) ->
     {ok, #redundancies{nodes = Redundancies,
@@ -606,7 +598,7 @@ correct_redundancies(Key) ->
 
 %% correct_redundancies_1/5 - next.
 %%
--spec(correct_redundancies_1(string(), integer(), list(), list(), list()) ->
+-spec(correct_redundancies_1(binary(), integer(), list(), list(), list()) ->
              ok | {error, any()}).
 correct_redundancies_1(_Key,_AddrId, [], [], _ErrorNodes) ->
     {error, not_found};
@@ -741,9 +733,7 @@ rebalance_2({ok, Redundancies}, #rebalance_message{node = Node,
             end;
         false ->
             ok
-    end;
-rebalance_2(_,_) ->
-    ok.
+    end.
 
 
 %% @doc Retrieve redundancies with a number of replicas

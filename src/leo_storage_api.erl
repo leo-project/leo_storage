@@ -205,8 +205,8 @@ attach(SystemConf) ->
 synchronize(Node) ->
     leo_storage_mq:publish(?QUEUE_TYPE_RECOVERY_NODE, Node).
 
--spec(synchronize(list() | string(), #?METADATA{} | atom()) ->
-             ok | {error, any()}).
+-spec(synchronize([atom()]|binary(), #?METADATA{}|atom()) ->
+             ok | not_found | {error, any()}).
 synchronize(InconsistentNodes, #?METADATA{addr_id = AddrId,
                                           key     = Key}) ->
     leo_storage_handler_object:replicate(InconsistentNodes, AddrId, Key);
@@ -277,7 +277,8 @@ compact_1(status) ->
 %%--------------------------------------------------------------------
 %%
 %%
--spec(get_node_status() -> {ok, #cluster_node_status{}}).
+-spec(get_node_status() ->
+             {ok, [tuple()]}).
 get_node_status() ->
     Version = case application:get_key(leo_storage, vsn) of
                   {ok, _Version} -> _Version;
@@ -351,11 +352,12 @@ get_node_status() ->
 %% @doc Do rebalance which means "Objects are copied to the specified node".
 %% @param RebalanceInfo: [{VNodeId, DestNode}]
 %%
--spec(rebalance(list()) ->
-             ok | {error, any()}).
+-spec(rebalance([tuple()]) ->
+             ok).
 rebalance(RebalanceList) ->
-    ok = leo_redundant_manager_api:force_sync_workers(),
+    catch leo_redundant_manager_api:force_sync_workers(),
     rebalance_1(RebalanceList).
+
 
 -spec(rebalance(list(), list(#member{}), list(#member{})) ->
              ok | {error, any()}).
@@ -372,11 +374,14 @@ rebalance(RebalanceList, MembersCur, MembersPrev) ->
 
 
 %% @private
+-spec(rebalance_1([tuple()]) ->
+             ok).
 rebalance_1([]) ->
     ok;
 rebalance_1([{VNodeId, Node}|T]) ->
-    ok = leo_storage_mq:publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, VNodeId, Node),
+    _ = leo_storage_mq:publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, VNodeId, Node),
     rebalance_1(T).
+
 
 %% recover a remote cluster's object
 -spec(recover_remote(integer(), binary()) ->

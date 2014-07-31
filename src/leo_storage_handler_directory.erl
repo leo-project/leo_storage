@@ -91,7 +91,7 @@ find_by_parent_dir(ParentDir, _Delimiter, Marker, MaxKeys) ->
 
 %% @doc Remove objects in the parent directory - request from Gateway
 %%
--spec(delete_objects_in_parent_dir(string()) ->
-             ok | {error, any()}).
+-spec(delete_objects_in_parent_dir(binary()) ->
+             {ok, [_]} | not_found).
 delete_objects_in_parent_dir(ParentDir) ->
     leo_storage_handler_object:prefix_search_and_remove_objects(ParentDir).

@@ -101,8 +101,8 @@ replicate_obj_0_({Test0Node, Test1Node}) ->
            ({error, Cause}) ->
                 {error, Cause}
         end,
-    {ok, {etag, _}} = leo_storage_replicator:replicate(
-                        put, 1, ?TEST_REDUNDANCIES_1, Object, F),
+    {ok, _} = leo_storage_replicator:replicate(
+                put, 1, ?TEST_REDUNDANCIES_1, Object, F),
     timer:sleep(100),
     ok.
 
@@ -165,7 +165,7 @@ gen_mock_2(object, {_Test0Node, _Test1Node}, Case) ->
 
     meck:new(leo_storage_handler_object, [non_strict]),
     meck:expect(leo_storage_handler_object, put,
-                fun(_Object, Ref) ->
+                fun({_Object, Ref}) ->
                         ?assertEqual(true, erlang:is_reference(Ref)),
 
                         case Case of

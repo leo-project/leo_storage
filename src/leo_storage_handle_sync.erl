@@ -43,9 +43,12 @@
 %% API
 %%--------------------------------------------------------------------
 %% @doc Compare local-metadatas with remote-metadatas
+-spec(get_metadatas([tuple()]) ->
+             {ok, [#?METADATA{}]}).
 get_metadatas(ListAddrAndKey) ->
     get_metadatas_1(ListAddrAndKey, []).
 
+%% @private
 get_metadatas_1([], Acc) ->
     {ok, Acc};
 get_metadatas_1([AddrAndKey|Rest], Acc) ->
@@ -102,20 +105,16 @@ send_addrid_and_key_to_remote_1([],_ClusterId,_ListAddrIdAndKey) ->
 send_addrid_and_key_to_remote_1([#mdc_replication_info{
                                     cluster_members = Members}|Rest],
                                 ClusterId, ListAddrIdAndKey) ->
-    case send_addrid_and_key_to_remote_2(Members, ClusterId, ListAddrIdAndKey, 0) of
-        {ok, RetL} ->
-            leo_sync_remote_cluster:compare_metadata(RetL);
-        _ ->
-            void
-    end,
+    {ok, RetL} = send_addrid_and_key_to_remote_2(
+                   Members, ClusterId, ListAddrIdAndKey, 0),   
+    ok = leo_sync_remote_cluster:compare_metadata(RetL),
     send_addrid_and_key_to_remote_1(Rest, ClusterId, ListAddrIdAndKey).
 
 %% @private
 send_addrid_and_key_to_remote_2([], ClusterId, ListAddrIdAndKey,_RetryTimes) ->
-    %% Enqueue a fail msg
     ok = leo_storage_mq:publish(
            ?QUEUE_TYPE_COMP_META_WITH_DC, ClusterId, ListAddrIdAndKey),
-    ok;
+    {ok, []};
 send_addrid_and_key_to_remote_2([_|Rest], ClusterId, ListAddrIdAndKey, ?DEF_MAX_RETRY_TIMES) ->
     send_addrid_and_key_to_remote_2(Rest, ClusterId, ListAddrIdAndKey, 0);
 send_addrid_and_key_to_remote_2([#?CLUSTER_MEMBER{
@@ -184,8 +183,8 @@ send_metadata(ClusterId) ->
     end.
 
 %% @private
--spec(send_addrid_and_key_callback(atom()) ->
-             ok).
+%% -spec(send_addrid_and_key_callback(atom()) ->
+%%              ok).
 send_addrid_and_key_callback(ClusterId) ->
     fun(K, V, Acc) when length(Acc) >= ?DEF_THRESHOLD_LEN ->
             ok = send_addrid_and_key_to_remote(ClusterId, Acc),

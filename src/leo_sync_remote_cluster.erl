@@ -81,8 +81,8 @@ defer_stack(#?OBJECT{} = Object) ->
                                   ?warn("defer_stack/1", "key:~s, cause:~p",
                                       [binary_to_list(Object#?OBJECT.key), Cause]),
                                   ok = leo_storage_mq:publish(
-                                       ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, 
-                                       Object#?OBJECT.addr_id, 
+                                       ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
+                                       Object#?OBJECT.addr_id,
                                        Object#?OBJECT.key)
                           end;
                       not_found ->
@@ -113,7 +113,7 @@ stack(ClusterId, Object) ->
 %% Store stacked objects
 %%
 -spec(store(atom(), binary()) ->
-             {ok, list(tuple())} | {error, any()}).
+             {ok, [#?METADATA{}]} | {error, any()}).
 store(ClusterId, CompressedObjs) ->
     case catch lz4:unpack(CompressedObjs) of
         {ok, OriginalObjects} ->
@@ -149,6 +149,8 @@ gen_id({cluster_id, ClusterId}) ->
 
 %% @doc Retrieve cluster members
 %%
+-spec(get_cluster_members(atom()) ->
+             {ok, [#mdc_replication_info{}]} | {error, any()}).
 get_cluster_members(undefined) ->
     case leo_mdcr_tbl_cluster_info:all() of
         {ok, ClusterInfoList} ->
@@ -201,7 +203,8 @@ get_cluster_members_2([#?CLUSTER_INFO{cluster_id = ClusterId}|Rest],
 %% @doc Compare a local-metadata with a remote-metadata
 %%      If it's inconsistent, the metadata is put into the queue
 %%
--spec(compare_metadata(list(#?METADATA{})) -> ok).
+-spec(compare_metadata(list(#?METADATA{})) ->
+             ok).
 compare_metadata([]) ->
     ok;
 compare_metadata([#?METADATA{cluster_id = ClusterId,
@@ -322,8 +325,8 @@ stack_fun(UId, AddrId, Key, Data) ->
 
 %% @doc Slicing objects and Store objects
 %% @private
--spec(slice_and_replicate(atom(), binary(), list(tuple())) ->
-             {ok, list(tuple())} | {error, any()}).
+-spec(slice_and_replicate(atom(), binary(), [#?METADATA{}]) ->
+             {ok, [#?METADATA{}]} | {error, any()}).
 slice_and_replicate(_, <<>>, Acc) ->
     {ok, lists:flatten(Acc)};
 slice_and_replicate(ClusterId, StackedObjs, Acc) ->
@@ -360,7 +363,7 @@ slice(StackedObjs) ->
 %% @doc Replicate an object between clusters
 %% @private
 -spec(replicate(atom(), #?OBJECT{}) ->
-             {ok, tuple()} | {error, any()}).
+             [] | #?METADATA{}).
 replicate(ClusterId, Object) ->
     %% Retrieve redundancies of the cluster,
     %% then overwrite 'n' and 'w' for the mdc-replication
@@ -370,10 +373,7 @@ replicate(ClusterId, Object) ->
                                             num_of_replicas = NumOfReplicas},
                   case leo_storage_handler_object:replicate(Object_1) of
                       ok ->
-                          ok;
-                      {ok, {_, Checksum}} ->
-                          Object_2 = Object_1#?OBJECT{checksum = Checksum},
-                          {ok, leo_object_storage_transformer:object_to_metadata(Object_2)};
+                          {ok, leo_object_storage_transformer:object_to_metadata(Object)};
                       {error, Cause} ->
                           {error, Cause}
                   end;
@@ -386,7 +386,7 @@ replicate(ClusterId, Object) ->
 %% @private
 replicate_1({ok, Metadata}) ->
     Metadata;
-replicate_1(_) ->
+replicate_1(_Error) ->
     [].
 
 
@@ -423,11 +423,12 @@ send([#mdc_replication_info{cluster_members = Members}|Rest], StackedInfo, Compr
 
 %% @private
 send_1([], ClusterId, StackedInfo,_CompressedObjs,_RetryTimes) ->
-    ok = enqueue_fail_replication(StackedInfo, ClusterId);
+    ok = enqueue_fail_replication(StackedInfo, ClusterId),
+    {error, ?ERROR_COULD_SEND_OBJ};
 send_1([_|Rest], ClusterId, StackedInfo, CompressedObjs, ?DEF_MAX_RETRY_TIMES) ->
     send_1(Rest, ClusterId, StackedInfo, CompressedObjs, 0);
 send_1([#?CLUSTER_MEMBER{node = Node,
-                         port = Port}|Rest] = ClusterMembes,
+                         port = Port}|Rest] = ClusterMembers,
        ClusterId, StackedInfo, CompressedObjs, RetryTimes) ->
     Node_1 = list_to_atom(lists:append([atom_to_list(Node),
                                         ":",
@@ -435,7 +436,7 @@ send_1([#?CLUSTER_MEMBER{node = Node,
     case leo_rpc:call(Node_1, erlang, node, []) of
         Msg when Msg == timeout orelse
                  element(1, Msg) == badrpc ->
-            send_1(ClusterMembes, ClusterId,
+            send_1(ClusterMembers, ClusterId,
                    StackedInfo, CompressedObjs, RetryTimes + 1);
         _ ->
             Timeout = ?env_mdcr_req_timeout(),
