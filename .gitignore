@@ -7,3 +7,4 @@ ring_*
 .leo_storage_dialyzer_plt
 leo_storage.dot
 leo_storage.png
+.rebar/
