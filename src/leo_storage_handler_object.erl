@@ -306,14 +306,38 @@ delete({Object, Ref}) ->
              ok | {error, any()}).
 delete(Object, ReqId) when is_integer(ReqId) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
-    replicate_fun(?REP_LOCAL, ?CMD_DELETE,
-                  Object#?OBJECT.addr_id,
-                  Object#?OBJECT{method   = ?CMD_DELETE,
-                                 data     = <<>>,
-                                 dsize    = 0,
-                                 clock    = leo_date:clock(),
-                                 req_id   = ReqId,
-                                 del      = ?DEL_TRUE}).
+    case replicate_fun(?REP_LOCAL, ?CMD_DELETE,
+                       Object#?OBJECT.addr_id,
+                       Object#?OBJECT{method   = ?CMD_DELETE,
+                                      data     = <<>>,
+                                      dsize    = 0,
+                                      clock    = leo_date:clock(),
+                                      req_id   = ReqId,
+                                      del      = ?DEL_TRUE}) of
+        ok ->
+            ok = delete_objects_under_dir(Object),
+            ok;
+        {error, not_found = Cause} ->
+            ok = delete_objects_under_dir(Object),
+            {error, Cause};
+        {error, Cause} ->
+            {error, Cause}
+    end.
+
+
+%% @private
+delete_objects_under_dir(Object) ->
+    Key   = Object#?OBJECT.key,
+    KSize = byte_size(Key),
+    case catch binary:part(Key, (KSize - 1), 1) of
+        {'EXIT',_} ->
+            void;
+        <<"/">> ->
+            prefix_search_and_remove_objects(Key);
+        _ ->
+            void
+    end,
+    ok.
 
 
 %%--------------------------------------------------------------------
@@ -472,13 +496,13 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
 
                   IsChunkedObj = (nomatch /= binary:match(Key, <<"\n">>)),
 
-                  Pos1 = case binary:match(Key, [ParentDir]) of
-                             nomatch ->
-                                 -1;
-                             {Pos0, _} ->
-                                 Pos0
-                         end,
-                  case (InRange == true andalso Pos1 == 0) of
+                  Pos_1 = case binary:match(Key, [ParentDir]) of
+                              nomatch ->
+                                  -1;
+                              {Pos0, _} ->
+                                  Pos0
+                          end,
+                  case (InRange == true andalso Pos_1 == 0) of
                       true ->
                           case (Length2 -1) of
                               Length0 when Meta0#?METADATA.del == ?DEL_FALSE andalso
@@ -544,14 +568,14 @@ prefix_search_and_remove_objects(ParentDir) ->
                   Metadata = binary_to_term(V),
                   AddrId   = Metadata#?METADATA.addr_id,
 
-                  Pos1 = case binary:match(Key, [ParentDir]) of
-                             nomatch ->
-                                 -1;
-                             {Pos0, _} ->
-                                 Pos0
-                         end,
+                  Pos_1 = case binary:match(Key, [ParentDir]) of
+                              nomatch ->
+                                  -1;
+                              {Pos, _} ->
+                                  Pos
+                          end,
 
-                  case (Pos1 == 0) of
+                  case (Pos_1 == 0) of
                       true when Metadata#?METADATA.del == ?DEL_FALSE ->
                           leo_storage_mq:publish(
                             ?QUEUE_TYPE_ASYNC_DELETION, AddrId, Key);
@@ -573,11 +597,11 @@ find_uploaded_objects_by_key(OriginalKey) ->
 
                   case (nomatch /= binary:match(Key, <<"\n">>)) of
                       true ->
-                          Pos1 = case binary:match(Key, [OriginalKey]) of
-                                     nomatch   -> -1;
-                                     {Pos0, _} -> Pos0
-                                 end,
-                          case (Pos1 == 0) of
+                          Pos_1 = case binary:match(Key, [OriginalKey]) of
+                                      nomatch   -> -1;
+                                      {Pos, _} -> Pos
+                                  end,
+                          case (Pos_1 == 0) of
                               true ->
                                   [Metadata|Acc];
                               false ->
