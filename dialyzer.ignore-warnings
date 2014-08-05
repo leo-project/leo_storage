@@ -1,2 +1,2 @@
-leo_storage_handler_object.erl:741: The pattern 'delete' can never match the type 'put'
-leo_storage_handler_object.erl:748: The pattern {'ok', _} can never match the type {'error',reference(),_} | {'ok',reference(),{'etag',binary()}}
+The pattern 'delete' can never match the type 'put'
+The pattern {'ok', _} can never match the type {'error',reference(),_} | {'ok',reference(),{'etag',binary()}}
