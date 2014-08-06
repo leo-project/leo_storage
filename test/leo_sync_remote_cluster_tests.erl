@@ -61,7 +61,7 @@ suite_test_() ->
 %% @doc Generate mocks
 %% @private
 gen_mocks(Node) ->
-    ok = meck:new(leo_redundant_manager_api),
+    ok = meck:new(leo_redundant_manager_api, [non_strict]),
     ok = meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id,
                      fun(_AddrId) ->
                              {ok, #redundancies{n = 3,
@@ -74,7 +74,7 @@ gen_mocks(Node) ->
                                                }}
                      end),
 
-    ok = meck:new(leo_storage_replicator),
+    ok = meck:new(leo_storage_replicator, [non_strict]),
     ok = meck:expect(leo_storage_replicator, replicate,
                      fun(_,_,_,_,_) ->
                              ok
@@ -82,7 +82,7 @@ gen_mocks(Node) ->
 
 
     ClusterId = 'cluster_1',
-    ok = meck:new(leo_mdcr_tbl_cluster_info),
+    ok = meck:new(leo_mdcr_tbl_cluster_info, [non_strict]),
     ok = meck:expect(leo_mdcr_tbl_cluster_info, all,
                      fun() ->
                              {ok, [#?CLUSTER_INFO{cluster_id = ClusterId,
@@ -94,13 +94,13 @@ gen_mocks(Node) ->
                                                  num_of_dc_replicas = 1}}
                      end),
 
-    ok = meck:new(leo_cluster_tbl_conf),
+    ok = meck:new(leo_cluster_tbl_conf, [non_strict]),
     ok = meck:expect(leo_cluster_tbl_conf, get,
                      fun() ->
                              {ok, #?SYSTEM_CONF{cluster_id = 'leofs_1',
                                                 num_of_dc_replicas = 1}}
                      end),
-    ok = meck:new(leo_mdcr_tbl_cluster_member),
+    ok = meck:new(leo_mdcr_tbl_cluster_member, [non_strict]),
     ok = meck:expect(leo_mdcr_tbl_cluster_member, find_by_limit,
                      fun(_,_) ->
                              {ok, [#?CLUSTER_MEMBER{node = Node, cluster_id = ClusterId},
@@ -109,14 +109,14 @@ gen_mocks(Node) ->
                                   ]}
                      end),
 
-    ok = meck:new(leo_rpc),
+    ok = meck:new(leo_rpc, [non_strict]),
     ok = meck:expect(leo_rpc, call,
                      fun(_Node,_Module,_Method,_Args,_Timeout) ->
                              %% ?debugVal({_Node,_Module,_Method,_Args,_Timeout}),
                              erlang:apply(_Module, _Method, _Args),
                              {ok, []}
                      end),
-    ok = meck:new(leo_storage_mq),
+    ok = meck:new(leo_storage_mq, [non_strict]),
     ok = meck:expect(leo_storage_mq, publish,
                      fun(_,_,_,_) ->
                              ok
@@ -125,9 +125,9 @@ gen_mocks(Node) ->
                      fun(_,_,_,_,_) ->
                              ok
                      end),
-    ok = meck:new(leo_ordning_reda_api),
+    ok = meck:new(leo_ordning_reda_api, [non_strict]),
     ok = meck:expect(leo_ordning_reda_api, stack,
-                     fun(_,_,_,_) ->
+                     fun(_,_,_) ->
                              ok
                      end),
     ok.

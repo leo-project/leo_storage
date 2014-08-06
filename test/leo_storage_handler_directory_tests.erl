@@ -63,7 +63,7 @@ teardown([_, Node1]) ->
 
 
 find_by_parent_dir_([Node0, Node1]) ->
-    meck:new(leo_redundant_manager_api),
+    meck:new(leo_redundant_manager_api, [non_strict]),
     meck:expect(leo_redundant_manager_api, get_members,
                 fun() ->
                         Members = [#member{node  = Node0,
@@ -76,12 +76,12 @@ find_by_parent_dir_([Node0, Node1]) ->
                         {ok, Members}
                 end),
 
-    ok = rpc:call(Node0, meck, new,    [leo_storage_handler_object, [no_link]]),
+    ok = rpc:call(Node0, meck, new,    [leo_storage_handler_object, [no_link, non_strict]]),
     ok = rpc:call(Node0, meck, expect, [leo_storage_handler_object, prefix_search,
                                         fun(_ParentDir, _,_) ->
                                                 {ok, [#?METADATA{key="air/on/g/0.png"}]}
                                         end]),
-    ok = rpc:call(Node1, meck, new,    [leo_storage_handler_object, [no_link]]),
+    ok = rpc:call(Node1, meck, new,    [leo_storage_handler_object, [no_link, non_strict]]),
     ok = rpc:call(Node1, meck, expect, [leo_storage_handler_object, prefix_search,
                                         fun(_ParentDir,_,_) ->
                                                 {ok, [#?METADATA{key="air/on/g/1.png"},
@@ -95,7 +95,7 @@ find_by_parent_dir_([Node0, Node1]) ->
     ok.
 
 delete_objects_in_parent_dir_(_) ->
-    ok = meck:new(leo_storage_handler_object),
+    ok = meck:new(leo_storage_handler_object, [non_strict]),
     meck:expect(leo_storage_handler_object, prefix_search_and_remove_objects,
                 fun(_) ->
                         ok

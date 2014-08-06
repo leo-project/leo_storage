@@ -36,6 +36,7 @@
 
 %% API
 -export([register_in_monitor/1, register_in_monitor/2,
+         get_disk_usage/0,
          get_routing_table_chksum/0,
          update_manager_nodes/1, recover_remote/2,
          start/1, start/2, start/3, stop/0, attach/1, synchronize/1, synchronize/2,
@@ -204,8 +205,8 @@ attach(SystemConf) ->
 synchronize(Node) ->
     leo_storage_mq:publish(?QUEUE_TYPE_RECOVERY_NODE, Node).
 
--spec(synchronize(list() | string(), #?METADATA{} | atom()) ->
-             ok | {error, any()}).
+-spec(synchronize([atom()]|binary(), #?METADATA{}|atom()) ->
+             ok | not_found | {error, any()}).
 synchronize(InconsistentNodes, #?METADATA{addr_id = AddrId,
                                           key     = Key}) ->
     leo_storage_handler_object:replicate(InconsistentNodes, AddrId, Key);
@@ -276,7 +277,8 @@ compact_1(status) ->
 %%--------------------------------------------------------------------
 %%
 %%
--spec(get_node_status() -> {ok, #cluster_node_status{}}).
+-spec(get_node_status() ->
+             {ok, [tuple()]}).
 get_node_status() ->
     Version = case application:get_key(leo_storage, vsn) of
                   {ok, _Version} -> _Version;
@@ -350,11 +352,12 @@ get_node_status() ->
 %% @doc Do rebalance which means "Objects are copied to the specified node".
 %% @param RebalanceInfo: [{VNodeId, DestNode}]
 %%
--spec(rebalance(list()) ->
-             ok | {error, any()}).
+-spec(rebalance([tuple()]) ->
+             ok).
 rebalance(RebalanceList) ->
-    ok = leo_redundant_manager_api:force_sync_workers(),
+    catch leo_redundant_manager_api:force_sync_workers(),
     rebalance_1(RebalanceList).
+
 
 -spec(rebalance(list(), list(#member{}), list(#member{})) ->
              ok | {error, any()}).
@@ -371,11 +374,14 @@ rebalance(RebalanceList, MembersCur, MembersPrev) ->
 
 
 %% @private
+-spec(rebalance_1([tuple()]) ->
+             ok).
 rebalance_1([]) ->
     ok;
 rebalance_1([{VNodeId, Node}|T]) ->
-    ok = leo_storage_mq:publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, VNodeId, Node),
+    _ = leo_storage_mq:publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, VNodeId, Node),
     rebalance_1(T).
+
 
 %% recover a remote cluster's object
 -spec(recover_remote(integer(), binary()) ->
@@ -389,3 +395,33 @@ recover_remote(AddrId, Key) ->
         {error, Cause} ->
             {error, Cause}
     end.
+
+%% @doc
+%% Get the disk usage(Total, Free) on leo_storage in KByte
+-spec(get_disk_usage() -> {ok, {Total::pos_integer(), Free::pos_integer()}}).
+get_disk_usage() ->
+    PathList = case ?env_storage_device() of
+        [] -> [];
+        Devices ->
+            lists:map(fun(Item) ->
+                              leo_misc:get_value(path, Item)
+                      end, Devices)
+    end,
+    get_disk_usage(PathList, dict:new()).
+get_disk_usage([], Dict) ->
+    Ret = dict:fold(fun(_MountPath, {Total, Free}, {SumTotal, SumFree}) ->
+                        {SumTotal + Total, SumFree + Free}
+                    end,
+                    {0, 0},
+                    Dict),
+    {ok, Ret};
+get_disk_usage([Path|Rest], Dict) ->
+    case leo_file:file_get_mount_path(Path) of 
+        {ok, {MountPath, TotalSize, UsedPercentage}} ->
+            FreeSize = TotalSize * (100 - UsedPercentage) / 100,
+            NewDict = dict:store(MountPath, {TotalSize, FreeSize}, Dict),
+            get_disk_usage(Rest, NewDict);
+        Error ->
+            {error, Error}
+end.
+

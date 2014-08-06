@@ -135,7 +135,7 @@ stack_fun([Node|Rest] = NodeList, AddrId, Key, Metadata, Object, E) ->
                       ObjSize:?DEF_BIN_OBJ_SIZE, Object/binary,
                       ?DEF_BIN_PADDING/binary >>,
 
-            case leo_ordning_reda_api:stack(Node, AddrId, Key, Data) of
+            case leo_ordning_reda_api:stack(Node, {AddrId, Key}, Data) of
                 ok ->
                     stack_fun(Rest, AddrId, Key, Metadata, Object, E);
                 {error, undefined} ->

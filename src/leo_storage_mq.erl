@@ -39,7 +39,7 @@
 
 -export([start/2, start/3,
          publish/2, publish/3, publish/4, publish/5]).
--export([init/0, handle_call/1]).
+-export([init/0, handle_call/1, handle_call/3]).
 
 -define(SLASH, "/").
 -define(MSG_PATH_PER_OBJECT,        "1").
@@ -49,23 +49,6 @@
 -define(MSG_PATH_RECOVERY_NODE,     "5").
 -define(MSG_PATH_SYNC_OBJ_WITH_DC,  "6").
 -define(MSG_PATH_COMP_META_WITH_DC, "7").
-
--type(queue_type() :: ?QUEUE_TYPE_PER_OBJECT  |
-                      ?QUEUE_TYPE_SYNC_BY_VNODE_ID  |
-                      ?QUEUE_TYPE_ASYNC_DELETION |
-                      ?QUEUE_TYPE_RECOVERY_NODE |
-                      ?QUEUE_TYPE_SYNC_OBJ_WITH_DC |
-                      ?QUEUE_TYPE_COMP_META_WITH_DC
-                      ).
-
--type(queue_id()   :: ?QUEUE_ID_PER_OBJECT |
-                      ?QUEUE_ID_SYNC_BY_VNODE_ID |
-                      ?QUEUE_ID_REBALANCE |
-                      ?QUEUE_ID_ASYNC_DELETION |
-                      ?QUEUE_ID_RECOVERY_NODE |
-                      ?QUEUE_ID_SYNC_OBJ_WITH_DC |
-                      ?QUEUE_ID_COMP_META_WITH_DC
-                      ).
 
 %%--------------------------------------------------------------------
 %% API
@@ -208,19 +191,19 @@ get_queue(?PROP_MQ_COMP_DC_3 = Id, Intervals) ->
 %% @doc Input a message into the queue.
 %%
 -spec(publish(queue_type(), atom()) ->
-             ok).
+             ok | {error, any()}).
 publish(?QUEUE_TYPE_RECOVERY_NODE = Id, Node) ->
-    KeyBin     = term_to_binary(Node),
-    MessageBin = term_to_binary(
-                   #recovery_node_message{id        = leo_date:clock(),
-                                          node      = Node,
-                                          timestamp = leo_date:now()}),
-    leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
+    KeyBin = term_to_binary(Node),
+    MsgBin = term_to_binary(
+               #recovery_node_message{id        = leo_date:clock(),
+                                      node      = Node,
+                                      timestamp = leo_date:now()}),
+    leo_mq_api:publish(queue_id(Id), KeyBin, MsgBin);
 publish(_,_) ->
     {error, badarg}.
 
--spec(publish(queue_type(), integer(), atom()) ->
-             ok).
+-spec(publish(queue_type(), any(), any()) ->
+             ok | {error, any()}).
 publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID = Id, VNodeId, Node) ->
     Clock = leo_date:clock(),
     KeyBin     = term_to_binary({VNodeId, Node, Clock}),
@@ -255,8 +238,8 @@ publish(?QUEUE_TYPE_COMP_META_WITH_DC = Id, ClusterId, AddrAndKeyList) ->
 publish(_,_,_) ->
     {error, badarg}.
 
--spec(publish(queue_type(), integer(), any(), any()) ->
-             ok).
+-spec(publish(queue_type(), any(), any(), any()) ->
+             ok | {error, any()}).
 publish(?QUEUE_TYPE_PER_OBJECT = Id, AddrId, Key, ErrorType) ->
     KeyBin = term_to_binary({ErrorType, Key}),
     MessageBin  = term_to_binary(
@@ -281,6 +264,8 @@ publish(?QUEUE_TYPE_SYNC_OBJ_WITH_DC = Id, ClusterId, AddrId, Key) ->
 publish(_,_,_,_) ->
     {error, badarg}.
 
+-spec(publish(queue_type(), any(), any(), any(), any()) ->
+             ok | {error, any()}).
 publish(?QUEUE_TYPE_REBALANCE = Id, Node, VNodeId, AddrId, Key) ->
     KeyBin     = term_to_binary({Node, AddrId, Key}),
     MessageBin = term_to_binary(
@@ -318,8 +303,7 @@ publish(_,_,_,_,_) ->
 %% -------------------------------------------------------------------
 %% @doc Initializer
 %%
--spec(init() ->
-             ok | {error, any()}).
+-spec(init() -> ok | {error, any()}).
 init() ->
     ok.
 
@@ -361,19 +345,11 @@ handle_call({consume, ?QUEUE_ID_SYNC_BY_VNODE_ID, MessageBin}) ->
             {error, Cause};
         #sync_unit_of_vnode_message{vnode_id = ToVNodeId,
                                     node     = Node} ->
-            case leo_redundant_manager_api:range_of_vnodes(ToVNodeId) of
-                {ok, Res} ->
-                    {ok, {CurRingHash, _PrevRingHash}} =
-                        leo_redundant_manager_api:checksum(?CHECKSUM_RING),
-                    ok = sync_vnodes(Node, CurRingHash, Res),
-                    notify_rebalance_message_to_manager(ToVNodeId);
-                Error ->
-                    ?error("handle_call/1 - QUEUE_ID_SYNC_BY_VNODE_ID",
-                           "error:~p", [Error]),
-                    ok = publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID,
-                                 ToVNodeId, Node),
-                    Error
-            end;
+            {ok, Res} = leo_redundant_manager_api:range_of_vnodes(ToVNodeId),
+            {ok, {CurRingHash, _PrevRingHash}} =
+                leo_redundant_manager_api:checksum(?CHECKSUM_RING),
+            ok = sync_vnodes(Node, CurRingHash, Res),
+            notify_rebalance_message_to_manager(ToVNodeId);
         _ ->
             {error, ?ERROR_COULD_MATCH}
     end;
@@ -448,7 +424,7 @@ handle_call({consume, ?QUEUE_ID_COMP_META_WITH_DC, MessageBin}) ->
             %% @doc - condition: if state of a remote-cluster is not 'running',
             %%                   then this queue is removed
             case leo_mdcr_tbl_cluster_stat:find_by_cluster_id(ClusterId) of
-                {ok, [#?CLUSTER_STAT{state = ?STATE_RUNNING}|_]} ->
+                {ok, #?CLUSTER_STAT{state = ?STATE_RUNNING}} ->
                     %% re-compare metadatas
                     leo_storage_handle_sync:send_addrid_and_key_to_remote(
                       ClusterId, AddrAndKeyList);
@@ -458,6 +434,9 @@ handle_call({consume, ?QUEUE_ID_COMP_META_WITH_DC, MessageBin}) ->
         _ ->
             {error, ?ERROR_COULD_MATCH}
     end.
+
+handle_call(_,_,_) ->
+    ok.
 
 
 %%--------------------------------------------------------------------
@@ -474,7 +453,7 @@ recover_node(Node) ->
 
 %% @private
 -spec(recover_node_callback(atom()) ->
-             list()).
+             any()).
 recover_node_callback(Node) ->
     fun(K, V, Acc) ->
             Metadata_1 = binary_to_term(V),
@@ -523,7 +502,7 @@ sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
 
 %% @private
 -spec(sync_vnodes_callback(atom(), pos_integer(), pos_integer()) ->
-             list()).
+             any()).
 sync_vnodes_callback(Node, FromAddrId, ToAddrId)->
     fun(K, V, Acc) ->
             %% Note: An object of copy is NOT equal current ring-hash.
@@ -608,7 +587,7 @@ notify_message_to_manager([Manager|T], VNodeId, Node) ->
 
 %% @doc correct_redundancies/1 - first.
 %%
--spec(correct_redundancies(string()) ->
+-spec(correct_redundancies(binary()) ->
              ok | {error, any()}).
 correct_redundancies(Key) ->
     {ok, #redundancies{nodes = Redundancies,
@@ -619,7 +598,7 @@ correct_redundancies(Key) ->
 
 %% correct_redundancies_1/5 - next.
 %%
--spec(correct_redundancies_1(string(), integer(), list(), list(), list()) ->
+-spec(correct_redundancies_1(binary(), integer(), list(), list(), list()) ->
              ok | {error, any()}).
 correct_redundancies_1(_Key,_AddrId, [], [], _ErrorNodes) ->
     {error, not_found};
@@ -754,9 +733,7 @@ rebalance_2({ok, Redundancies}, #rebalance_message{node = Node,
             end;
         false ->
             ok
-    end;
-rebalance_2(_,_) ->
-    ok.
+    end.
 
 
 %% @doc Retrieve redundancies with a number of replicas
@@ -889,4 +866,3 @@ queue_id(?QUEUE_TYPE_SYNC_OBJ_WITH_DC) ->
     ?QUEUE_ID_SYNC_OBJ_WITH_DC;
 queue_id(?QUEUE_TYPE_COMP_META_WITH_DC) ->
     ?QUEUE_ID_COMP_META_WITH_DC.
-

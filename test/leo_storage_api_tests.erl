@@ -84,7 +84,7 @@ register_in_monitor_([_Node0, Node1]) ->
     ?assertEqual({error, not_found}, Res0),
 
     %% 2.
-    ok = rpc:call(Node1, meck, new,    [leo_manager_api, [no_link]]),
+    ok = rpc:call(Node1, meck, new,    [leo_manager_api, [no_link, non_strict]]),
     ok = rpc:call(Node1, meck, expect, [leo_manager_api, register,
                                         fun(_RequestedTimes, _Pid, _Node, storage,
                                             _L1,_L2,_NumOfVNodes,_RPCPort) ->
@@ -97,7 +97,7 @@ register_in_monitor_([_Node0, Node1]) ->
 
     %% 3.
     ok = rpc:call(Node1, meck, unload, [leo_manager_api]),
-    ok = rpc:call(Node1, meck, new,    [leo_manager_api, [no_link]]),
+    ok = rpc:call(Node1, meck, new,    [leo_manager_api, [no_link, non_strict]]),
 
     Res2 = leo_storage_api:register_in_monitor(first),
     ?assertEqual(ok, Res2),
@@ -106,7 +106,7 @@ register_in_monitor_([_Node0, Node1]) ->
     ok.
 
 get_routing_table_chksum_(_) ->
-    meck:new(leo_redundant_manager_api),
+    meck:new(leo_redundant_manager_api, [non_strict]),
     meck:expect(leo_redundant_manager_api, checksum,
                 fun(ring) ->
                         {ok, {1234, 5678}}
@@ -119,7 +119,7 @@ get_routing_table_chksum_(_) ->
 
 start_([Node0, _]) ->
     %% 1.
-    meck:new(leo_redundant_manager_api),
+    meck:new(leo_redundant_manager_api, [non_strict]),
     meck:expect(leo_redundant_manager_api, create,
                 fun() ->
                         {ok, [],[]}
@@ -142,7 +142,7 @@ start_([Node0, _]) ->
                                        {?CHECKSUM_MEMBER, 1234567890}]}}
                 end),
 
-    meck:new(leo_object_storage_api),
+    meck:new(leo_object_storage_api, [non_strict]),
     meck:expect(leo_object_storage_api, start, fun(_,_) -> ok end),
 
     {ok, {Node, Chksums}} = leo_storage_api:start([#member{node = 'node_0@127.0.0.1'}]),
@@ -151,7 +151,7 @@ start_([Node0, _]) ->
 
     %% 2.
     meck:unload(leo_redundant_manager_api),
-    meck:new(leo_redundant_manager_api),
+    meck:new(leo_redundant_manager_api, [non_strict]),
     meck:expect(leo_redundant_manager_api, update_members,
                 fun(_) ->
                         ok
@@ -175,7 +175,7 @@ stop_(_) ->
     ok.
 
 attach_(_) ->
-    meck:new(leo_redundant_manager_api),
+    meck:new(leo_redundant_manager_api, [non_strict]),
     meck:expect(leo_redundant_manager_api, set_options,
                 fun(_SystemConf) ->
                         ok
@@ -193,19 +193,19 @@ attach_(_) ->
     ok.
 
 synchronize_([Node0, _]) ->
-    meck:new(leo_storage_handler_object),
+    meck:new(leo_storage_handler_object, [non_strict]),
     meck:expect(leo_storage_handler_object, replicate,
                 fun(_Nodes, _AddrId, _Key) ->
                         ok
                 end),
 
-    meck:new(leo_redundant_manager_api),
+    meck:new(leo_redundant_manager_api, [non_strict]),
     meck:expect(leo_redundant_manager_api, get_redundancies_by_key,
                 fun(_Key) ->
                         {ok, #redundancies{vnode_id_to = 12345}}
                 end),
 
-    meck:new(leo_storage_mq),
+    meck:new(leo_storage_mq, [non_strict]),
     meck:expect(leo_storage_mq, publish,
                 fun(_Q, _VNodeId, _Key, _ErrorType) ->
                         ok
@@ -233,7 +233,7 @@ synchronize_([Node0, _]) ->
 get_node_status_(_) ->
     application:start(mnesia),
 
-    meck:new(leo_redundant_manager_api),
+    meck:new(leo_redundant_manager_api, [non_strict]),
     meck:expect(leo_redundant_manager_api, checksum,
                 fun(ring) ->
                         {ok, {1234, 5678}}
@@ -250,13 +250,13 @@ get_node_status_(_) ->
     ok.
 
 rebalance_([Node0, Node1]) ->
-    meck:new(leo_storage_mq),
+    meck:new(leo_storage_mq, [non_strict]),
     meck:expect(leo_storage_mq, publish,
                 fun(_Q, _VNodeId, _Node) ->
                         ok
                 end),
 
-    meck:new(leo_redundant_manager_api),
+    meck:new(leo_redundant_manager_api, [non_strict]),
     meck:expect(leo_redundant_manager_api, force_sync_workers,
                 fun() ->
                         ok

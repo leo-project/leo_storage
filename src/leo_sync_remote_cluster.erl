@@ -75,7 +75,16 @@ defer_stack(#?OBJECT{} = Object) ->
                   %% Check whether stack an object or not
                   case leo_mdcr_tbl_cluster_stat:find_by_state(?STATE_RUNNING) of
                       {ok, _} ->
-                          stack(Object);
+                          case stack(Object) of
+                              ok -> void;
+                              {error, Cause}->
+                                  ?warn("defer_stack/1", "key:~s, cause:~p",
+                                      [binary_to_list(Object#?OBJECT.key), Cause]),
+                                  ok = leo_storage_mq:publish(
+                                       ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
+                                       Object#?OBJECT.addr_id,
+                                       Object#?OBJECT.key)
+                          end;
                       not_found ->
                           void;
                       {error, Cause} ->
@@ -95,7 +104,7 @@ defer_stack(_) ->
 stack(Object) ->
     stack(undefined, Object).
 
--spec(stack(string(), #?OBJECT{}) ->
+-spec(stack(atom(), #?OBJECT{}) ->
              ok | {error, any()}).
 stack(ClusterId, Object) ->
     stack_fun(ClusterId, Object).
@@ -103,8 +112,8 @@ stack(ClusterId, Object) ->
 
 %% Store stacked objects
 %%
--spec(store(string(), binary()) ->
-             {ok, list(tuple())} | {error, any()}).
+-spec(store(atom(), binary()) ->
+             {ok, [#?METADATA{}]} | {error, any()}).
 store(ClusterId, CompressedObjs) ->
     case catch lz4:unpack(CompressedObjs) of
         {ok, OriginalObjects} ->
@@ -121,12 +130,12 @@ store(ClusterId, CompressedObjs) ->
 
 %% Generate a sync-proc of ID
 %%
--spec(gen_id() ->
-             atom()).
+-spec(gen_id() -> atom()).
 gen_id() ->
     gen_id(erlang:phash2(leo_date:clock(),
                          ?env_num_of_mdcr_sync_procs()) + 1).
--spec(gen_id(pos_integer()) ->
+
+-spec(gen_id(pos_integer() | {'cluster_id', (atom()|string()|pos_integer())}) ->
              atom()).
 gen_id(Id) when is_integer(Id) ->
     list_to_atom(lists:append([?DEF_PREFIX_MDCR_SYNC_PROC_1, integer_to_list(Id)]));
@@ -140,6 +149,8 @@ gen_id({cluster_id, ClusterId}) ->
 
 %% @doc Retrieve cluster members
 %%
+-spec(get_cluster_members(atom()) ->
+             {ok, [#mdc_replication_info{}]} | {error, any()}).
 get_cluster_members(undefined) ->
     case leo_mdcr_tbl_cluster_info:all() of
         {ok, ClusterInfoList} ->
@@ -297,7 +308,7 @@ stack_fun(ClusterId, #?OBJECT{addr_id = AddrId,
     end.
 
 stack_fun(UId, AddrId, Key, Data) ->
-    case leo_ordning_reda_api:stack(UId, AddrId, Key, Data) of
+    case leo_ordning_reda_api:stack(UId, {AddrId, Key}, Data) of
         ok ->
             ok;
         {error, undefined} ->
@@ -314,8 +325,8 @@ stack_fun(UId, AddrId, Key, Data) ->
 
 %% @doc Slicing objects and Store objects
 %% @private
--spec(slice_and_replicate(string(), binary(), list(tuple())) ->
-             {ok, list(tuple())} | {error, any()}).
+-spec(slice_and_replicate(atom(), binary(), [#?METADATA{}]) ->
+             {ok, [#?METADATA{}]} | {error, any()}).
 slice_and_replicate(_, <<>>, Acc) ->
     {ok, lists:flatten(Acc)};
 slice_and_replicate(ClusterId, StackedObjs, Acc) ->
@@ -351,8 +362,8 @@ slice(StackedObjs) ->
 
 %% @doc Replicate an object between clusters
 %% @private
--spec(replicate(string(), #?OBJECT{}) ->
-             {ok, tuple()} | {error, any()}).
+-spec(replicate(atom(), #?OBJECT{}) ->
+             [] | #?METADATA{}).
 replicate(ClusterId, Object) ->
     %% Retrieve redundancies of the cluster,
     %% then overwrite 'n' and 'w' for the mdc-replication
@@ -362,10 +373,7 @@ replicate(ClusterId, Object) ->
                                             num_of_replicas = NumOfReplicas},
                   case leo_storage_handler_object:replicate(Object_1) of
                       ok ->
-                          ok;
-                      {ok, {_, Checksum}} ->
-                          Object_2 = Object_1#?OBJECT{checksum = Checksum},
-                          {ok, leo_object_storage_transformer:object_to_metadata(Object_2)};
+                          {ok, leo_object_storage_transformer:object_to_metadata(Object)};
                       {error, Cause} ->
                           {error, Cause}
                   end;
@@ -378,7 +386,7 @@ replicate(ClusterId, Object) ->
 %% @private
 replicate_1({ok, Metadata}) ->
     Metadata;
-replicate_1(_) ->
+replicate_1(_Error) ->
     [].
 
 
@@ -415,11 +423,12 @@ send([#mdc_replication_info{cluster_members = Members}|Rest], StackedInfo, Compr
 
 %% @private
 send_1([], ClusterId, StackedInfo,_CompressedObjs,_RetryTimes) ->
-    ok = enqueue_fail_replication(StackedInfo, ClusterId);
+    ok = enqueue_fail_replication(StackedInfo, ClusterId),
+    {error, ?ERROR_COULD_SEND_OBJ};
 send_1([_|Rest], ClusterId, StackedInfo, CompressedObjs, ?DEF_MAX_RETRY_TIMES) ->
     send_1(Rest, ClusterId, StackedInfo, CompressedObjs, 0);
 send_1([#?CLUSTER_MEMBER{node = Node,
-                         port = Port}|Rest] = ClusterMembes,
+                         port = Port}|Rest] = ClusterMembers,
        ClusterId, StackedInfo, CompressedObjs, RetryTimes) ->
     Node_1 = list_to_atom(lists:append([atom_to_list(Node),
                                         ":",
@@ -427,7 +436,7 @@ send_1([#?CLUSTER_MEMBER{node = Node,
     case leo_rpc:call(Node_1, erlang, node, []) of
         Msg when Msg == timeout orelse
                  element(1, Msg) == badrpc ->
-            send_1(ClusterMembes, ClusterId,
+            send_1(ClusterMembers, ClusterId,
                    StackedInfo, CompressedObjs, RetryTimes + 1);
         _ ->
             Timeout = ?env_mdcr_req_timeout(),

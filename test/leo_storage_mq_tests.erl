@@ -87,7 +87,7 @@ setup() ->
     true = rpc:call(Test1Node, code, add_path, ["../deps/meck/ebin"]),
 
     %% gen mock.
-    %% meck:new(leo_logger_api),
+    %% meck:new(leo_logger_api, [non_strict]),
     %% meck:expect(leo_logger_api, new,          fun(_,_,_) -> ok end),
     %% meck:expect(leo_logger_api, new,          fun(_,_,_,_,_) -> ok end),
     %% meck:expect(leo_logger_api, new,          fun(_,_,_,_,_,_) -> ok end),
@@ -95,14 +95,14 @@ setup() ->
     %% meck:expect(leo_logger_api, append,       fun(_,_) -> ok end),
     %% meck:expect(leo_logger_api, append,       fun(_,_,_) -> ok end),
 
-    meck:new(leo_mq_api),
+    meck:new(leo_mq_api, [non_strict]),
     meck:expect(leo_mq_api, new,     fun(_,_,_) -> ok end),
     meck:expect(leo_mq_api, publish, fun(_,_,_) -> ok end),
 
-    meck:new(leo_mq_logger),
+    meck:new(leo_mq_logger, [non_strict]),
     meck:expect(leo_mq_logger, append, fun(_MQ) -> ok end),
 
-    meck:new(leo_redundant_manager_api),
+    meck:new(leo_redundant_manager_api, [non_strict]),
     meck:expect(leo_redundant_manager_api, get_redundancies_by_key,
                 fun(_, _) ->
                         {ok, #redundancies{nodes = [#redundant_node{node = Test0Node,
@@ -191,12 +191,12 @@ subscribe_0_({Test0Node, Test1Node}) ->
     ?TBL_REBALANCE_COUNTER = ets:new(?TBL_REBALANCE_COUNTER, [named_table, public]),
 
     %% case-1.
-    ok = rpc:call(Test0Node, meck, new,    [leo_storage_handler_object, [no_link]]),
+    ok = rpc:call(Test0Node, meck, new,    [leo_storage_handler_object, [no_link, non_strict]]),
     ok = rpc:call(Test0Node, meck, expect, [leo_storage_handler_object, head,
                                             fun(_Key, _VNodeId) ->
                                                     {ok, ?TEST_META_1}
                                             end]),
-    ok = rpc:call(Test1Node, meck, new,    [leo_storage_handler_object, [no_link]]),
+    ok = rpc:call(Test1Node, meck, new,    [leo_storage_handler_object, [no_link, non_strict]]),
     ok = rpc:call(Test1Node, meck, expect, [leo_storage_handler_object, head,
                                             fun(_Key, _VNodeId) ->
                                                     {ok, ?TEST_META_1}
@@ -206,7 +206,7 @@ subscribe_0_({Test0Node, Test1Node}) ->
                         {ok, #member{state = ?STATE_RUNNING}}
                 end),
 
-    meck:new(leo_object_storage_api),
+    meck:new(leo_object_storage_api, [non_strict]),
     meck:expect(leo_object_storage_api, head,
                 fun({_AddrId, _Key}) ->
                         {ok, term_to_binary(#?METADATA{num_of_replicas = 0})}
@@ -223,18 +223,18 @@ subscribe_1_({Test0Node, Test1Node}) ->
     ?TBL_REBALANCE_COUNTER = ets:new(?TBL_REBALANCE_COUNTER, [named_table, public]),
 
     %% case-1.
-    ok = rpc:call(Test0Node, meck, new,    [leo_storage_handler_object, [no_link]]),
+    ok = rpc:call(Test0Node, meck, new,    [leo_storage_handler_object, [no_link, non_strict]]),
     ok = rpc:call(Test0Node, meck, expect, [leo_storage_handler_object, head,
                                             fun(_Key, _VNodeId, _DoRetry) ->
                                                     {ok, ?TEST_META_1}
                                             end]),
-    ok = rpc:call(Test1Node, meck, new,    [leo_storage_handler_object, [no_link]]),
+    ok = rpc:call(Test1Node, meck, new,    [leo_storage_handler_object, [no_link, non_strict]]),
     ok = rpc:call(Test1Node, meck, expect, [leo_storage_handler_object, head,
                                             fun(_Key, _VNodeId, _DoRetry) ->
                                                     {ok, ?TEST_META_2}
                                             end]),
 
-    ok = rpc:call(Test0Node, meck, new,    [leo_storage_api, [no_link]]),
+    ok = rpc:call(Test0Node, meck, new,    [leo_storage_api, [no_link, non_strict]]),
     ok = rpc:call(Test0Node, meck, expect, [leo_storage_api, synchronize,
                                             fun(_InconsistentNodes, _CorrectMetadata) ->
                                                     ok
@@ -244,7 +244,7 @@ subscribe_1_({Test0Node, Test1Node}) ->
                         {ok, #member{state = ?STATE_RUNNING}}
                 end),
 
-    meck:new(leo_object_storage_api),
+    meck:new(leo_object_storage_api, [non_strict]),
     meck:expect(leo_object_storage_api, head,
                 fun({_AddrId, _Key}) ->
                         {ok, term_to_binary(#?METADATA{num_of_replicas = 0})}
@@ -263,7 +263,7 @@ subscribe_1_({Test0Node, Test1Node}) ->
 subscribe_2_({Test0Node, _Test1Node}) ->
     ?TBL_REBALANCE_COUNTER = ets:new(?TBL_REBALANCE_COUNTER, [named_table, public]),
 
-    meck:new(leo_storage_handler_object),
+    meck:new(leo_storage_handler_object, [non_strict]),
     meck:expect(leo_storage_handler_object, copy,
                 fun(_,_,_) ->
                         ok
@@ -278,7 +278,7 @@ subscribe_2_({Test0Node, _Test1Node}) ->
                         {ok, #redundancies{nodes = [{Test0Node, true}]}}
                 end),
 
-    meck:new(leo_object_storage_api),
+    meck:new(leo_object_storage_api, [non_strict]),
     meck:expect(leo_object_storage_api, head,
                 fun({_AddrId, _Key}) ->
                         {ok, term_to_binary(#?METADATA{num_of_replicas = 0})}
@@ -295,7 +295,7 @@ subscribe_2_({Test0Node, _Test1Node}) ->
 subscribe_3_({_Test0Node, _Test1Node}) ->
     ?TBL_REBALANCE_COUNTER = ets:new(?TBL_REBALANCE_COUNTER, [named_table, public]),
 
-    meck:new(leo_object_storage_api),
+    meck:new(leo_object_storage_api, [non_strict]),
     meck:expect(leo_object_storage_api, fetch_by_addr_id,
                 fun(_FromVNodeId, Fun) ->
                         Fun(<<"key">>, term_to_binary(#?METADATA{ring_hash = 0}), []),

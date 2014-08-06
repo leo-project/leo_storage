@@ -58,7 +58,7 @@ replicate_test_() ->
                           ]]}.
 
 setup() ->
-    meck:new(leo_logger),
+    meck:new(leo_logger, [non_strict]),
     meck:expect(leo_logger, append, fun(_,_,_) ->
                                             ok
                                     end),
@@ -101,8 +101,8 @@ replicate_obj_0_({Test0Node, Test1Node}) ->
            ({error, Cause}) ->
                 {error, Cause}
         end,
-    {ok, {etag, _}} = leo_storage_replicator:replicate(
-                        put, 1, ?TEST_REDUNDANCIES_1, Object, F),
+    {ok, _} = leo_storage_replicator:replicate(
+                put, 1, ?TEST_REDUNDANCIES_1, Object, F),
     timer:sleep(100),
     ok.
 
@@ -154,7 +154,7 @@ replicate_obj_2_({Test0Node, Test1Node}) ->
 %%--------------------------------------------------------------------
 %% for object-operation #1.
 gen_mock_2(object, {_Test0Node, _Test1Node}, Case) ->
-    meck:new(leo_storage_mq),
+    meck:new(leo_storage_mq, [non_strict]),
     meck:expect(leo_storage_mq, publish,
                 fun(Type, VNodeId, Key, _ErrorType) ->
                         ?assertEqual(?QUEUE_TYPE_PER_OBJECT, Type),
@@ -163,9 +163,9 @@ gen_mock_2(object, {_Test0Node, _Test1Node}, Case) ->
                         ok
                 end),
 
-    meck:new(leo_storage_handler_object),
+    meck:new(leo_storage_handler_object, [non_strict]),
     meck:expect(leo_storage_handler_object, put,
-                fun(_Object, Ref) ->
+                fun({_Object, Ref}) ->
                         ?assertEqual(true, erlang:is_reference(Ref)),
 
                         case Case of
@@ -184,7 +184,7 @@ gen_mock_2(object, {_Test0Node, _Test1Node}, Case) ->
 
 %% for object-operation #2.
 gen_mock_3(object, Test1Node, Case) ->
-    ok = rpc:call(Test1Node, meck, new,    [leo_storage_handler_object, [no_link]]),
+    ok = rpc:call(Test1Node, meck, new,    [leo_storage_handler_object, [no_link, non_strict]]),
     ok = rpc:call(Test1Node, meck, expect, [leo_storage_handler_object, put,
                                             fun(#?OBJECT{addr_id = VNodeId,
                                                          key     = Key,
