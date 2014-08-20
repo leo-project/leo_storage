@@ -339,7 +339,8 @@ delete_objects_under_dir(Object) ->
     case catch binary:part(Key, (KSize - 1), 1) of
         {'EXIT',_} ->
             void;
-        <<"/">> ->
+        Bin when Bin == <<"/">> orelse
+                 Bin == <<"\n">> ->
             %% for remote storage nodes
             case leo_redundant_manager_api:get_members_by_status(?STATE_RUNNING) of
                 {ok, RetL} ->
