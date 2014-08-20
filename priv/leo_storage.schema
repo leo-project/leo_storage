@@ -693,6 +693,30 @@
  ]}.
 
 
+%% --------------------------------------------------------------------
+%% Mnesia
+%% --------------------------------------------------------------------
+%% @doc The write threshold for transaction log dumps
+%%      as the number of writes to the transaction log
+{mapping,
+ "mnesia.dump_log_write_threshold",
+ "mnesia.dump_log_write_threshold",
+ [
+  {datatype, integer},
+  {default, 50000}
+ ]}.
+
+
+%% @doc Controls how often disc_copies tables are dumped from memory
+{mapping,
+ "mnesia.dc_dump_limit",
+ "mnesia.dc_dump_limit",
+ [
+  {datatype, integer},
+  {default, 40}
+ ]}.
+
+
 %%======================================================================
 %% Profiling
 %%======================================================================
