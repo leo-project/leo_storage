@@ -60,6 +60,7 @@
 -define(QUEUE_ID_RECOVERY_NODE,     'leo_recovery_node_queue').
 -define(QUEUE_ID_SYNC_OBJ_WITH_DC,  'leo_sync_obj_with_dc_queue').
 -define(QUEUE_ID_COMP_META_WITH_DC, 'leo_comp_meta_with_dc_queue').
+-define(QUEUE_ID_DEL_DIR,           'leo_delete_dir_queue').
 
 -define(QUEUE_TYPE_PER_OBJECT,        'queue_type_per_object').
 -define(QUEUE_TYPE_SYNC_BY_VNODE_ID,  'queue_type_sync_by_vnode_id').
@@ -68,6 +69,7 @@
 -define(QUEUE_TYPE_RECOVERY_NODE,     'queue_type_recovery_node').
 -define(QUEUE_TYPE_SYNC_OBJ_WITH_DC,  'queue_type_sync_obj_with_dc').
 -define(QUEUE_TYPE_COMP_META_WITH_DC, 'queue_type_comp_meta_with_dc').
+-define(QUEUE_TYPE_DEL_DIR,           'queue_type_delete_dir').
 
 -define(ERR_TYPE_REPLICATE_DATA,      'error_msg_replicate_data').
 -define(ERR_TYPE_RECOVER_DATA,        'error_msg_recover_data').
@@ -170,6 +172,13 @@
           timestamp = 0          :: integer()
          }).
 
+-record(delete_dir, {
+          id = 0        :: integer(),
+          node          :: atom(),
+          key = <<>>    :: binary(),
+          timestamp = 0 :: integer()
+         }).
+
 
 
 %% @doc macros.
@@ -255,6 +264,9 @@
 -define(PROP_MQ_COMP_DC_1,   cns_num_of_batch_process_comp_meta_with_dc).
 -define(PROP_MQ_COMP_DC_2,   cns_interval_comp_meta_with_dc_max).
 -define(PROP_MQ_COMP_DC_3,   cns_interval_comp_meta_with_dc_min).
+-define(PROP_MQ_DEL_DIR_1,   cns_num_of_batch_process_del_dir).
+-define(PROP_MQ_DEL_DIR_2,   cns_interval_del_dir_max).
+-define(PROP_MQ_DEL_DIR_3,   cns_interval_del_dir_min).
 
 -define(env_mq_consumption_intervals(),
         [
@@ -437,7 +449,8 @@
                       ?QUEUE_TYPE_ASYNC_DELETION |
                       ?QUEUE_TYPE_RECOVERY_NODE |
                       ?QUEUE_TYPE_SYNC_OBJ_WITH_DC |
-                      ?QUEUE_TYPE_COMP_META_WITH_DC
+                      ?QUEUE_TYPE_COMP_META_WITH_DC |
+                      ?QUEUE_TYPE_DEL_DIR
                       ).
 
 -type(queue_id()   :: ?QUEUE_ID_PER_OBJECT |
@@ -446,5 +459,6 @@
                       ?QUEUE_ID_ASYNC_DELETION |
                       ?QUEUE_ID_RECOVERY_NODE |
                       ?QUEUE_ID_SYNC_OBJ_WITH_DC |
-                      ?QUEUE_ID_COMP_META_WITH_DC
+                      ?QUEUE_ID_COMP_META_WITH_DC |
+                      ?QUEUE_ID_DEL_DIR
                       ).

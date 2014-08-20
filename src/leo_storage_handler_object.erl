@@ -39,6 +39,9 @@
 -export([get/1, get/2, get/3, get/4, get/5,
          put/1, put/2, put/4,
          delete/1, delete/2,
+         delete_objects_under_dir/1,
+         delete_objects_under_dir/2,
+         delete_objects_under_dir/3,
          head/2, head/3,
          head_with_calc_md5/3,
          replicate/1, replicate/3,
@@ -325,19 +328,60 @@ delete(Object, ReqId) when is_integer(ReqId) ->
     end.
 
 
-%% @private
+%% @doc Remove objects of the under directory
+%%
+-spec(delete_objects_under_dir(#?OBJECT{}) ->
+             ok).
 delete_objects_under_dir(Object) ->
     Key   = Object#?OBJECT.key,
     KSize = byte_size(Key),
+
     case catch binary:part(Key, (KSize - 1), 1) of
         {'EXIT',_} ->
             void;
         <<"/">> ->
+            %% for remote storage nodes
+            case leo_redundant_manager_api:get_members_by_status(?STATE_RUNNING) of
+                {ok, RetL} ->
+                    Nodes = [N||#member{node = N} <- RetL],
+                    Ref = make_ref(),
+                    {ok, Ref} = delete_objects_under_dir(Nodes, Ref, Key),
+                    ok;
+                _ ->
+                    void
+            end,
+            %% for local object storage
             prefix_search_and_remove_objects(Key);
         _ ->
             void
     end,
     ok.
+
+
+%% @doc Remove objects of the under directory for remote-nodes
+%%
+-spec(delete_objects_under_dir(reference(), binary()) ->
+             {ok, reference()}).
+delete_objects_under_dir(Ref, Key) ->
+    _ = prefix_search_and_remove_objects(Key),
+    {ok, Ref}.
+
+
+-spec(delete_objects_under_dir([atom()], reference(), binary()) ->
+             {ok, reference()}).
+delete_objects_under_dir([], Ref,_) ->
+    {ok, Ref};
+delete_objects_under_dir([Node|Rest], Ref, Key) ->
+    RPCKey = rpc:async_call(Node, ?MODULE,
+                            delete_objects_under_dir, [Ref, Key]),
+    case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
+        {value, {ok, Ref}} ->
+            ok;
+        _Other ->
+            %% enqueu a fail message into the mq
+            ok = leo_storage_mq:publish(?QUEUE_TYPE_DEL_DIR, Node, Key)
+    end,
+    delete_objects_under_dir(Rest, Ref, Key).
 
 
 %%--------------------------------------------------------------------
