@@ -671,11 +671,12 @@ correct_redundancies_1(Key, AddrId, [#redundant_node{node = Node}|T], Metadatas,
 -spec(correct_redundancies_2(list(), list()) ->
              ok | {error, any()}).
 correct_redundancies_2(ListOfMetadata, ErrorNodes) ->
-    [{_, Metadata} = H|_] = lists:sort(fun({_, M1}, {_, M2}) ->
-                                               M1#?METADATA.clock >= M2#?METADATA.clock;
-                                          (_,_) ->
-                                               false
-                                       end, ListOfMetadata),
+    [{_, Metadata} = H|_] = lists:sort(
+                              fun({_, M1}, {_, M2}) ->
+                                      M1#?METADATA.clock >= M2#?METADATA.clock;
+                                 (_,_) ->
+                                      false
+                              end, ListOfMetadata),
 
     {_, CorrectNodes, InconsistentNodes} =
         lists:foldl(
@@ -797,28 +798,29 @@ get_redundancies_with_replicas(AddrId, Key, Redundancies) ->
 notify_rebalance_message_to_manager(VNodeId) ->
     case ets_lookup(?TBL_REBALANCE_COUNTER, VNodeId) of
         {ok, NumOfMessages} ->
-            lists:foldl(fun(_Manager, true) ->
-                                void;
-                           (Manager0, false = Res) ->
-                                Manager1 = case is_atom(Manager0) of
-                                               true  -> Manager0;
-                                               false -> list_to_atom(Manager0)
-                                           end,
-
-                                case catch rpc:call(Manager1, leo_manager_api, notify,
-                                                    [rebalance, VNodeId, erlang:node(), NumOfMessages],
-                                                    ?DEF_REQ_TIMEOUT) of
-                                    ok ->
-                                        true;
-                                    {_, Cause} ->
-                                        ?error("notify_rebalance_message_to_manager/1",
-                                               "manager:~p, vnode_id:~w, ~ncause:~p",
-                                               [Manager1, VNodeId, Cause]),
-                                        Res;
-                                    timeout ->
-                                        Res
-                                end
-                        end, false, ?env_manager_nodes(leo_storage)),
+            Fun = fun(_Manager, true) ->
+                          void;
+                     (Manager0, false = Res) ->
+                          Manager1 = case is_atom(Manager0) of
+                                         true  -> Manager0;
+                                         false -> list_to_atom(Manager0)
+                                     end,
+                          case catch rpc:call(Manager1, leo_manager_api, notify,
+                                              [rebalance, VNodeId,
+                                               erlang:node(), NumOfMessages],
+                                              ?DEF_REQ_TIMEOUT) of
+                              ok ->
+                                  true;
+                              {_, Cause} ->
+                                  ?error("notify_rebalance_message_to_manager/1",
+                                         "manager:~p, vnode_id:~w, ~ncause:~p",
+                                         [Manager1, VNodeId, Cause]),
+                                  Res;
+                              timeout ->
+                                  Res
+                          end
+                  end,
+            lists:foldl(Fun, false, ?env_manager_nodes(leo_storage)),
             ok;
         Error ->
             Error
