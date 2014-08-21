@@ -49,6 +49,7 @@
 -define(MSG_PATH_RECOVERY_NODE,     "5").
 -define(MSG_PATH_SYNC_OBJ_WITH_DC,  "6").
 -define(MSG_PATH_COMP_META_WITH_DC, "7").
+-define(MSG_PATH_DEL_DIR,           "8").
 
 %%--------------------------------------------------------------------
 %% API
@@ -119,6 +120,11 @@ start(RefSup, Intervals, RootPath0) ->
               get_queue(?PROP_MQ_COMP_DC_1, Intervals),
               get_queue(?PROP_MQ_COMP_DC_2, Intervals),
               get_queue(?PROP_MQ_COMP_DC_3, Intervals)
+             },
+             {?QUEUE_ID_DEL_DIR, ?MSG_PATH_DEL_DIR,
+              get_queue(?PROP_MQ_DEL_DIR_1, Intervals),
+              get_queue(?PROP_MQ_DEL_DIR_2, Intervals),
+              get_queue(?PROP_MQ_DEL_DIR_3, Intervals)
              }
             ], RefMqSup, RootPath1).
 
@@ -185,12 +191,19 @@ get_queue(?PROP_MQ_COMP_DC_1 = Id, Intervals) ->
 get_queue(?PROP_MQ_COMP_DC_2 = Id, Intervals) ->
     leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MAX);
 get_queue(?PROP_MQ_COMP_DC_3 = Id, Intervals) ->
+    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MIN);
+
+get_queue(?PROP_MQ_DEL_DIR_1 = Id, Intervals) ->
+    leo_misc:get_value(Id, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC);
+get_queue(?PROP_MQ_DEL_DIR_2 = Id, Intervals) ->
+    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MAX);
+get_queue(?PROP_MQ_DEL_DIR_3 = Id, Intervals) ->
     leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MIN).
 
 
 %% @doc Input a message into the queue.
 %%
--spec(publish(queue_type(), atom()) ->
+-spec(publish(queue_type(), atom()|binary()) ->
              ok | {error, any()}).
 publish(?QUEUE_TYPE_RECOVERY_NODE = Id, Node) ->
     KeyBin = term_to_binary(Node),
@@ -234,6 +247,15 @@ publish(?QUEUE_TYPE_COMP_META_WITH_DC = Id, ClusterId, AddrAndKeyList) ->
                                                 list_of_addrid_and_key = AddrAndKeyList,
                                                 timestamp = leo_date:now()}),
     leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
+
+publish(?QUEUE_TYPE_DEL_DIR = Id, Node, Key) ->
+    KeyBin = term_to_binary({Node, Key}),
+    MsgBin = term_to_binary(
+               #delete_dir{id   = leo_date:clock(),
+                           node = Node,
+                           key  = Key,
+                           timestamp = leo_date:now()}),
+    leo_mq_api:publish(queue_id(Id), KeyBin, MsgBin);
 
 publish(_,_,_) ->
     {error, badarg}.
@@ -433,6 +455,19 @@ handle_call({consume, ?QUEUE_ID_COMP_META_WITH_DC, MessageBin}) ->
             end;
         _ ->
             {error, ?ERROR_COULD_MATCH}
+    end;
+
+handle_call({consume, ?QUEUE_ID_DEL_DIR, MessageBin}) ->
+    case catch binary_to_term(MessageBin) of
+        {'EXIT', Cause} ->
+            ?error("handle_call/1 - QUEUE_ID_DEL_DIR",
+                   "cause:~p", [Cause]),
+            {error, Cause};
+        #delete_dir{key  = Key,
+                    node = Node} ->
+            Ref = make_ref(),
+            leo_storage_handler_object:delete_objects_under_dir(
+              [Node], Ref, Key)
     end.
 
 handle_call(_,_,_) ->
@@ -636,11 +671,12 @@ correct_redundancies_1(Key, AddrId, [#redundant_node{node = Node}|T], Metadatas,
 -spec(correct_redundancies_2(list(), list()) ->
              ok | {error, any()}).
 correct_redundancies_2(ListOfMetadata, ErrorNodes) ->
-    [{_, Metadata} = H|_] = lists:sort(fun({_, M1}, {_, M2}) ->
-                                               M1#?METADATA.clock >= M2#?METADATA.clock;
-                                          (_,_) ->
-                                               false
-                                       end, ListOfMetadata),
+    [{_, Metadata} = H|_] = lists:sort(
+                              fun({_, M1}, {_, M2}) ->
+                                      M1#?METADATA.clock >= M2#?METADATA.clock;
+                                 (_,_) ->
+                                      false
+                              end, ListOfMetadata),
 
     {_, CorrectNodes, InconsistentNodes} =
         lists:foldl(
@@ -762,28 +798,29 @@ get_redundancies_with_replicas(AddrId, Key, Redundancies) ->
 notify_rebalance_message_to_manager(VNodeId) ->
     case ets_lookup(?TBL_REBALANCE_COUNTER, VNodeId) of
         {ok, NumOfMessages} ->
-            lists:foldl(fun(_Manager, true) ->
-                                void;
-                           (Manager0, false = Res) ->
-                                Manager1 = case is_atom(Manager0) of
-                                               true  -> Manager0;
-                                               false -> list_to_atom(Manager0)
-                                           end,
-
-                                case catch rpc:call(Manager1, leo_manager_api, notify,
-                                                    [rebalance, VNodeId, erlang:node(), NumOfMessages],
-                                                    ?DEF_REQ_TIMEOUT) of
-                                    ok ->
-                                        true;
-                                    {_, Cause} ->
-                                        ?error("notify_rebalance_message_to_manager/1",
-                                               "manager:~p, vnode_id:~w, ~ncause:~p",
-                                               [Manager1, VNodeId, Cause]),
-                                        Res;
-                                    timeout ->
-                                        Res
-                                end
-                        end, false, ?env_manager_nodes(leo_storage)),
+            Fun = fun(_Manager, true) ->
+                          void;
+                     (Manager0, false = Res) ->
+                          Manager1 = case is_atom(Manager0) of
+                                         true  -> Manager0;
+                                         false -> list_to_atom(Manager0)
+                                     end,
+                          case catch rpc:call(Manager1, leo_manager_api, notify,
+                                              [rebalance, VNodeId,
+                                               erlang:node(), NumOfMessages],
+                                              ?DEF_REQ_TIMEOUT) of
+                              ok ->
+                                  true;
+                              {_, Cause} ->
+                                  ?error("notify_rebalance_message_to_manager/1",
+                                         "manager:~p, vnode_id:~w, ~ncause:~p",
+                                         [Manager1, VNodeId, Cause]),
+                                  Res;
+                              timeout ->
+                                  Res
+                          end
+                  end,
+            lists:foldl(Fun, false, ?env_manager_nodes(leo_storage)),
             ok;
         Error ->
             Error
@@ -865,4 +902,6 @@ queue_id(?QUEUE_TYPE_RECOVERY_NODE) ->
 queue_id(?QUEUE_TYPE_SYNC_OBJ_WITH_DC) ->
     ?QUEUE_ID_SYNC_OBJ_WITH_DC;
 queue_id(?QUEUE_TYPE_COMP_META_WITH_DC) ->
-    ?QUEUE_ID_COMP_META_WITH_DC.
+    ?QUEUE_ID_COMP_META_WITH_DC;
+queue_id(?QUEUE_TYPE_DEL_DIR) ->
+    ?QUEUE_ID_DEL_DIR.
