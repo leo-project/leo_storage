@@ -226,11 +226,11 @@ compact(start, NumOfTargets, MaxProc) ->
     case leo_redundant_manager_api:get_member_by_node(erlang:node()) of
         {ok, #member{state = ?STATE_RUNNING}} ->
             TargetPids1 =
-                case leo_compaction_manager_fsm:status() of
+                case leo_compact_fsm_controller:state() of
                     {ok, #compaction_stats{status = Status,
                                            pending_targets = PendingTargets}}
-                      when Status == ?COMPACTION_STATUS_SUSPEND;
-                           Status == ?COMPACTION_STATUS_IDLE ->
+                      when Status == ?ST_SUSPENDING;
+                           Status == ?ST_IDLING ->
                         PendingTargets;
                     _ ->
                         []
@@ -247,7 +247,7 @@ compact(start, NumOfTargets, MaxProc) ->
                             _Other ->
                                 lists:sublist(TargetPids1, NumOfTargets)
                         end,
-                    leo_compaction_manager_fsm:start(
+                    leo_compact_fsm_controller:start(
                       TargetPids2, MaxProc,
                       fun leo_redundant_manager_api:has_charge_of_node/2)
             end;
@@ -265,11 +265,11 @@ compact(Method) ->
 
 %% @private
 compact_1(suspend) ->
-    leo_compaction_manager_fsm:suspend();
+    leo_compact_fsm_controller:suspend();
 compact_1(resume) ->
-    leo_compaction_manager_fsm:resume();
+    leo_compact_fsm_controller:resume();
 compact_1(status) ->
-    leo_compaction_manager_fsm:status().
+    leo_compact_fsm_controller:state().
 
 
 %%--------------------------------------------------------------------
@@ -416,7 +416,7 @@ get_disk_usage([], Dict) ->
                     Dict),
     {ok, Ret};
 get_disk_usage([Path|Rest], Dict) ->
-    case leo_file:file_get_mount_path(Path) of 
+    case leo_file:file_get_mount_path(Path) of
         {ok, {MountPath, TotalSize, UsedPercentage}} ->
             FreeSize = TotalSize * (100 - UsedPercentage) / 100,
             NewDict = dict:store(MountPath, {TotalSize, FreeSize}, Dict),
