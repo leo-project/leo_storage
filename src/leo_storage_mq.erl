@@ -547,7 +547,9 @@ sync_vnodes_callback(Node, FromAddrId, ToAddrId)->
             case (AddrId >= FromAddrId andalso
                   AddrId =< ToAddrId) of
                 true ->
-                    case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
+                    case catch leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
+                        {'EXIT',_Cause} ->
+                            Acc;
                         {ok, #redundancies{nodes = Redundancies}} ->
                             Nodes = [N || #redundant_node{node = N} <- Redundancies],
                             case lists:member(Node, Nodes) of

@@ -80,8 +80,18 @@ register_in_monitor(Pid, RequestedTimes) ->
                                         [RequestedTimes, Pid, erlang:node(), storage,
                                          GroupL1, GroupL2, NumOfNodes, RPCPort],
                                         ?DEF_REQ_TIMEOUT) of
-                              ok ->
-                                  true;
+                              {ok, SystemConf} ->
+                                  case leo_cluster_tbl_conf:update(SystemConf) of
+                                      ok ->
+                                          Options = lists:zip(
+                                                      record_info(
+                                                        fields, ?SYSTEM_CONF),
+                                                      tl(tuple_to_list(SystemConf))),
+                                          ok = leo_redundant_manager_api:set_options(Options),
+                                          true;
+                                      _ ->
+                                          false
+                                  end;
                               Error ->
                                   ?error("register_in_monitor/1",
                                          "manager:~w, cause:~p", [Node1, Error]),
