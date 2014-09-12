@@ -761,7 +761,7 @@ read_and_repair_1({error, Cause}, #read_parameter{key = _K}, []) ->
     ?output_warn("read_and_repair_1/3", _K, Cause),
     {error, Cause};
 
-read_and_repair_1({error, _Reason},
+read_and_repair_1({error, Reason},
                   #read_parameter{key = _K,
                                   quorum = ReadQuorum} = ReadParameter, Redundancies) ->
     NumOfNodes = erlang:length([N || #redundant_node{node = N,
@@ -770,8 +770,10 @@ read_and_repair_1({error, _Reason},
     case (NumOfNodes >= ReadQuorum) of
         true ->
             read_and_repair(ReadParameter, Redundancies);
+        false when Reason == not_found ->
+            {error, not_found};
         false ->
-            ?output_warn("read_and_repair_1/3", _K, _Reason),
+            ?output_warn("read_and_repair_1/3", _K, Reason),
             {error, ?ERROR_COULD_NOT_GET_DATA}
     end;
 read_and_repair_1(_,_,_) ->
