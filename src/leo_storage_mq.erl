@@ -501,6 +501,11 @@ recover_node_callback(Node) ->
             %% by the MQ.
             case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
                 {ok, #redundancies{nodes = Redundancies}} ->
+                    ?debug("recover_node_callback",
+                           "node:~w, key:~s, num_of_replicas:~w, redundancies:~p",
+                           [Node, binary_to_list(K),
+                            length(Redundancies), Redundancies]),
+
                     RedundantNodes = [N || #redundant_node{node = N} <- Redundancies],
                     ok = recover_node_callback_1(AddrId, K, Node, RedundantNodes),
                     Acc;
