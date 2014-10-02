@@ -577,7 +577,7 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
                                           end
                                   end;
 
-                              Length1 when Meta0#?METADATA.del == ?DEL_FALSE andalso
+                              _Any when Meta0#?METADATA.del == ?DEL_FALSE andalso
                                            IsChunkedObj == false ->
                                   {Token2, _} = lists:split(Length1, Token1),
                                   Dir = lists:foldl(fun(Bin0, <<>>) ->
