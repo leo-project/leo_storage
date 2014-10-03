@@ -257,7 +257,7 @@ compact(start, NumOfTargets, MaxProc) ->
                             _Other ->
                                 lists:sublist(TargetPids1, NumOfTargets)
                         end,
-                    leo_compact_fsm_controller:start(
+                    leo_object_storage_api:compact_data(
                       TargetPids2, MaxProc,
                       fun leo_redundant_manager_api:has_charge_of_node/2)
             end;
@@ -411,16 +411,16 @@ recover_remote(AddrId, Key) ->
 -spec(get_disk_usage() -> {ok, {Total::pos_integer(), Free::pos_integer()}}).
 get_disk_usage() ->
     PathList = case ?env_storage_device() of
-        [] -> [];
-        Devices ->
-            lists:map(fun(Item) ->
-                              leo_misc:get_value(path, Item)
-                      end, Devices)
-    end,
+                   [] -> [];
+                   Devices ->
+                       lists:map(fun(Item) ->
+                                         leo_misc:get_value(path, Item)
+                                 end, Devices)
+               end,
     get_disk_usage(PathList, dict:new()).
 get_disk_usage([], Dict) ->
     Ret = dict:fold(fun(_MountPath, {Total, Free}, {SumTotal, SumFree}) ->
-                        {SumTotal + Total, SumFree + Free}
+                            {SumTotal + Total, SumFree + Free}
                     end,
                     {0, 0},
                     Dict),
@@ -433,5 +433,5 @@ get_disk_usage([Path|Rest], Dict) ->
             get_disk_usage(Rest, NewDict);
         Error ->
             {error, Error}
-end.
+    end.
 
