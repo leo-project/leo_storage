@@ -40,7 +40,8 @@
          get_routing_table_chksum/0,
          update_manager_nodes/1, recover_remote/2,
          start/1, start/2, start/3, stop/0, attach/1, synchronize/1, synchronize/2,
-         compact/1, compact/3, get_node_status/0,
+         compact/1, compact/3, diagnose_data/0,
+         get_node_status/0,
          rebalance/1, rebalance/3]).
 
 %% interval to notify to leo_manager
@@ -280,6 +281,13 @@ compact_1(resume) ->
     leo_compact_fsm_controller:resume();
 compact_1(status) ->
     leo_compact_fsm_controller:state().
+
+
+%% @doc Diagnose the data
+-spec(diagnose_data() ->
+             ok | {error, any()}).
+diagnose_data() ->
+    leo_compact_fsm_controller:diagnose().
 
 
 %%--------------------------------------------------------------------

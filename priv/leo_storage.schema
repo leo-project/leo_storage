@@ -518,6 +518,14 @@
   {default, "./log/ring"}
  ]}.
 
+%% @doc is enable data-diagnosis log
+{mapping,
+ "log.is_enable_diagnosis_log",
+ "leo_object_storage.is_enable_diagnosis_log",
+ [
+  {datatype, atom},
+  {default, false}
+ ]}.
 
 %% --------------------------------------------------------------------
 %% STORAGE - DIR
