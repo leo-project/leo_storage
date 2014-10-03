@@ -495,31 +495,35 @@ recover_node_callback(Node) ->
             Metadata_2 = leo_object_storage_transformer:transform_metadata(Metadata_1),
             #?METADATA{addr_id = AddrId} = Metadata_2,
 
+            %% Retrieve redundant-nodes from the redundant-manager(RING),
+            %% then if the recovery-target-node and "this node"
+            %% are included in retrieved redundant-nodes, "the file" will be recovered
+            %% by the MQ.
             case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
                 {ok, #redundancies{nodes = Redundancies}} ->
-                    % The target `Node` must be included regardless of its available value
-                    % Other nodes must be available.
-                    Nodes = [N || #redundant_node{node = N, available = A}
-                                  <- Redundancies,
-                                  (N == Node) orelse (N /= Node andalso A == true)],
-                    case lists:member(Node, Nodes) of
-                        true ->
-                            Candidate = hd(lists:delete(Node, Nodes)),
-                            case (Candidate == erlang:node()) orelse
-                                (leo_misc:node_existence(Candidate) == false) of
-                                true ->
-                                    ?MODULE:publish(?QUEUE_TYPE_PER_OBJECT,
-                                                    AddrId, K, ?ERR_TYPE_RECOVER_DATA);
-                                false ->
-                                    void
-                            end;
-                        false  ->
-                            void
-                    end,
+                    RedundantNodes = [N || #redundant_node{node = N} <- Redundancies],
+                    ok = recover_node_callback_1(AddrId, K, Node, RedundantNodes),
                     Acc;
                 _Other ->
                     Acc
             end
+    end.
+
+%% @private
+recover_node_callback_1(_,_,_,[]) ->
+    ok;
+recover_node_callback_1(AddrId, Key, Node, RedundantNodes) ->
+    case lists:member(Node, RedundantNodes) of
+        true ->
+            case lists:member(erlang:node(), RedundantNodes) of
+                true ->
+                    ?MODULE:publish(?QUEUE_TYPE_PER_OBJECT,
+                                    AddrId, Key, ?ERR_TYPE_RECOVER_DATA);
+                false ->
+                    ok
+            end;
+        false ->
+            ok
     end.
 
 
