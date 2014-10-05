@@ -860,6 +860,14 @@
   {default, "256000"}
  ]}.
 
+%% @doc Enable or disable SMP
+{mapping,
+ "erlang.smp",
+ "vm_args.-smp",
+ [
+  {default, "enable"}
+ ]}.
+
 %% %% @doc Raise the ETS table limit
 %% {mapping,
 %%  "erlang.hidden_flag",
