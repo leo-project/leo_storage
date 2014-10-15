@@ -524,7 +524,7 @@
  "leo_object_storage.is_enable_diagnosis_log",
  [
   {datatype, atom},
-  {default, false}
+  {default, true}
  ]}.
 
 %% --------------------------------------------------------------------
