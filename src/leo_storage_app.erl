@@ -32,6 +32,7 @@
 -include("leo_storage.hrl").
 -include_lib("leo_commons/include/leo_commons.hrl").
 -include_lib("leo_logger/include/leo_logger.hrl").
+-include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("leo_statistics/include/leo_statistics.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
@@ -151,7 +152,8 @@ launch_object_storage(RefSup) ->
 %% @private
 launch_redundant_manager(RefSup, Managers, QueueDir) ->
     ChildSpec = {leo_redundant_manager_sup,
-                 {leo_redundant_manager_sup, start_link, [storage, Managers, QueueDir]},
+                 {leo_redundant_manager_sup, start_link,
+                  [?PERSISTENT_NODE, Managers, QueueDir]},
                  permanent, 2000, supervisor, [leo_redundant_manager_sup]},
     {ok, _} = supervisor:start_child(RefSup, ChildSpec),
     ok.
