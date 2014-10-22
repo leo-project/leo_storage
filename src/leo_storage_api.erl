@@ -78,7 +78,7 @@ register_in_monitor(Pid, RequestedTimes) ->
                           RPCPort = ?env_rpc_port(),
 
                           case rpc:call(Node1, leo_manager_api, register,
-                                        [RequestedTimes, Pid, erlang:node(), storage,
+                                        [RequestedTimes, Pid, erlang:node(), ?PERSISTENT_NODE,
                                          GroupL1, GroupL2, NumOfNodes, RPCPort],
                                         ?DEF_REQ_TIMEOUT) of
                               {ok, SystemConf} ->
