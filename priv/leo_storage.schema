@@ -868,6 +868,44 @@
   {default, "enable"}
  ]}.
 
+%% @doc Erlang scheduler's compaction of load
+{mapping,
+ "erlang.schedulers.compaction_of_load",
+ "vm_args.+scl",
+ [
+  {datatype, atom},
+  {default, 'true'}
+ ]}.
+
+%% Erlang scheduler's balancing of load
+{mapping,
+ "erlang.schedulers.utilization_balancing",
+ "vm_args.+sub",
+ [
+  {datatype, atom},
+  {default, 'false'}
+ ]}.
+
+%% Sender-side network distribution buffer size
+{mapping,
+ "erlang.distribution_buffer_size",
+ "vm_args.+zdbbl",
+ [
+  {datatype, bytesize},
+  {default, "32MB"}
+ ]}.
+
+%% A non-negative integer which indicates
+%% how many times generational garbage collections
+%% can be done without forcing a fullsweep collection
+{mapping,
+ "erlang.fullsweep_after",
+ "vm_args.-env ERL_FULLSWEEP_AFTER",
+ [
+  {datatype, integer},
+  {default, 0}
+ ]}.
+
 %% %% @doc Raise the ETS table limit
 %% {mapping,
 %%  "erlang.hidden_flag",
