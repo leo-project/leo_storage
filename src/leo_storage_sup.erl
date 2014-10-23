@@ -62,10 +62,12 @@ stop() ->
 %% @end
 %% @private
 init([]) ->
+    WD_MaxMemCapacity = ?env_watchdog_max_mem_capacity(),
+    WD_CheckInterval  = ?env_watchdog_check_interval(),
+
     WatchDog = {leo_storage_watchdog,
                 {leo_storage_watchdog, start_link,
-                 [?DEF_MEM_CAPACITY,
-                  ?DEF_WATCH_INTERVAL]},
+                 [ WD_MaxMemCapacity, WD_CheckInterval ]},
                 permanent,
                 ?SHUTDOWN_WAITING_TIME,
                 worker,
