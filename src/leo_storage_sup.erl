@@ -62,9 +62,12 @@ stop() ->
 %% @end
 %% @private
 init([]) ->
-    {ok, {_SupFlags = {one_for_one, ?MAX_RESTART, ?MAX_TIME}, []}}.
-
-
-%% ---------------------------------------------------------------------
-%% Internal Functions
-%% ---------------------------------------------------------------------
+    WatchDog = {leo_storage_watchdog,
+                {leo_storage_watchdog, start_link,
+                 [?DEF_MEM_CAPACITY,
+                  ?DEF_WATCH_INTERVAL]},
+                permanent,
+                ?SHUTDOWN_WAITING_TIME,
+                worker,
+                [leo_storage_watchdog]},
+    {ok, {_SupFlags = {one_for_one, ?MAX_RESTART, ?MAX_TIME}, [WatchDog]}}.

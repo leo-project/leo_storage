@@ -243,6 +243,9 @@
 -define(DEF_MQ_INTERVAL_MAX, 32).
 -define(DEF_MQ_INTERVAL_MIN,  8).
 
+-define(DEF_WATCH_INTERVAL,   5000).
+-define(DEF_MEM_CAPACITY, 500000000).
+
 -define(PROP_MQ_PER_OBJ_1,   cns_num_of_batch_process_per_object).
 -define(PROP_MQ_PER_OBJ_2,   cns_interval_per_object_max).
 -define(PROP_MQ_PER_OBJ_3,   cns_interval_per_object_min).
