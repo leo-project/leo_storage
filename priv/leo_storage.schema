@@ -874,7 +874,7 @@
 %% @doc Erlang scheduler's compaction of load
 {mapping,
  "erlang.schedulers.compaction_of_load",
- "vm_args.-scl",
+ "vm_args.+scl",
  [
   {datatype, atom},
   {default, 'true'}
@@ -892,10 +892,9 @@
 %% Sender-side network distribution buffer size
 {mapping,
  "erlang.distribution_buffer_size",
- "vm_args.-zdbbl",
+ "vm_args.+zdbbl",
  [
-  {datatype, bytesize},
-  {default, "32MB"}
+  {default, "16384"}
  ]}.
 
 %% %% @doc Raise the ETS table limit
