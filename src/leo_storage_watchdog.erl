@@ -95,10 +95,11 @@ handle_info(timeout, State=#state{max_mem_capacity = MemCapacity,
         undefined ->
             void;
         Pid ->
-            case erlang:memory(binary) of
-                Binary when Binary >= MemCapacity ->
+            BinaryMem = erlang:memory(binary),
+            case (BinaryMem >= MemCapacity) of
+                true ->
                     erlang:garbage_collect(Pid);
-                _Other ->
+                false ->
                     void
             end
     end,
