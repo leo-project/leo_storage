@@ -94,6 +94,7 @@ replicate(Method, Quorum, Nodes, Object, Callback) ->
 
 %% @private
 replicate_1([],_Ref,_From,_AddrId,_Key,_Object,_ReqId) ->
+    true = erlang:garbage_collect(self()),
     ok;
 %% for local-node
 replicate_1([#redundant_node{node = Node,
