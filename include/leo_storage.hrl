@@ -175,7 +175,7 @@
 -record(delete_dir, {
           id = 0        :: integer(),
           node          :: atom(),
-          key = <<>>    :: binary(),
+          keys = []     :: [binary()|undefined],
           timestamp = 0 :: integer()
          }).
 

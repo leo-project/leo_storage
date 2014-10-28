@@ -333,56 +333,72 @@ delete(Object, ReqId) when is_integer(ReqId) ->
 -spec(delete_objects_under_dir(#?OBJECT{}) ->
              ok).
 delete_objects_under_dir(Object) ->
-    Key   = Object#?OBJECT.key,
+    Key = Object#?OBJECT.key,
     KSize = byte_size(Key),
 
     case catch binary:part(Key, (KSize - 1), 1) of
         {'EXIT',_} ->
             void;
-        Bin when Bin == <<"/">> orelse
-                 Bin == <<"\n">> ->
+         Bin ->
+            Targets = case Bin == <<"/">> of
+                          true ->
+                              [ Bin,
+                                undefined];
+                          false when Bin == <<"\n">> ->
+                              [ undefined,
+                                << Key/binary, "\n" >> ];
+                          false ->
+                              [ << Key/binary, "/"  >>,
+                                << Key/binary, "\n" >> ]
+                      end,
+
             %% for remote storage nodes
+            Ref = make_ref(),
             case leo_redundant_manager_api:get_members_by_status(?STATE_RUNNING) of
                 {ok, RetL} ->
                     Nodes = [N||#member{node = N} <- RetL],
-                    Ref = make_ref(),
-                    {ok, Ref} = delete_objects_under_dir(Nodes, Ref, Key),
+                    {ok, Ref} = delete_objects_under_dir(Nodes, Ref, Targets),
                     ok;
                 _ ->
                     void
             end,
             %% for local object storage
-            prefix_search_and_remove_objects(Key);
-        _ ->
-            void
+            delete_objects_under_dir(Ref, Targets)
     end,
     ok.
 
 
 %% @doc Remove objects of the under directory for remote-nodes
 %%
--spec(delete_objects_under_dir(reference(), binary()) ->
-             {ok, reference()}).
-delete_objects_under_dir(Ref, Key) ->
-    _ = prefix_search_and_remove_objects(Key),
-    {ok, Ref}.
-
-
--spec(delete_objects_under_dir([atom()], reference(), binary()) ->
-             {ok, reference()}).
-delete_objects_under_dir([], Ref,_) ->
+-spec(delete_objects_under_dir(Ref, Keys) ->
+             {ok, Ref} when Ref::reference(),
+                            Keys::[binary()|undefined]).
+delete_objects_under_dir(Ref, []) ->
     {ok, Ref};
-delete_objects_under_dir([Node|Rest], Ref, Key) ->
+delete_objects_under_dir(Ref, [undefined|Rest]) ->
+    delete_objects_under_dir(Ref, Rest);
+delete_objects_under_dir(Ref, [Key|Rest]) ->
+    _ = prefix_search_and_remove_objects(Key),
+    delete_objects_under_dir(Ref, Rest).
+
+
+-spec(delete_objects_under_dir(Nodes, Ref, Keys) ->
+             {ok, Ref} when Nodes::[atom()],
+                            Ref::reference(),
+                            Keys::[binary()|undefined]).
+delete_objects_under_dir([], Ref,_Keys) ->
+    {ok, Ref};
+delete_objects_under_dir([Node|Rest], Ref, Keys) ->
     RPCKey = rpc:async_call(Node, ?MODULE,
-                            delete_objects_under_dir, [Ref, Key]),
+                            delete_objects_under_dir, [Ref, Keys]),
     case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
         {value, {ok, Ref}} ->
             ok;
         _Other ->
             %% enqueu a fail message into the mq
-            ok = leo_storage_mq:publish(?QUEUE_TYPE_DEL_DIR, Node, Key)
+            ok = leo_storage_mq:publish(?QUEUE_TYPE_DEL_DIR, Node, Keys)
     end,
-    delete_objects_under_dir(Rest, Ref, Key).
+    delete_objects_under_dir(Rest, Ref, Keys).
 
 
 %%--------------------------------------------------------------------
@@ -524,8 +540,8 @@ replicate(DestNodes, AddrId, Key) ->
 %% API - Prefix Search (Fetch)
 %%--------------------------------------------------------------------
 prefix_search(ParentDir, Marker, MaxKeys) ->
-    Fun = fun(Key, V, Acc0) when length(Acc0) =< MaxKeys ->
-                  Meta0   = binary_to_term(V),
+    Fun = fun(Key, V, Acc) when length(Acc) =< MaxKeys ->
+                  Meta = binary_to_term(V),
                   InRange = case Marker of
                                 [] -> true;
                                 Key -> false;
@@ -533,81 +549,94 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
                                     (Marker == hd(lists:sort([Marker, Key])))
                             end,
 
-                  Token0 = leo_misc:binary_tokens(ParentDir, ?DEF_DELIMITER),
-                  Token1 = leo_misc:binary_tokens(Key,       ?DEF_DELIMITER),
-                  Length0 = erlang:length(Token0),
-                  Length1 = Length0 + 1,
-                  Length2 = erlang:length(Token1),
-
+                  Token_1  = leo_misc:binary_tokens(ParentDir, ?DEF_DELIMITER),
+                  Token_2  = leo_misc:binary_tokens(Key,       ?DEF_DELIMITER),
+                  Length_1 = erlang:length(Token_1),
+                  Length_2 = Length_1 + 1,
+                  Length_3 = erlang:length(Token_2),
                   IsChunkedObj = (nomatch /= binary:match(Key, <<"\n">>)),
 
                   Pos_1 = case binary:match(Key, [ParentDir]) of
                               nomatch ->
                                   -1;
-                              {Pos0, _} ->
-                                  Pos0
+                              {Pos, _} ->
+                                  Pos
                           end,
-                  case (InRange == true andalso Pos_1 == 0) of
+
+                  case (InRange == true
+                        andalso Pos_1 == 0) of
                       true ->
-                          case (Length2 -1) of
-                              Length0 when Meta0#?METADATA.del == ?DEL_FALSE andalso
-                                           IsChunkedObj == false ->
+                          case (Length_3 - 1) of
+                              %%
+                              %%
+                              %%
+                              Length_1 when Meta#?METADATA.del == ?DEL_FALSE
+                                            andalso IsChunkedObj == false ->
                                   KeyLen = byte_size(Key),
 
-                                  case (binary:part(Key, KeyLen - 1, 1) == ?DEF_DELIMITER andalso KeyLen > 1) of
+                                  case (binary:part(Key, KeyLen - 1, 1) == ?DEF_DELIMITER
+                                        andalso KeyLen > 1) of
                                       true  ->
-                                          case lists:keyfind(Key, 2, Acc0) of
+                                          case lists:keyfind(Key, 2, Acc) of
                                               false ->
-                                                  ordsets:add_element(#?METADATA{key      = Key,
-                                                                                 dsize    = -1}, Acc0);
+                                                  ordsets:add_element(#?METADATA{key   = Key,
+                                                                                 dsize = -1}, Acc);
                                               _ ->
-                                                  Acc0
+                                                  Acc
                                           end;
                                       false ->
-                                          case lists:keyfind(Key, 2, Acc0) of
+                                          case lists:keyfind(Key, 2, Acc) of
                                               false ->
-                                                  ordsets:add_element(Meta0#?METADATA{offset    = 0,
-                                                                                      ring_hash = 0}, Acc0);
-                                              #?METADATA{clock = Clock} when Meta0#?METADATA.clock > Clock ->
-                                                  Acc1 = lists:keydelete(Key, 2, Acc0),
-                                                  ordsets:add_element(Meta0#?METADATA{offset    = 0,
-                                                                                      ring_hash = 0}, Acc1);
+                                                  ordsets:add_element(Meta#?METADATA{offset    = 0,
+                                                                                     ring_hash = 0}, Acc);
+                                              #?METADATA{clock = Clock} when Meta#?METADATA.clock > Clock ->
+                                                  Acc_1 = lists:keydelete(Key, 2, Acc),
+                                                  ordsets:add_element(Meta#?METADATA{offset    = 0,
+                                                                                     ring_hash = 0}, Acc_1);
                                               _ ->
-                                                  Acc0
+                                                  Acc
                                           end
                                   end;
-
-                              _Any when Meta0#?METADATA.del == ?DEL_FALSE andalso
-                                           IsChunkedObj == false ->
-                                  {Token2, _} = lists:split(Length1, Token1),
-                                  Dir = lists:foldl(fun(Bin0, <<>>) ->
-                                                            << Bin0/binary, ?DEF_DELIMITER/binary >>;
-                                                       (Bin0, Bin1) ->
-                                                            << Bin1/binary, Bin0/binary, ?DEF_DELIMITER/binary >>
+                              %%
+                              %%
+                              %%
+                              _Any when Meta#?METADATA.del == ?DEL_FALSE
+                                        andalso IsChunkedObj == false ->
+                                  {Token2, _} = lists:split(Length_2, Token_2),
+                                  Dir = lists:foldl(fun(Bin_1, <<>>) ->
+                                                            << Bin_1/binary,
+                                                               ?DEF_DELIMITER/binary >>;
+                                                       (Bin_1, Bin_2) ->
+                                                            << Bin_2/binary,
+                                                               Bin_1/binary,
+                                                               ?DEF_DELIMITER/binary >>
                                                     end, <<>>, Token2),
-                                  case lists:keyfind(Dir, 2, Acc0) of
+                                  case lists:keyfind(Dir, 2, Acc) of
                                       false ->
                                           ordsets:add_element(#?METADATA{key   = Dir,
-                                                                         dsize = -1}, Acc0);
+                                                                         dsize = -1}, Acc);
                                       _ ->
-                                          Acc0
+                                          Acc
                                   end;
                               _ ->
-                                  Acc0
+                                  Acc
                           end;
                       false ->
-                          Acc0
+                          Acc
                   end;
-             (_, _, Acc0) ->
-                  Acc0
+             (_, _, Acc) ->
+                  Acc
           end,
     leo_object_storage_api:fetch_by_key(ParentDir, Fun).
 
 
 %% @doc Retrieve object of deletion from object-storage by key
 %%
--spec(prefix_search_and_remove_objects(binary()) ->
-             {ok, [_]} | not_found).
+-spec(prefix_search_and_remove_objects(ParentDir) ->
+             {ok, [_]} |
+             not_found when ParentDir::undefined|binary()).
+prefix_search_and_remove_objects(undefined) ->
+    not_found;
 prefix_search_and_remove_objects(ParentDir) ->
     Fun = fun(Key, V, Acc) ->
                   Metadata = binary_to_term(V),
