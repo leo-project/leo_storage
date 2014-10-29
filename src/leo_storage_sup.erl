@@ -19,7 +19,7 @@
 %% under the License.
 %%
 %% ---------------------------------------------------------------------
-%% LeoFS - Supervisor.
+%% Supervisor
 %% @doc
 %% @end
 %%======================================================================
@@ -36,6 +36,7 @@
          stop/0]).
 
 -export([init/1]).
+
 
 %%-----------------------------------------------------------------------
 %% External API
@@ -89,6 +90,7 @@ init([]) ->
                             {leo_watchdog_cpu, start_link,
                              [MaxCPULoadAvg,
                               MaxCPUUtil,
+                              'leo_storage_notifier_cpu',
                               CheckInterval
                              ]},
                             permanent,
@@ -108,6 +110,7 @@ init([]) ->
                             {leo_watchdog_io, start_link,
                              [MaxInput,
                               MaxOutput,
+                              'leo_storage_notifier_io',
                               CheckInterval
                              ]},
                             permanent,
@@ -118,6 +121,3 @@ init([]) ->
                           Watchdogs_2
                   end,
     {ok, {_SupFlags = {one_for_one, ?MAX_RESTART, ?MAX_TIME}, Watchdogs_3}}.
-
-
-
