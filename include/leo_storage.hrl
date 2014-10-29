@@ -242,8 +242,11 @@
 
 -define(DEF_WATCH_INTERVAL,   5000).
 -define(DEF_MEM_CAPACITY, 33554432).
--define(DEF_CPU_LOAD_AVG, 100).
--define(DEF_CPU_UTIL,      90).
+-define(DEF_CPU_LOAD_AVG, 100.0).
+-define(DEF_CPU_UTIL,      90.0).
+-define(DEF_INPUT_FOR_INTERVAL,  134217728). %% 128MB
+-define(DEF_OUTPUT_FOR_INTERVAL, 134217728). %% 128MB
+-define(DEF_DISK_UTIL,      90.0).
 
 %% -define(DEF_MEM_CAPACITY, 500000000).
 
@@ -276,6 +279,28 @@
             _ ->
                 ?DEF_CPU_UTIL
         end).
+-define(env_watchdog_max_input_for_interval(),
+        case application:get_env(leo_storage, watchdog_max_input_for_interval) of
+            {ok, EnvWDMaxInputForInterval} ->
+                EnvWDMaxInputForInterval;
+            _ ->
+                ?DEF_INPUT_FOR_INTERVAL
+        end).
+-define(env_watchdog_max_output_for_interval(),
+        case application:get_env(leo_storage, watchdog_max_output_for_interval) of
+            {ok, EnvWDMaxOutputForInterval} ->
+                EnvWDMaxOutputForInterval;
+            _ ->
+                ?DEF_OUTPUT_FOR_INTERVAL
+        end).
+-define(env_watchdog_max_disk_util(),
+        case application:get_env(leo_storage, watchdog_max_disk_util) of
+            {ok, EnvWDMaxDiskUtil} ->
+                EnvWDMaxDiskUtil;
+            _ ->
+                ?DEF_DISK_UTIL
+        end).
+
 
 
 -define(DEF_MQ_NUM_OF_BATCH_PROC, 1).
