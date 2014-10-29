@@ -90,7 +90,7 @@ init([]) ->
                             {leo_watchdog_cpu, start_link,
                              [MaxCPULoadAvg,
                               MaxCPUUtil,
-                              'leo_storage_notifier_cpu',
+                              'leo_storage_notifier',
                               CheckInterval
                              ]},
                             permanent,
@@ -110,7 +110,7 @@ init([]) ->
                             {leo_watchdog_io, start_link,
                              [MaxInput,
                               MaxOutput,
-                              'leo_storage_notifier_io',
+                              'leo_storage_notifier',
                               CheckInterval
                              ]},
                             permanent,

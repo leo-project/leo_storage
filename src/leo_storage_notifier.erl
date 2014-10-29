@@ -22,7 +22,7 @@
 %% @doc
 %% @end
 %%======================================================================
--module(leo_storage_notifier_cpu).
+-module(leo_storage_notifier).
 
 -author('Yosuke Hara').
 
@@ -37,8 +37,14 @@
 %%-----------------------------------------------------------------------
 %% API
 %%-----------------------------------------------------------------------
--spec(notify(Id::atom(), State::[{atom(), any()}]) ->
-             ok | {error, any()}).
-notify(Id, State) ->
-    ?debugVal({Id, State}),
+-spec(notify(Id, State) ->
+             ok | {error, any()} when Id::atom(),
+                                      State::[{atom(), any()}]).
+notify('leo_watchdog_cpu', State) ->
+    ?debugVal(State),
+    ok;
+notify('leo_watchdog_io', State) ->
+    ?debugVal(State),
+    ok;
+notify(_,_) ->
     ok.
