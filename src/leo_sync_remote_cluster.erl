@@ -48,8 +48,8 @@
 start_link() ->
     start_link(gen_id()).
 
--spec(start_link(atom()) ->
-             ok | {error, any()}).
+-spec(start_link(UId) ->
+             ok | {error, any()} when UId::atom()).
 start_link(UId) ->
     BufSize = ?env_mdcr_sync_proc_buf_size(),
     Timeout = ?env_mdcr_sync_proc_timeout(),
@@ -60,16 +60,16 @@ start_link(UId) ->
 
 %% @doc Remove a container from the supervisor
 %%
--spec(stop(atom()) ->
-             ok | {error, any()}).
+-spec(stop(Id) ->
+             ok | {error, any()} when Id::atom()).
 stop(Id) ->
     leo_ordning_reda_api:remove_container(Id).
 
 
 %% @doc Stack a object into the ordning&reda
 %%
--spec(defer_stack(null | #?OBJECT{}) ->
-             ok | {error, any()}).
+-spec(defer_stack(Object) ->
+             ok | {error, any()} when Object::null|#?OBJECT{}).
 defer_stack(#?OBJECT{} = Object) ->
     spawn(fun() ->
                   %% Check whether stack an object or not
@@ -99,21 +99,23 @@ defer_stack(_) ->
 
 %% @doc Stack a object into the ordning&reda
 %%
--spec(stack(#?OBJECT{}) ->
-             ok | {error, any()}).
+-spec(stack(Object) ->
+             ok | {error, any()} when Object::#?OBJECT{}).
 stack(Object) ->
     stack(undefined, Object).
 
--spec(stack(atom(), #?OBJECT{}) ->
-             ok | {error, any()}).
+-spec(stack(ClusterId, Object) ->
+             ok | {error, any()} when ClusterId::atom(),
+                                      Object::#?OBJECT{}).
 stack(ClusterId, Object) ->
     stack_fun(ClusterId, Object).
 
 
 %% Store stacked objects
 %%
--spec(store(atom(), binary()) ->
-             {ok, [#?METADATA{}]} | {error, any()}).
+-spec(store(ClusterId, CompressedObjs) ->
+             {ok, [#?METADATA{}]} | {error, any()} when ClusterId::atom(),
+                                                        CompressedObjs::binary()).
 store(ClusterId, CompressedObjs) ->
     case catch lz4:unpack(CompressedObjs) of
         {ok, OriginalObjects} ->
@@ -130,13 +132,15 @@ store(ClusterId, CompressedObjs) ->
 
 %% Generate a sync-proc of ID
 %%
--spec(gen_id() -> atom()).
+-spec(gen_id() ->
+             atom()).
 gen_id() ->
     gen_id(erlang:phash2(leo_date:clock(),
                          ?env_num_of_mdcr_sync_procs()) + 1).
 
--spec(gen_id(pos_integer() | {'cluster_id', (atom()|string()|pos_integer())}) ->
-             atom()).
+-spec(gen_id(Id) ->
+             atom() when Id::pos_integer() |
+                             {'cluster_id', (atom()|string()|pos_integer())}).
 gen_id(Id) when is_integer(Id) ->
     list_to_atom(lists:append([?DEF_PREFIX_MDCR_SYNC_PROC_1, integer_to_list(Id)]));
 gen_id({cluster_id, ClusterId}) ->
@@ -149,8 +153,9 @@ gen_id({cluster_id, ClusterId}) ->
 
 %% @doc Retrieve cluster members
 %%
--spec(get_cluster_members(atom()) ->
-             {ok, [#mdc_replication_info{}]} | {error, any()}).
+-spec(get_cluster_members(ClusterId) ->
+             {ok, [#mdc_replication_info{}]} |
+             {error, any()} when ClusterId::atom()).
 get_cluster_members(undefined) ->
     case leo_mdcr_tbl_cluster_info:all() of
         {ok, ClusterInfoList} ->
@@ -203,8 +208,8 @@ get_cluster_members_2([#?CLUSTER_INFO{cluster_id = ClusterId}|Rest],
 %% @doc Compare a local-metadata with a remote-metadata
 %%      If it's inconsistent, the metadata is put into the queue
 %%
--spec(compare_metadata(list(#?METADATA{})) ->
-             ok).
+-spec(compare_metadata(ListOfMetadata) ->
+             ok when ListOfMetadata::[#?METADATA{}]).
 compare_metadata([]) ->
     ok;
 compare_metadata([#?METADATA{cluster_id = ClusterId,

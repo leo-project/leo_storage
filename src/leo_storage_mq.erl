@@ -56,14 +56,17 @@
 %%--------------------------------------------------------------------
 %% @doc create queues and launch mq-servers.
 %%
--spec(start(string(), list(tuple())) ->
-             ok | {error, any()}).
-start(RootPath0, Intervals) ->
-    start(leo_storage_sup, Intervals, RootPath0).
+-spec(start(RootPath, Intervals) ->
+             ok | {error, any()} when RootPath::binary(),
+                                      Intervals::list(tuple())).
+start(RootPath, Intervals) ->
+    start(leo_storage_sup, Intervals, RootPath).
 
--spec(start(pid(), list(tuple()), string()) ->
-             ok | {error, any()}).
-start(RefSup, Intervals, RootPath0) ->
+-spec(start(RefSup, Intervals, RootPath) ->
+             ok | {error, any()} when RefSup::pid(),
+                                      Intervals::[tuple()],
+                                      RootPath::binary()).
+start(RefSup, Intervals, RootPath) ->
     %% launch mq-sup under storage-sup
     RefMqSup =
         case whereis(leo_mq_sup) of
@@ -78,10 +81,10 @@ start(RefSup, Intervals, RootPath0) ->
         end,
 
     %% launch queue-processes
-    RootPath1 =
-        case (string:len(RootPath0) == string:rstr(RootPath0, ?SLASH)) of
-            true  -> RootPath0;
-            false -> RootPath0 ++ ?SLASH
+    RootPath_1 =
+        case (string:len(RootPath) == string:rstr(RootPath, ?SLASH)) of
+            true  -> RootPath;
+            false -> RootPath ++ ?SLASH
         end,
 
     ?TBL_REBALANCE_COUNTER = ets:new(?TBL_REBALANCE_COUNTER,
@@ -126,7 +129,7 @@ start(RefSup, Intervals, RootPath0) ->
               get_queue(?PROP_MQ_DEL_DIR_2, Intervals),
               get_queue(?PROP_MQ_DEL_DIR_3, Intervals)
              }
-            ], RefMqSup, RootPath1).
+            ], RefMqSup, RootPath_1).
 
 %% @private
 start_1([],_,_) ->

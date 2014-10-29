@@ -242,6 +242,9 @@
 
 -define(DEF_WATCH_INTERVAL,   5000).
 -define(DEF_MEM_CAPACITY, 33554432).
+-define(DEF_CPU_LOAD_AVG, 100).
+-define(DEF_CPU_UTIL,      90).
+
 %% -define(DEF_MEM_CAPACITY, 500000000).
 
 -define(env_watchdog_check_interval(),
@@ -259,6 +262,21 @@
             _ ->
                 ?DEF_MEM_CAPACITY
         end).
+-define(env_watchdog_max_cpu_load_avg(),
+        case application:get_env(leo_storage, watchdog_max_cpu_load_avg) of
+            {ok, EnvWDMaxCpuLoadAvg} ->
+                EnvWDMaxCpuLoadAvg;
+            _ ->
+                ?DEF_CPU_LOAD_AVG
+        end).
+-define(env_watchdog_max_cpu_util(),
+        case application:get_env(leo_storage, watchdog_max_cpu_util) of
+            {ok, EnvWDMaxCpuUtil} ->
+                EnvWDMaxCpuUtil;
+            _ ->
+                ?DEF_CPU_UTIL
+        end).
+
 
 -define(DEF_MQ_NUM_OF_BATCH_PROC, 1).
 -define(DEF_MQ_INTERVAL_MAX, 32).

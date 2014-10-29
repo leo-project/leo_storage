@@ -40,14 +40,14 @@
 
 -record(req_params, {
           pid     :: pid(),
-          addr_id :: integer(),
+          addr_id :: non_neg_integer(),
           key     :: binary(),
           object  :: #?OBJECT{},
           req_id  :: integer()}).
 
 -record(state, {
           method       :: atom(),
-          addr_id      :: integer(),
+          addr_id      :: non_neg_integer(),
           key          :: binary(),
           num_of_nodes :: pos_integer(),
           callback     :: function(),
@@ -61,8 +61,12 @@
 %%--------------------------------------------------------------------
 %% @doc Replicate an object to local-node and remote-nodes.
 %%
--spec(replicate(put|delete, pos_integer(), list(), #?OBJECT{}, function()) ->
-             any()).
+-spec(replicate(Method, Quorum, Nodes, Object, Callback) ->
+             any() when Method::put|delete,
+                        Quorum::pos_integer(),
+                        Nodes::list(),
+                        Object:: #?OBJECT{},
+                        Callback::function()).
 replicate(Method, Quorum, Nodes, Object, Callback) ->
     AddrId = Object#?OBJECT.addr_id,
     Key    = Object#?OBJECT.key,
@@ -192,7 +196,9 @@ replicate_fun(Ref, #req_params{pid     = Pid,
 
 %% @doc Input a message into the queue.
 %%
--spec(enqueue(error_msg_type(), integer(), binary()) ->
-             ok | void).
+-spec(enqueue(Type, AddrId, Key) ->
+             ok when Type::error_msg_type(),
+                     AddrId::non_neg_integer(),
+                     Key::binary()).
 enqueue(?ERR_TYPE_REPLICATE_DATA = Type,  AddrId, Key) ->
     leo_storage_mq:publish(?QUEUE_TYPE_PER_OBJECT, AddrId, Key, Type).

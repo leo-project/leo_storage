@@ -40,8 +40,10 @@
 %%--------------------------------------------------------------------
 %% @doc Add a container into the supervisor
 %%
--spec(start_link(atom(), integer(), integer()) ->
-             ok | {error, any()}).
+-spec(start_link(Node, BufSize, Timeout) ->
+             ok | {error, any()} when Node::atom(),
+                                      BufSize::integer(),
+                                      Timeout::integer()).
 start_link(Node, BufSize, Timeout) ->
     leo_ordning_reda_api:add_container(Node, [{module,      ?MODULE},
                                               {buffer_size, BufSize},
@@ -49,24 +51,29 @@ start_link(Node, BufSize, Timeout) ->
 
 %% @doc Remove a container from the supervisor
 %%
--spec(stop(atom()) ->
-             ok | {error, any()}).
+-spec(stop(Node) ->
+             ok | {error, any()} when Node::atom()).
 stop(Node) ->
     leo_ordning_reda_api:remove_container(Node).
 
 
 %% @doc Stack a object into the ordning&reda
 %%
--spec(stack(list(atom()), integer(), string(), tuple(), binary()) ->
-             ok | {error, any()}).
+-spec(stack(DestNodes, AddrId, Key, Metadata, Object) ->
+             ok |
+             {error, any()} when DestNodes::[atom()],
+                                 AddrId::integer(),
+                                 Key::binary(),
+                                 Metadata::#metadata{},
+                                 Object::#?OBJECT{}).
 stack(DestNodes, AddrId, Key, Metadata, Object) ->
     stack_fun(DestNodes, AddrId, Key, Metadata, Object, []).
 
 
 %% Store stacked objects
 %%
--spec(store(binary()) ->
-             ok | {error, any()}).
+-spec(store(CompressedObjs) ->
+             ok | {error, any()} when CompressedObjs::binary()).
 store(CompressedObjs) ->
     case catch lz4:unpack(CompressedObjs) of
         {ok, OriginalObjects} ->
@@ -151,8 +158,8 @@ stack_fun([Node|Rest] = NodeList, AddrId, Key, Metadata, Object, E) ->
 
 %% @doc Retrieve the node state from redundant-manager and ordning-reda
 %%
--spec(node_state(atom()) ->
-             ok | {error, inactive}).
+-spec(node_state(Node) ->
+             ok | {error, inactive} when Node::atom()).
 node_state(Node) ->
     case leo_redundant_manager_api:get_member_by_node(Node) of
         {ok, #member{state = ?STATE_RUNNING}} ->
@@ -164,8 +171,8 @@ node_state(Node) ->
 
 %% @doc Slicing objects and Store objects
 %%
--spec(slice_and_replicate(binary()) ->
-             ok | {error, any()}).
+-spec(slice_and_replicate(Objects) ->
+             ok | {error, any()} when Objects::binary()).
 slice_and_replicate(Objects) ->
     slice_and_replicate(Objects, []).
 
@@ -204,7 +211,7 @@ slice_and_replicate(Objects, Errors) ->
             end
     end.
 
-
+%% @private
 slice(Objects) ->
     try
         %% Retrieve metadata

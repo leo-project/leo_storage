@@ -62,14 +62,29 @@ stop() ->
 %% @end
 %% @private
 init([]) ->
-    WD_MaxMemCapacity = ?env_watchdog_max_mem_capacity(),
-    WD_CheckInterval  = ?env_watchdog_check_interval(),
+    MaxMemCapacity = ?env_watchdog_max_mem_capacity(),
+    MaxCPULoadAvg  = ?env_watchdog_max_cpu_load_avg(),
+    MaxCPUUtil     = ?env_watchdog_max_cpu_util(),
+    CheckInterval  = ?env_watchdog_check_interval(),
 
     WatchDogs = [{leo_watchdog_rex,
                   {leo_watchdog_rex, start_link,
-                   [WD_MaxMemCapacity, WD_CheckInterval]},
+                   [MaxMemCapacity,
+                    CheckInterval
+                   ]},
                   permanent,
                   ?SHUTDOWN_WAITING_TIME,
                   worker,
-                  [leo_watchdog_rex]}],
+                  [leo_watchdog_rex]},
+                 {leo_watchdog_cpu,
+                  {leo_watchdog_cpu, start_link,
+                   [MaxCPULoadAvg,
+                    MaxCPUUtil,
+                    CheckInterval
+                   ]},
+                  permanent,
+                  ?SHUTDOWN_WAITING_TIME,
+                  worker,
+                  [leo_watchdog_cpu]}
+                ],
     {ok, {_SupFlags = {one_for_one, ?MAX_RESTART, ?MAX_TIME}, WatchDogs}}.

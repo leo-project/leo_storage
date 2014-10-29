@@ -52,8 +52,8 @@
 %%--------------------------------------------------------------------
 %% @doc register into the manager's monitor.
 %%
--spec(register_in_monitor(first | again) ->
-             ok | {error, not_found}).
+-spec(register_in_monitor(RequestedTimes) ->
+             ok | {error, not_found} when RequestedTimes::first|again).
 register_in_monitor(RequestedTimes) ->
     case whereis(leo_storage_sup) of
         undefined ->
@@ -62,8 +62,9 @@ register_in_monitor(RequestedTimes) ->
             register_in_monitor(Pid, RequestedTimes)
     end.
 
--spec(register_in_monitor(pid(), first | again) ->
-             ok | {error, any()}).
+-spec(register_in_monitor(Pid, RequestedTimes) ->
+             ok | {error, any()} when Pid::pid(),
+                                      RequestedTimes::first|again).
 register_in_monitor(Pid, RequestedTimes) ->
     Fun = fun(Node0, Res) ->
                   Node1 = case is_atom(Node0) of
@@ -121,16 +122,17 @@ get_routing_table_chksum() ->
 
 %% @doc update manager nodes
 %%
--spec(update_manager_nodes(list()) ->
-             ok).
+-spec(update_manager_nodes(Managers) ->
+             ok when Managers::[atom()]).
 update_manager_nodes(Managers) ->
     ?update_env_manager_nodes(leo_storage, Managers),
     leo_membership_cluster_local:update_manager_nodes(Managers).
 
 %% @doc start storage-server.
 %%
--spec(start(list()) ->
-             {ok, {atom(), integer()}} | {error, {atom(), any()}}).
+-spec(start(MembersCur) ->
+             {ok, {atom(), integer()}} |
+             {error, {atom(), any()}} when MembersCur::[#member{}]).
 start(MembersCur) ->
     start(MembersCur, undefined).
 start([], _) ->
@@ -191,8 +193,8 @@ stop() ->
 
 %% @doc attach a cluster.
 %%
--spec(attach(#?SYSTEM_CONF{}) ->
-             ok | {error, any()}).
+-spec(attach(SystemConf) ->
+             ok | {error, any()} when SystemConf::#?SYSTEM_CONF{}).
 attach(SystemConf) ->
     ok = leo_redundant_manager_api:set_options(
            [{cluster_id, SystemConf#?SYSTEM_CONF.cluster_id},
@@ -211,28 +213,34 @@ attach(SystemConf) ->
 %%--------------------------------------------------------------------
 %% @doc synchronize a data.
 %%
--spec(synchronize(atom()) ->
-             ok | {error, any()}).
+-spec(synchronize(Node) ->
+             ok | {error, any()} when Node::atom()).
 synchronize(Node) ->
     leo_storage_mq:publish(?QUEUE_TYPE_RECOVERY_NODE, Node).
 
--spec(synchronize([atom()]|binary(), #?METADATA{}|atom()) ->
-             ok | not_found | {error, any()}).
+-spec(synchronize(SyncTarget, SyncVal) ->
+             ok |
+             not_found |
+             {error, any()} when SyncTarget::[atom()]|binary(),
+                                 SyncVal::#?METADATA{}|atom()).
 synchronize(InconsistentNodes, #?METADATA{addr_id = AddrId,
                                           key     = Key}) ->
     leo_storage_handler_object:replicate(InconsistentNodes, AddrId, Key);
 
 synchronize(Key, ErrorType) ->
-    {ok, #redundancies{vnode_id_to = VNodeId}} = leo_redundant_manager_api:get_redundancies_by_key(Key),
+    {ok, #redundancies{vnode_id_to = VNodeId}} =
+        leo_redundant_manager_api:get_redundancies_by_key(Key),
     leo_storage_mq:publish(?QUEUE_TYPE_PER_OBJECT, VNodeId, Key, ErrorType).
 
 
 %%--------------------------------------------------------------------
 %% API for Admin and System#4
 %%--------------------------------------------------------------------
-%% @doc
-%%
--spec(compact(atom(), 'all' | integer(), integer()) -> ok | {error, any()}).
+%% @doc Execute data-compaction
+-spec(compact(start, NumOfTargets, MaxProc) ->
+             ok |
+             {error, any()} when NumOfTargets::'all' | integer(),
+                                 MaxProc:: integer()).
 compact(start, NumOfTargets, MaxProc) ->
     case leo_redundant_manager_api:get_member_by_node(erlang:node()) of
         {ok, #member{state = ?STATE_RUNNING}} ->
@@ -266,6 +274,9 @@ compact(start, NumOfTargets, MaxProc) ->
             {error,'not_running'}
     end.
 
+-spec(compact(Method) ->
+             ok |
+             {error, any()} when Method::atom()).
 compact(Method) ->
     case leo_redundant_manager_api:get_member_by_node(erlang:node()) of
         {ok, #member{state = ?STATE_RUNNING}} ->
@@ -370,15 +381,18 @@ get_node_status() ->
 %% @doc Do rebalance which means "Objects are copied to the specified node".
 %% @param RebalanceInfo: [{VNodeId, DestNode}]
 %%
--spec(rebalance([tuple()]) ->
-             ok).
+-spec(rebalance(RebalanceList) ->
+             ok when RebalanceList::[tuple()]).
 rebalance(RebalanceList) ->
     catch leo_redundant_manager_api:force_sync_workers(),
     rebalance_1(RebalanceList).
 
 
--spec(rebalance(list(), list(#member{}), list(#member{})) ->
-             ok | {error, any()}).
+-spec(rebalance(RebalanceList, MembersCur, MembersPrev) ->
+             ok |
+             {error, any()} when RebalanceList::[tuple()],
+                                 MembersCur::[#member{}],
+                                 MembersPrev::[#member{}]).
 rebalance(RebalanceList, MembersCur, MembersPrev) ->
     case leo_redundant_manager_api:synchronize(
            ?SYNC_TARGET_BOTH, [{?VER_CUR,  MembersCur},
@@ -402,8 +416,9 @@ rebalance_1([{VNodeId, Node}|T]) ->
 
 
 %% recover a remote cluster's object
--spec(recover_remote(integer(), binary()) ->
-             ok | {error, any()}).
+-spec(recover_remote(AddrId, Key) ->
+             ok | {error, any()} when AddrId::integer(),
+                                      Key::binary()).
 recover_remote(AddrId, Key) ->
     case leo_object_storage_api:get({AddrId, Key}) of
         {ok, _Metadata, Object} ->
@@ -416,7 +431,9 @@ recover_remote(AddrId, Key) ->
 
 %% @doc
 %% Get the disk usage(Total, Free) on leo_storage in KByte
--spec(get_disk_usage() -> {ok, {Total::pos_integer(), Free::pos_integer()}}).
+-spec(get_disk_usage() ->
+             {ok, {Total, Free}} when Total::pos_integer(),
+                                      Free::pos_integer()).
 get_disk_usage() ->
     PathList = case ?env_storage_device() of
                    [] -> [];
@@ -442,4 +459,3 @@ get_disk_usage([Path|Rest], Dict) ->
         Error ->
             {error, Error}
     end.
-
