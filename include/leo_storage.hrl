@@ -258,12 +258,28 @@
                 ?DEF_WATCH_INTERVAL
         end).
 
+-define(env_watchdog_rex_enabled(),
+        case application:get_env(leo_storage, watchdog_rex_enabled) of
+            {ok, EnvWDRexEnabled} ->
+                EnvWDRexEnabled;
+            _ ->
+                true
+        end).
 -define(env_watchdog_max_mem_capacity(),
         case application:get_env(leo_storage, watchdog_max_mem_capacity) of
             {ok, EnvWDMaxMemCapacity} ->
                 EnvWDMaxMemCapacity;
             _ ->
                 ?DEF_MEM_CAPACITY
+        end).
+
+
+-define(env_watchdog_cpu_enabled(),
+        case application:get_env(leo_storage, watchdog_cpu_enabled) of
+            {ok, EnvWDCpuEnabled} ->
+                EnvWDCpuEnabled;
+            _ ->
+                true
         end).
 -define(env_watchdog_max_cpu_load_avg(),
         case application:get_env(leo_storage, watchdog_max_cpu_load_avg) of
@@ -278,6 +294,15 @@
                 EnvWDMaxCpuUtil;
             _ ->
                 ?DEF_CPU_UTIL
+        end).
+
+
+-define(env_watchdog_io_enabled(),
+        case application:get_env(leo_storage, watchdog_io_enabled) of
+            {ok, EnvWDIOEnabled} ->
+                EnvWDIOEnabled;
+            _ ->
+                true
         end).
 -define(env_watchdog_max_input_for_interval(),
         case application:get_env(leo_storage, watchdog_max_input_for_interval) of

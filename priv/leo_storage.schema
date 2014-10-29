@@ -209,18 +209,36 @@
   {default, 5000}
  ]}.
 
-%% @doc Maximum memory capacity for binary - defalut:32MB
+%% @doc REX - Is enabled
 {mapping,
- "watchdog.max_mem_capacity",
+ "watchdog.rex.is_enabled",
+ "leo_storage.watchdog_rex_enabled",
+ [
+  {datatype, atom},
+  {default, true}
+ ]}.
+
+%% @doc REX - Maximum memory capacity for binary - defalut:32MB
+{mapping,
+ "watchdog.rex.max_mem_capacity",
  "leo_storage.watchdog_max_mem_capacity",
  [
   {datatype, integer},
   {default, 33554432}
  ]}.
 
+%% @doc CPU - Is enabled
+{mapping,
+ "watchdog.cpu.is_enabled",
+ "leo_storage.watchdog_cpu_enabled",
+ [
+  {datatype, atom},
+  {default, true}
+ ]}.
+
 %% @doc Maximum CPU load avg for 1min/5min - default:100 = "1.0"
 {mapping,
- "watchdog.max_cpu_load_avg",
+ "watchdog.cpu.max_cpu_load_avg",
  "leo_storage.watchdog_max_cpu_load_avg",
  [
   {datatype, integer},
@@ -229,16 +247,25 @@
 
 %% @doc Maximum CPU load util - default:100 = "100%"
 {mapping,
- "watchdog.max_cpu_util",
+ "watchdog.cpu.max_cpu_util",
  "leo_storage.watchdog_max_cpu_util",
  [
   {datatype, integer},
   {default, 100}
  ]}.
 
+%% @doc CPU - Is enabled
+{mapping,
+ "watchdog.io.is_enabled",
+ "leo_storage.watchdog_io_enabled",
+ [
+  {datatype, atom},
+  {default, true}
+ ]}.
+
 %% Maximum input size for interval - default:128MB
 {mapping,
- "watchdog.max_input_for_interval",
+ "watchdog.io.max_input_for_interval",
  "leo_storage.watchdog_max_input_for_interval",
  [
   {datatype, integer},
@@ -247,7 +274,7 @@
 
 %% Maximum output size for interval - default:128MB
 {mapping,
- "watchdog.max_output_for_interval",
+ "watchdog.io.max_output_for_interval",
  "leo_storage.watchdog_max_output_for_interval",
  [
   {datatype, integer},

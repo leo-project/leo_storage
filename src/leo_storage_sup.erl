@@ -62,77 +62,62 @@ stop() ->
 %% @end
 %% @private
 init([]) ->
-    MaxMemCapacity = ?env_watchdog_max_mem_capacity(),
-    MaxCPULoadAvg  = ?env_watchdog_max_cpu_load_avg(),
-    MaxCPUUtil     = ?env_watchdog_max_cpu_util(),
-    MaxInput       = ?env_watchdog_max_input_for_interval(),
-    MaxOutput      = ?env_watchdog_max_output_for_interval(),
-    _MaxDiskUtil   = ?env_watchdog_max_disk_util(),
-    CheckInterval  = ?env_watchdog_check_interval(),
-    _TargetPaths = lists:map(
-                     fun(Item) ->
-                             {ok, Curr} = file:get_cwd(),
-                             Path = leo_misc:get_value(path, Item),
-                             Path1 = case Path of
-                                         "/"   ++ _Rest -> Path;
-                                         "../" ++ _Rest -> Path;
-                                         "./"  ++  Rest -> Curr ++ "/" ++ Rest;
-                                         _              -> Curr ++ "/" ++ Path
-                                     end,
-                             Path2 = case (string:len(Path1) == string:rstr(Path1, "/")) of
-                                         true  -> Path1;
-                                         false -> Path1 ++ "/"
-                                     end,
-                             Path2
-                     end, ?env_storage_device()),
+    %% Watchdog for rex's binary usage
+    CheckInterval = ?env_watchdog_check_interval(),
+    Watchdogs_1 = case ?env_watchdog_rex_enabled() of
+                      true ->
+                          MaxMemCapacity = ?env_watchdog_max_mem_capacity(),
+                          [{leo_watchdog_rex,
+                            {leo_watchdog_rex, start_link,
+                             [MaxMemCapacity,
+                              CheckInterval
+                             ]},
+                            permanent,
+                            ?SHUTDOWN_WAITING_TIME,
+                            worker,
+                            [leo_watchdog_rex]}];
+                      false ->
+                          []
+                  end,
 
-    WatchDogs = [
-                 %% Watchdog for rex's binary usage
-                 {leo_watchdog_rex,
-                  {leo_watchdog_rex, start_link,
-                   [MaxMemCapacity,
-                    CheckInterval
-                   ]},
-                  permanent,
-                  ?SHUTDOWN_WAITING_TIME,
-                  worker,
-                  [leo_watchdog_rex]},
+    %% Wachdog for CPU
+    Watchdogs_2 = case ?env_watchdog_cpu_enabled() of
+                      true ->
+                          MaxCPULoadAvg = ?env_watchdog_max_cpu_load_avg(),
+                          MaxCPUUtil    = ?env_watchdog_max_cpu_util(),
+                          [{leo_watchdog_cpu,
+                            {leo_watchdog_cpu, start_link,
+                             [MaxCPULoadAvg,
+                              MaxCPUUtil,
+                              CheckInterval
+                             ]},
+                            permanent,
+                            ?SHUTDOWN_WAITING_TIME,
+                            worker,
+                            [leo_watchdog_cpu]} | Watchdogs_1];
+                      false ->
+                          Watchdogs_1
+                  end,
 
-                 %% Wachdog for CPU
-                 {leo_watchdog_cpu,
-                  {leo_watchdog_cpu, start_link,
-                   [MaxCPULoadAvg,
-                    MaxCPUUtil,
-                    CheckInterval
-                   ]},
-                  permanent,
-                  ?SHUTDOWN_WAITING_TIME,
-                  worker,
-                  [leo_watchdog_cpu]},
+    %% Wachdog for IO
+    Watchdogs_3 = case ?env_watchdog_io_enabled() of
+                      true ->
+                          MaxInput  = ?env_watchdog_max_input_for_interval(),
+                          MaxOutput = ?env_watchdog_max_output_for_interval(),
+                          [{leo_watchdog_io,
+                            {leo_watchdog_io, start_link,
+                             [MaxInput,
+                              MaxOutput,
+                              CheckInterval
+                             ]},
+                            permanent,
+                            ?SHUTDOWN_WAITING_TIME,
+                            worker,
+                            [leo_watchdog_io]} | Watchdogs_2 ];
+                      false ->
+                          Watchdogs_2
+                  end,
+    {ok, {_SupFlags = {one_for_one, ?MAX_RESTART, ?MAX_TIME}, Watchdogs_3}}.
 
-                 %% Wachdog for IO
-                 {leo_watchdog_io,
-                  {leo_watchdog_io, start_link,
-                   [MaxInput,
-                    MaxOutput,
-                    CheckInterval
-                   ]},
-                  permanent,
-                  ?SHUTDOWN_WAITING_TIME,
-                  worker,
-                  [leo_watchdog_io]}
 
-                 %% @PENDING
-                 %% Wachdog for Disk
-                 %% {leo_watchdog_disk,
-                 %%  {leo_watchdog_disk, start_link,
-                 %%   [TargetPaths,
-                 %%    MaxDiskUtil,
-                 %%    CheckInterval
-                 %%   ]},
-                 %%  permanent,
-                 %%  ?SHUTDOWN_WAITING_TIME,
-                 %%  worker,
-                 %%  [leo_watchdog_disk]}
-                ],
-    {ok, {_SupFlags = {one_for_one, ?MAX_RESTART, ?MAX_TIME}, WatchDogs}}.
+
