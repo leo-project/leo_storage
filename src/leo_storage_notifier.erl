@@ -28,24 +28,32 @@
 
 -include("leo_storage.hrl").
 -include_lib("leo_logger/include/leo_logger.hrl").
+-include_lib("leo_watchdog/include/leo_watchdog.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 -behaviour(leo_notify_behaviour).
 
--export([notify/2]).
+-export([notify/3]).
 
 
 %%-----------------------------------------------------------------------
 %% API
 %%-----------------------------------------------------------------------
--spec(notify(Id, State) ->
+-spec(notify(Id, Level, State) ->
              ok | {error, any()} when Id::atom(),
+                                      Level::watchdog_level(),
                                       State::[{atom(), any()}]).
-notify('leo_watchdog_cpu', State) ->
+notify('leo_watchdog_cpu', ?WD_LEVEL_ERROR, State) ->
+    ?error("notify/2", "state:~p", [State]),
+    ok;
+notify('leo_watchdog_cpu', ?WD_LEVEL_WARN, State) ->
     ?warn("notify/2", "state:~p", [State]),
     ok;
-notify('leo_watchdog_io', State) ->
+notify('leo_watchdog_io', ?WD_LEVEL_ERROR, State) ->
+    ?error("notify/2", "state:~p", [State]),
+    ok;
+notify('leo_watchdog_io', ?WD_LEVEL_WARN, State) ->
     ?warn("notify/2", "state:~p", [State]),
     ok;
-notify(_,_) ->
+notify(_,_,_) ->
     ok.
