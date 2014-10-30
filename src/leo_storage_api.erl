@@ -32,6 +32,7 @@
 -include_lib("leo_logger/include/leo_logger.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
+-include_lib("leo_watchdog/include/leo_watchdog.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 %% API
@@ -374,6 +375,17 @@ get_node_status() ->
           {dirs,          Directories},
           {avs,           ?env_storage_device()},
           {ring_checksum, RingHashes},
+          {watchdog,
+           [{cpu_enabled,    ?env_watchdog_cpu_enabled(leo_storage)},
+            {io_enabled,     ?env_watchdog_io_enabled(leo_storage)},
+            {watch_interval, ?env_watchdog_check_interval(leo_storage)},
+            {rex_max_mem_capacity, ?env_watchdog_max_mem_capacity(leo_storage)},
+            {cpu_max_cpu_load_avg, ?env_watchdog_max_cpu_load_avg(leo_storage)},
+            {cpu_max_cpu_util,     ?env_watchdog_max_cpu_util(leo_storage)},
+            {io_max_input_for_interval,  ?env_watchdog_max_input_for_interval(leo_storage)},
+            {io_max_output_for_interval, ?env_watchdog_max_output_for_interval(leo_storage)}
+           ]
+          },
           {statistics,    Statistics}
          ]}.
 
