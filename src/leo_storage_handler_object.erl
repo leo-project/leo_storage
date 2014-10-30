@@ -168,13 +168,21 @@ get_fun(AddrId, Key) ->
                                  StartPos::integer(),
                                  EndPos::integer()).
 get_fun(AddrId, Key, StartPos, EndPos) ->
-    case leo_object_storage_api:get({AddrId, Key}, StartPos, EndPos) of
-        {ok, Metadata, Object} ->
-            {ok, Metadata, Object};
-        not_found = Cause ->
-            {error, Cause};
-        {error, Cause} ->
-            {error, Cause}
+    %% Check state of the node
+    case leo_watchdog_state:find_not_safe_items() of
+        not_found ->
+            %% Retrieve the object
+            case leo_object_storage_api:get(
+                   {AddrId, Key}, StartPos, EndPos) of
+                {ok, Metadata, Object} ->
+                    {ok, Metadata, Object};
+                not_found = Cause ->
+                    {error, Cause};
+                {error, Cause} ->
+                    {error, Cause}
+            end;
+        _ ->
+            {error, unavailable}
     end.
 
 
@@ -262,12 +270,20 @@ put(Ref, From, Object, ReqId) ->
                                               Key::binary(),
                                               Object::#?OBJECT{}).
 put_fun(Ref, AddrId, Key, Object) ->
-    case leo_object_storage_api:put({AddrId, Key}, Object) of
-        {ok, ETag} ->
-            {ok, Ref, {etag, ETag}};
-        {error, Cause} ->
-            {error, Ref, Cause}
+    %% Check state of the node
+    case leo_watchdog_state:find_not_safe_items() of
+        not_found ->
+            %% Put the object to the local object-storage
+            case leo_object_storage_api:put({AddrId, Key}, Object) of
+                {ok, ETag} ->
+                    {ok, Ref, {etag, ETag}};
+                {error, Cause} ->
+                    {error, Ref, Cause}
+            end;
+        _ ->
+            {error, Ref, unavailable}
     end.
+
 
 
 %% Remove chunked objects from the object-storage
@@ -855,22 +871,28 @@ read_and_repair_1(_,_,_) ->
 -spec(replicate_fun(replication(), request_verb(), integer(), #?OBJECT{}) ->
              ok | {error, any()}).
 replicate_fun(?REP_LOCAL, Method, AddrId, Object) ->
-    case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
-        {ok, #redundancies{nodes     = Redundancies,
-                           w         = WriteQuorum,
-                           d         = DeleteQuorum,
-                           ring_hash = RingHash}} ->
+    %% Check state of the node
+    case leo_watchdog_state:find_not_safe_items() of
+        not_found ->
+            case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
+                {ok, #redundancies{nodes     = Redundancies,
+                                   w         = WriteQuorum,
+                                   d         = DeleteQuorum,
+                                   ring_hash = RingHash}} ->
 
-            Quorum = case Method of
-                         ?CMD_PUT    -> WriteQuorum;
-                         ?CMD_DELETE -> DeleteQuorum
-                     end,
+                    Quorum = case Method of
+                                 ?CMD_PUT    -> WriteQuorum;
+                                 ?CMD_DELETE -> DeleteQuorum
+                             end,
 
-            leo_storage_replicator:replicate(
-              Method, Quorum, Redundancies, Object#?OBJECT{ring_hash = RingHash},
-              replicate_callback(Object));
-        {error,_Cause} ->
-            {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
+                    leo_storage_replicator:replicate(
+                      Method, Quorum, Redundancies, Object#?OBJECT{ring_hash = RingHash},
+                      replicate_callback(Object));
+                {error,_Cause} ->
+                    {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
+            end;
+        _ ->
+            {error, unavailable}
     end.
 
 %% @doc obj-replication request from remote node.
