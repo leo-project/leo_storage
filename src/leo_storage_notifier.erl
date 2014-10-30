@@ -27,6 +27,7 @@
 -author('Yosuke Hara').
 
 -include("leo_storage.hrl").
+-include_lib("leo_logger/include/leo_logger.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 -behaviour(leo_notify_behaviour).
@@ -41,10 +42,10 @@
              ok | {error, any()} when Id::atom(),
                                       State::[{atom(), any()}]).
 notify('leo_watchdog_cpu', State) ->
-    ?debugVal(State),
+    ?warn("notify/2", "state:~p", [State]),
     ok;
 notify('leo_watchdog_io', State) ->
-    ?debugVal(State),
+    ?warn("notify/2", "state:~p", [State]),
     ok;
 notify(_,_) ->
     ok.

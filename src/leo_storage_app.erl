@@ -43,6 +43,7 @@
 %% Application behaviour callbacks
 %%----------------------------------------------------------------------
 start(_Type, _Args) ->
+    application:start(leo_watchdog),
     Res = leo_storage_sup:start_link(),
     after_proc(Res).
 
@@ -108,6 +109,40 @@ after_proc({ok, Pid}) ->
 
     %% Launch leo-rpc
     ok = leo_rpc:start(),
+
+    %% Launch leo-watchdog
+    %% Watchdog for rex's binary usage
+    WatchInterval = ?env_watchdog_check_interval(),
+    case ?env_watchdog_rex_enabled() of
+        true ->
+            MaxMemCapacity = ?env_watchdog_max_mem_capacity(),
+            leo_watchdog_sup:start_child(
+              rex, [MaxMemCapacity], WatchInterval);
+        false ->
+            void
+    end,
+
+    %% Wachdog for CPU
+    case ?env_watchdog_cpu_enabled() of
+        true ->
+            MaxCPULoadAvg = ?env_watchdog_max_cpu_load_avg(),
+            MaxCPUUtil    = ?env_watchdog_max_cpu_util(),
+            leo_watchdog_sup:start_child(
+              cpu, [MaxCPULoadAvg, MaxCPUUtil, leo_storage_notifier], WatchInterval);
+        false ->
+            void
+    end,
+
+    %% Wachdog for IO
+    case ?env_watchdog_io_enabled() of
+        true ->
+            MaxInput  = ?env_watchdog_max_input_for_interval(),
+            MaxOutput = ?env_watchdog_max_output_for_interval(),
+            leo_watchdog_sup:start_child(
+              io, [MaxInput, MaxOutput, leo_storage_notifier], WatchInterval);
+        false ->
+            void
+    end,
     {ok, Pid};
 
 after_proc(Error) ->
@@ -131,15 +166,17 @@ launch_logger() ->
 %% @doc Launch Object-Storage
 %%
 launch_object_storage(RefSup) ->
-    ObjStoageInfo = case ?env_storage_device() of
-                        [] -> [];
-                        Devices ->
-                            lists:map(fun(Item) ->
-                                              Containers = leo_misc:get_value(num_of_containers, Item),
-                                              Path       = leo_misc:get_value(path,              Item),
-                                              {Containers, Path}
-                                      end, Devices)
-                    end,
+    ObjStoageInfo =
+        case ?env_storage_device() of
+            [] -> [];
+            Devices ->
+                lists:map(
+                  fun(Item) ->
+                          Containers = leo_misc:get_value(num_of_containers, Item),
+                          Path       = leo_misc:get_value(path,              Item),
+                          {Containers, Path}
+                  end, Devices)
+        end,
 
     ChildSpec = {leo_object_storage_sup,
                  {leo_object_storage_sup, start_link, [ObjStoageInfo]},
