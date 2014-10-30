@@ -34,6 +34,7 @@
 -include_lib("leo_logger/include/leo_logger.hrl").
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("leo_statistics/include/leo_statistics.hrl").
+-include_lib("leo_watchdog/include/leo_watchdog.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 %% Application and Supervisor callbacks
@@ -112,10 +113,10 @@ after_proc({ok, Pid}) ->
 
     %% Launch leo-watchdog
     %% Watchdog for rex's binary usage
-    WatchInterval = ?env_watchdog_check_interval(),
-    case ?env_watchdog_rex_enabled() of
+    WatchInterval = ?env_watchdog_check_interval(leo_storage),
+    case ?env_watchdog_rex_enabled(leo_storage) of
         true ->
-            MaxMemCapacity = ?env_watchdog_max_mem_capacity(),
+            MaxMemCapacity = ?env_watchdog_max_mem_capacity(leo_storage),
             leo_watchdog_sup:start_child(
               rex, [MaxMemCapacity], WatchInterval);
         false ->
@@ -123,10 +124,10 @@ after_proc({ok, Pid}) ->
     end,
 
     %% Wachdog for CPU
-    case ?env_watchdog_cpu_enabled() of
+    case ?env_watchdog_cpu_enabled(leo_storage) of
         true ->
-            MaxCPULoadAvg = ?env_watchdog_max_cpu_load_avg(),
-            MaxCPUUtil    = ?env_watchdog_max_cpu_util(),
+            MaxCPULoadAvg = ?env_watchdog_max_cpu_load_avg(leo_storage),
+            MaxCPUUtil    = ?env_watchdog_max_cpu_util(leo_storage),
             leo_watchdog_sup:start_child(
               cpu, [MaxCPULoadAvg, MaxCPUUtil, leo_storage_notifier], WatchInterval);
         false ->
@@ -134,10 +135,10 @@ after_proc({ok, Pid}) ->
     end,
 
     %% Wachdog for IO
-    case ?env_watchdog_io_enabled() of
+    case ?env_watchdog_io_enabled(leo_storage) of
         true ->
-            MaxInput  = ?env_watchdog_max_input_for_interval(),
-            MaxOutput = ?env_watchdog_max_output_for_interval(),
+            MaxInput  = ?env_watchdog_max_input_for_interval(leo_storage),
+            MaxOutput = ?env_watchdog_max_output_for_interval(leo_storage),
             leo_watchdog_sup:start_child(
               io, [MaxInput, MaxOutput, leo_storage_notifier], WatchInterval);
         false ->
