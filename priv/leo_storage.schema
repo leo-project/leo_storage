@@ -236,13 +236,13 @@
   {default, false}
  ]}.
 
-%% @doc Maximum CPU load avg for 1min/5min - default:100 = "1.0"
+%% @doc Maximum CPU load avg for 1min/5min - default:2
 {mapping,
  "watchdog.cpu.max_cpu_load_avg",
  "leo_storage.watchdog_max_cpu_load_avg",
  [
   {datatype, integer},
-  {default, 100}
+  {default, 2}
  ]}.
 
 %% @doc Maximum CPU load util - default:100 = "100%"
