@@ -218,7 +218,7 @@
   {default, true}
  ]}.
 
-%% @doc REX - Maximum memory capacity for binary - defalut:32MB
+%% @doc Maximum memory capacity of binary for rex(rpc) - default:32MB
 {mapping,
  "watchdog.rex.max_mem_capacity",
  "leo_storage.watchdog_max_mem_capacity",
@@ -263,22 +263,40 @@
   {default, false}
  ]}.
 
-%% Maximum input size for interval - default:128MB
+%% @doc Maximum input size for interval - default:128MB
 {mapping,
- "watchdog.io.max_input_for_interval",
- "leo_storage.watchdog_max_input_for_interval",
+ "watchdog.io.max_input_per_sec",
+ "leo_storage.watchdog_max_input_per_sec",
  [
   {datatype, integer},
   {default, 134217728}
  ]}.
 
-%% Maximum output size for interval - default:128MB
+%% @doc Maximum output size for interval - default:128MB
 {mapping,
- "watchdog.io.max_output_for_interval",
- "leo_storage.watchdog_max_output_for_interval",
+ "watchdog.io.max_output_per_sec",
+ "leo_storage.watchdog_max_output_per_sec",
  [
   {datatype, integer},
   {default, 134217728}
+ ]}.
+
+%% @doc Disk - Is enabled
+{mapping,
+ "watchdog.disk.is_enabled",
+ "leo_storage.watchdog_disk_enabled",
+ [
+  {datatype, atom},
+  {default, false}
+ ]}.
+
+%% @doc Maximum disk util - default:80%
+{mapping,
+ "watchdog.io.max_disk_util",
+ "leo_storage.watchdog_max_disk_util",
+ [
+  {datatype, integer},
+  {default, 80}
  ]}.
 
 

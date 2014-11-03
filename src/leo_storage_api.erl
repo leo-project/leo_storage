@@ -382,8 +382,8 @@ get_node_status() ->
             {rex_max_mem_capacity, ?env_watchdog_max_mem_capacity(leo_storage)},
             {cpu_max_cpu_load_avg, ?env_watchdog_max_cpu_load_avg(leo_storage)},
             {cpu_max_cpu_util,     ?env_watchdog_max_cpu_util(leo_storage)},
-            {io_max_input_for_interval,  ?env_watchdog_max_input_for_interval(leo_storage)},
-            {io_max_output_for_interval, ?env_watchdog_max_output_for_interval(leo_storage)}
+            {io_max_input_for_interval,  ?env_watchdog_max_input_per_sec(leo_storage)},
+            {io_max_output_for_interval, ?env_watchdog_max_output_per_sec(leo_storage)}
            ]
           },
           {statistics,    Statistics}

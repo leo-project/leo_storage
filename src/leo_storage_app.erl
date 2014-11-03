@@ -137,10 +137,20 @@ after_proc({ok, Pid}) ->
     %% Wachdog for IO
     case ?env_watchdog_io_enabled(leo_storage) of
         true ->
-            MaxInput  = ?env_watchdog_max_input_for_interval(leo_storage),
-            MaxOutput = ?env_watchdog_max_output_for_interval(leo_storage),
+            MaxInput  = ?env_watchdog_max_input_per_sec(leo_storage),
+            MaxOutput = ?env_watchdog_max_output_per_sec(leo_storage),
             leo_watchdog_sup:start_child(
               io, [MaxInput, MaxOutput, leo_storage_notifier], WatchInterval);
+        false ->
+            void
+    end,
+
+    %% Wachdog for Disk
+    case ?env_watchdog_disk_enabled(leo_storage) of
+        true ->
+            MaxDiskUtil = ?env_watchdog_max_disk_util(leo_storage),
+            leo_watchdog_sup:start_child(
+              disk, [MaxDiskUtil, leo_storage_notifier], WatchInterval);
         false ->
             void
     end,
