@@ -200,15 +200,6 @@
 %% --------------------------------------------------------------------
 %% STORAGE - Watchdog
 %% --------------------------------------------------------------------
-%% @doc Check inteval (ms) - defalut:5sec
-{mapping,
- "watchdog.check_interval",
- "leo_storage.watchdog_check_interval",
- [
-  {datatype, integer},
-  {default, 5000}
- ]}.
-
 %% @doc REX - Is enabled
 {mapping,
  "watchdog.rex.is_enabled",
@@ -217,6 +208,16 @@
   {datatype, atom},
   {default, true}
  ]}.
+
+%% @doc Check inteval (ms) - defalut:5sec
+{mapping,
+ "watchdog.rex.interval",
+ "leo_storage.watchdog_rex_interval",
+ [
+  {datatype, integer},
+  {default, 5000}
+ ]}.
+
 
 %% @doc Maximum memory capacity of binary for rex(rpc) - default:32MB
 {mapping,
@@ -234,6 +235,15 @@
  [
   {datatype, atom},
   {default, false}
+ ]}.
+
+%% @doc Check inteval (ms) - defalut:5sec
+{mapping,
+ "watchdog.cpu.interval",
+ "leo_storage.watchdog_cpu_interval",
+ [
+  {datatype, integer},
+  {default, 5000}
  ]}.
 
 %% @doc Maximum CPU load avg for 1min/5min - default:2
@@ -254,13 +264,22 @@
   {default, 100}
  ]}.
 
-%% @doc CPU - Is enabled
+%% @doc IO - Is enabled
 {mapping,
  "watchdog.io.is_enabled",
  "leo_storage.watchdog_io_enabled",
  [
   {datatype, atom},
   {default, false}
+ ]}.
+
+%% @doc Check inteval (ms) - defalut:5sec
+{mapping,
+ "watchdog.io.interval",
+ "leo_storage.watchdog_io_interval",
+ [
+  {datatype, integer},
+  {default, 5000}
  ]}.
 
 %% @doc Maximum input size for interval - default:128MB
@@ -290,6 +309,15 @@
   {default, false}
  ]}.
 
+%% @doc Check inteval (ms) - defalut:5sec
+{mapping,
+ "watchdog.disk.interval",
+ "leo_storage.watchdog_disk_interval",
+ [
+  {datatype, integer},
+  {default, 5000}
+ ]}.
+
 %% @doc Maximum disk util - default:80%
 {mapping,
  "watchdog.io.max_disk_util",
@@ -298,7 +326,6 @@
   {datatype, integer},
   {default, 80}
  ]}.
-
 
 %% @doc Maximum io wait - default:90%
 {mapping,
