@@ -264,13 +264,13 @@
   {default, false}
  ]}.
 
-%% @doc Check inteval (ms) - defalut:5sec
+%% @doc Check inteval (ms) - defalut:1sec
 {mapping,
  "watchdog.io.interval",
  "leo_storage.watchdog_io_interval",
  [
   {datatype, integer},
-  {default, 5000}
+  {default, 1000}
  ]}.
 
 %% @doc Maximum input size for interval - default:128MB
@@ -300,13 +300,13 @@
   {default, false}
  ]}.
 
-%% @doc Check inteval (ms) - defalut:5sec
+%% @doc Check inteval (ms) - defalut:1sec
 {mapping,
  "watchdog.disk.interval",
  "leo_storage.watchdog_disk_interval",
  [
   {datatype, integer},
-  {default, 5000}
+  {default, 1000}
  ]}.
 
 %% @doc Maximum disk util - default:80%
