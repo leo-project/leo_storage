@@ -113,42 +113,37 @@ after_proc({ok, Pid}) ->
 
     %% Launch leo-watchdog
     %% Watchdog for rex's binary usage
-    case ?env_watchdog_rex_enabled(leo_storage) of
-        true ->
-            MaxMemCapacity = ?env_watchdog_max_mem_capacity(leo_storage),
-            IntervalRex = ?env_watchdog_rex_interval(leo_storage),
-            leo_watchdog_sup:start_child(
-              rex, [MaxMemCapacity], IntervalRex);
-        false ->
-            void
-    end,
+    MaxMemCapacity = ?env_wd_threshold_mem_capacity(leo_storage),
+    IntervalRex = ?env_wd_rex_interval(leo_storage),
+    leo_watchdog_sup:start_child(
+      rex, [MaxMemCapacity], IntervalRex),
 
     %% Wachdog for CPU
-    case ?env_watchdog_cpu_enabled(leo_storage) of
+    case ?env_wd_cpu_enabled(leo_storage) of
         true ->
-            MaxCPULoadAvg = ?env_watchdog_max_cpu_load_avg(leo_storage),
-            MaxCPUUtil    = ?env_watchdog_max_cpu_util(leo_storage),
-            IntervalCpu   = ?env_watchdog_cpu_interval(leo_storage),
+            MaxCPULoadAvg = ?env_wd_threshold_cpu_load_avg(leo_storage),
+            MaxCPUUtil    = ?env_wd_threshold_cpu_util(leo_storage),
+            IntervalCpu   = ?env_wd_cpu_interval(leo_storage),
             leo_watchdog_sup:start_child(
-              cpu, [MaxCPULoadAvg, MaxCPUUtil, leo_storage_notifier], IntervalCpu);
+              cpu, [MaxCPULoadAvg, MaxCPUUtil], IntervalCpu);
         false ->
             void
     end,
 
     %% Wachdog for IO
-    case ?env_watchdog_io_enabled(leo_storage) of
+    case ?env_wd_io_enabled(leo_storage) of
         true ->
-            MaxInput    = ?env_watchdog_max_input_per_sec(leo_storage),
-            MaxOutput   = ?env_watchdog_max_output_per_sec(leo_storage),
-            IntervalIo  = ?env_watchdog_io_interval(leo_storage),
+            MaxInput    = ?env_wd_threshold_input_per_sec(leo_storage),
+            MaxOutput   = ?env_wd_threshold_output_per_sec(leo_storage),
+            IntervalIo  = ?env_wd_io_interval(leo_storage),
             leo_watchdog_sup:start_child(
-              io, [MaxInput, MaxOutput, leo_storage_notifier], IntervalIo);
+              io, [MaxInput, MaxOutput], IntervalIo);
         false ->
             void
     end,
 
     %% Wachdog for Disk
-    case ?env_watchdog_disk_enabled(leo_storage) of
+    case ?env_wd_disk_enabled(leo_storage) of
         true ->
             TargetPaths = lists:map(
                             fun(Item) ->
@@ -166,12 +161,11 @@ after_proc({ok, Pid}) ->
                                             end,
                                     Path2
                             end, ?env_storage_device()),
-            MaxDiskUtil  = ?env_watchdog_max_disk_util(leo_storage),
-            MaxIoWait    = ?env_watchdog_max_io_wait(leo_storage),
-            IntervalDisk = ?env_watchdog_disk_interval(leo_storage),
+            MaxDiskUtil  = ?env_wd_threshold_disk_util(leo_storage),
+            MaxIoWait    = ?env_wd_threshold_io_wait(leo_storage),
+            IntervalDisk = ?env_wd_disk_interval(leo_storage),
             leo_watchdog_sup:start_child(
-              disk, [TargetPaths, MaxDiskUtil, MaxIoWait,
-                     leo_storage_notifier], IntervalDisk);
+              disk, [TargetPaths, MaxDiskUtil, MaxIoWait], IntervalDisk);
         false ->
             void
     end,
