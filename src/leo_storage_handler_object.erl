@@ -181,7 +181,8 @@ get_fun(AddrId, Key, StartPos, EndPos) ->
                 {error, Cause} ->
                     {error, Cause}
             end;
-        _ ->
+        {ok, ErrorItems} ->
+            ?debug("get_fun/4", "error-items:~p", [ErrorItems]),
             {error, unavailable}
     end.
 
@@ -280,7 +281,8 @@ put_fun(Ref, AddrId, Key, Object) ->
                 {error, Cause} ->
                     {error, Ref, Cause}
             end;
-        _ ->
+        {ok, ErrorItems} ->
+            ?debug("put_fun/4", "error-items:~p", [ErrorItems]),
             {error, Ref, unavailable}
     end.
 
@@ -891,7 +893,8 @@ replicate_fun(?REP_LOCAL, Method, AddrId, Object) ->
                 {error,_Cause} ->
                     {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
             end;
-        _ ->
+        {ok, ErrorItems}->
+            ?debug("replicate_fun/4", "error-items:~p", [ErrorItems]),
             {error, unavailable}
     end.
 
