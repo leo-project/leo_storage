@@ -300,6 +300,16 @@
  ]}.
 
 
+%% @doc Maximum io wait - default:90%
+{mapping,
+ "watchdog.disk.max_io_wait = 90",
+ "leo_storage.watchdog_max_io_wait",
+ [
+  {datatype, integer},
+  {default, 90}
+ ]}.
+
+
 %% --------------------------------------------------------------------
 %% STORAGE - MQ
 %% --------------------------------------------------------------------

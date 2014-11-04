@@ -149,8 +149,9 @@ after_proc({ok, Pid}) ->
     case ?env_watchdog_disk_enabled(leo_storage) of
         true ->
             MaxDiskUtil = ?env_watchdog_max_disk_util(leo_storage),
+            MaxIoWait   = ?env_watchdog_max_io_wait(leo_storage),
             leo_watchdog_sup:start_child(
-              disk, [MaxDiskUtil, leo_storage_notifier], WatchInterval);
+              disk, [MaxDiskUtil, MaxIoWait, leo_storage_notifier], WatchInterval);
         false ->
             void
     end,

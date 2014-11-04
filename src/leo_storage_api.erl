@@ -385,7 +385,8 @@ get_node_status() ->
             {cpu_max_cpu_util,     ?env_watchdog_max_cpu_util(leo_storage)},
             {io_max_input_per_sec,  ?env_watchdog_max_input_per_sec(leo_storage)},
             {io_max_output_per_sec, ?env_watchdog_max_output_per_sec(leo_storage)},
-            {disk_max_disk_util,    ?env_watchdog_max_disk_util(leo_storage)}
+            {disk_max_disk_util,    ?env_watchdog_max_disk_util(leo_storage)},
+            {disk_max_io_wait,      ?env_watchdog_max_io_wait(leo_storage)}
            ]
           },
           {statistics,    Statistics}
