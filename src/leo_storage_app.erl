@@ -150,11 +150,28 @@ after_proc({ok, Pid}) ->
     %% Wachdog for Disk
     case ?env_watchdog_disk_enabled(leo_storage) of
         true ->
+            TargetPaths = lists:map(
+                            fun(Item) ->
+                                    {ok, Curr} = file:get_cwd(),
+                                    Path = leo_misc:get_value(path, Item),
+                                    Path1 = case Path of
+                                                "/"   ++ _Rest -> Path;
+                                                "../" ++ _Rest -> Path;
+                                                "./"  ++  Rest -> Curr ++ "/" ++ Rest;
+                                                _              -> Curr ++ "/" ++ Path
+                                            end,
+                                    Path2 = case (string:len(Path1) == string:rstr(Path1, "/")) of
+                                                true  -> Path1;
+                                                false -> Path1 ++ "/"
+                                            end,
+                                    Path2
+                            end, ?env_storage_device()),
             MaxDiskUtil  = ?env_watchdog_max_disk_util(leo_storage),
             MaxIoWait    = ?env_watchdog_max_io_wait(leo_storage),
             IntervalDisk = ?env_watchdog_disk_interval(leo_storage),
             leo_watchdog_sup:start_child(
-              disk, [MaxDiskUtil, MaxIoWait, leo_storage_notifier], IntervalDisk);
+              disk, [TargetPaths, MaxDiskUtil, MaxIoWait,
+                     leo_storage_notifier], IntervalDisk);
         false ->
             void
     end,
