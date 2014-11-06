@@ -319,7 +319,7 @@
 
 %% @doc Maximum io wait - default:90%
 {mapping,
- "watchdog.disk.max_io_wait = 90",
+ "watchdog.disk.max_io_wait",
  "leo_storage.wd_threshold_io_wait",
  [
   {datatype, integer},
