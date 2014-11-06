@@ -388,8 +388,8 @@ get_node_status() ->
             {cpu_threshold_cpu_util,     ?env_wd_threshold_cpu_util(leo_storage)},
             {io_threshold_input_per_sec,  ?env_wd_threshold_input_per_sec(leo_storage)},
             {io_threshold_output_per_sec, ?env_wd_threshold_output_per_sec(leo_storage)},
-            {disk_threshold_disk_util,    ?env_wd_threshold_disk_util(leo_storage)},
-            {disk_threshold_io_wait,      ?env_wd_threshold_io_wait(leo_storage)}
+            {disk_threshold_dusk_use,     ?env_wd_threshold_disk_use(leo_storage)},
+            {disk_threshold_disk_util,    ?env_wd_threshold_disk_util(leo_storage)}
            ]
           },
           {statistics,    Statistics}

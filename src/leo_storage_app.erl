@@ -161,11 +161,11 @@ after_proc({ok, Pid}) ->
                                             end,
                                     Path2
                             end, ?env_storage_device()),
+            MaxDiskUse   = ?env_wd_threshold_disk_use(leo_storage),
             MaxDiskUtil  = ?env_wd_threshold_disk_util(leo_storage),
-            MaxIoWait    = ?env_wd_threshold_io_wait(leo_storage),
             IntervalDisk = ?env_wd_disk_interval(leo_storage),
             leo_watchdog_sup:start_child(
-              disk, [TargetPaths, MaxDiskUtil, MaxIoWait], IntervalDisk);
+              disk, [TargetPaths, MaxDiskUse, MaxDiskUtil], IntervalDisk);
         false ->
             void
     end,
