@@ -308,22 +308,22 @@
   {default, 1}
  ]}.
 
-%% @doc Maximum disk use% - default:80%
+%% @doc Maximum disk use% - default:85%
 {mapping,
  "watchdog.disk.threshold_disk_use",
  "leo_storage.wd_threshold_disk_use",
  [
   {datatype, integer},
-  {default, 80}
+  {default, 85}
  ]}.
 
-%% @doc Maximum io wait - default:90%
+%% @doc Maximum io wait - default:95%
 {mapping,
  "watchdog.disk.threshold_disk_util",
  "leo_storage.wd_threshold_disk_util",
  [
   {datatype, integer},
-  {default, 90}
+  {default, 95}
  ]}.
 
 
