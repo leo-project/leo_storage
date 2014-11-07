@@ -30,6 +30,7 @@
 -include("leo_storage.hrl").
 -include_lib("leo_commons/include/leo_commons.hrl").
 -include_lib("leo_logger/include/leo_logger.hrl").
+-include_lib("leo_mq/include/leo_mq.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("leo_watchdog/include/leo_watchdog.hrl").
@@ -37,13 +38,20 @@
 
 %% API
 -export([register_in_monitor/1, register_in_monitor/2,
-         get_disk_usage/0,
          get_routing_table_chksum/0,
          update_manager_nodes/1, recover_remote/2,
-         start/1, start/2, start/3, stop/0, attach/1, synchronize/1, synchronize/2,
+         start/1, start/2, start/3, stop/0, attach/1,
+         synchronize/1, synchronize/2,
          compact/1, compact/3, diagnose_data/0,
          get_node_status/0,
-         rebalance/1, rebalance/3]).
+         rebalance/1, rebalance/3,
+         get_disk_usage/0
+        ]).
+-export([get_mq_consumer_state/0,
+         get_mq_consumer_state/1,
+         mq_suspend/1,
+         mq_resume/1
+        ]).
 
 %% interval to notify to leo_manager
 -define(CHECK_INTERVAL, 3000).
@@ -128,6 +136,22 @@ get_routing_table_chksum() ->
 update_manager_nodes(Managers) ->
     ?update_env_manager_nodes(leo_storage, Managers),
     leo_membership_cluster_local:update_manager_nodes(Managers).
+
+
+%% recover a remote cluster's object
+-spec(recover_remote(AddrId, Key) ->
+             ok | {error, any()} when AddrId::integer(),
+                                      Key::binary()).
+recover_remote(AddrId, Key) ->
+    case leo_object_storage_api:get({AddrId, Key}) of
+        {ok, _Metadata, Object} ->
+            leo_sync_remote_cluster:defer_stack(Object);
+        not_found = Cause ->
+            {error, Cause};
+        {error, Cause} ->
+            {error, Cause}
+    end.
+
 
 %% @doc start storage-server.
 %%
@@ -305,8 +329,7 @@ diagnose_data() ->
 %%--------------------------------------------------------------------
 %% Maintenance
 %%--------------------------------------------------------------------
-%%
-%%
+%% @doc Retrieve the current node status
 -spec(get_node_status() ->
              {ok, [tuple()]}).
 get_node_status() ->
@@ -398,7 +421,6 @@ get_node_status() ->
 
 %% @doc Do rebalance which means "Objects are copied to the specified node".
 %% @param RebalanceInfo: [{VNodeId, DestNode}]
-%%
 -spec(rebalance(RebalanceList) ->
              ok when RebalanceList::[tuple()]).
 rebalance(RebalanceList) ->
@@ -422,7 +444,6 @@ rebalance(RebalanceList, MembersCur, MembersPrev) ->
             Error
     end.
 
-
 %% @private
 -spec(rebalance_1([tuple()]) ->
              ok).
@@ -433,22 +454,7 @@ rebalance_1([{VNodeId, Node}|T]) ->
     rebalance_1(T).
 
 
-%% recover a remote cluster's object
--spec(recover_remote(AddrId, Key) ->
-             ok | {error, any()} when AddrId::integer(),
-                                      Key::binary()).
-recover_remote(AddrId, Key) ->
-    case leo_object_storage_api:get({AddrId, Key}) of
-        {ok, _Metadata, Object} ->
-            leo_sync_remote_cluster:defer_stack(Object);
-        not_found = Cause ->
-            {error, Cause};
-        {error, Cause} ->
-            {error, Cause}
-    end.
-
-%% @doc
-%% Get the disk usage(Total, Free) on leo_storage in KByte
+%% @doc Get the disk usage(Total, Free) on leo_storage in KByte
 -spec(get_disk_usage() ->
              {ok, {Total, Free}} when Total::pos_integer(),
                                       Free::pos_integer()).
@@ -477,3 +483,69 @@ get_disk_usage([Path|Rest], Dict) ->
         Error ->
             {error, Error}
     end.
+
+
+%%--------------------------------------------------------------------
+%% MQ-related
+%%--------------------------------------------------------------------
+%% @doc Retrieve mq-consumer state
+-spec(get_mq_consumer_state() ->
+             {ok, StateList} | not_found when StateList::{MQId, State, MsgCount},
+                                              MQId::atom(),
+                                              State::atom(),
+                                              MsgCount::non_neg_integer()).
+get_mq_consumer_state() ->
+    case leo_mq_api:consumers() of
+        {ok,  []} ->
+            not_found;
+        {ok, StateList} ->
+            StateList_1 =
+                lists:flatten(
+                  lists:map(
+                    fun(#mq_state{id = MQId} = S) ->
+                            case leo_misc:get_value(MQId, ?mq_id_and_alias, []) of
+                                [] ->
+                                    [];
+                                Alias ->
+                                    S#mq_state{alias = Alias}
+                            end
+                    end, StateList)),
+            {ok, StateList_1}
+    end.
+
+-spec(get_mq_consumer_state(MQId) ->
+             {ok, StateList} | not_found when MQId::atom(),
+                                              StateList::{Id, State, MsgCount},
+                                              Id::atom(),
+                                              State::atom(),
+                                              MsgCount::non_neg_integer()).
+get_mq_consumer_state(MQId) ->
+    case leo_mq_api:consumers() of
+        {ok,  []} ->
+            not_found;
+        {ok, Consumers} ->
+            get_mq_consumer_state_1(Consumers, MQId)
+    end.
+
+%% @private
+get_mq_consumer_state_1([],_MQId) ->
+    not_found;
+get_mq_consumer_state_1([#mq_state{id = MQId} = State|_], MQId) ->
+    Alias = leo_misc:get_value(MQId, ?mq_id_and_alias, []),
+    {ok, State#mq_state{alias = Alias}};
+get_mq_consumer_state_1([_|Rest], MQId) ->
+    get_mq_consumer_state_1(Rest, MQId).
+
+
+%% @doc Suspend comsumption msg of the mq-consumer
+-spec(mq_suspend(MQId) ->
+             ok when MQId::atom()).
+mq_suspend(MQId) ->
+    leo_mq_api:suspend(MQId).
+
+
+%% @doc Resume comsumption msg of the mq-consumer
+-spec(mq_resume(MQId) ->
+             ok when MQId::atom()).
+mq_resume(MQId) ->
+    leo_mq_api:resume(MQId).

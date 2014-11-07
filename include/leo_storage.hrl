@@ -463,3 +463,12 @@
                       ?QUEUE_ID_COMP_META_WITH_DC |
                       ?QUEUE_ID_DEL_DIR
                       ).
+
+-define(mq_id_and_alias, [{leo_delete_dir_queue,        "delete dir"},
+                          {leo_comp_meta_with_dc_queue, "comparison metadata w/dc"},
+                          {leo_sync_obj_with_dc_queue,  "syncronization w/dc"},
+                          {leo_recovery_node_queue,     "recovery node"},
+                          {leo_async_deletion_queue,    "async deletion of obj"},
+                          {leo_rebalance_queue,         "rebalance"},
+                          {leo_sync_by_vnode_id_queue,  "sync obj by vnode-id"},
+                          {leo_per_object_queue,        "recover obj"}]).
