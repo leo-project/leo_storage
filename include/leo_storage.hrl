@@ -464,11 +464,11 @@
                       ?QUEUE_ID_DEL_DIR
                       ).
 
--define(mq_id_and_alias, [{leo_delete_dir_queue,        "delete dir"},
-                          {leo_comp_meta_with_dc_queue, "comparison metadata w/dc"},
-                          {leo_sync_obj_with_dc_queue,  "syncronization w/dc"},
-                          {leo_recovery_node_queue,     "recovery node"},
-                          {leo_async_deletion_queue,    "async deletion of obj"},
-                          {leo_rebalance_queue,         "rebalance"},
-                          {leo_sync_by_vnode_id_queue,  "sync obj by vnode-id"},
-                          {leo_per_object_queue,        "recover obj"}]).
+-define(mq_id_and_alias, [{leo_delete_dir_queue,        "delete directories"},
+                          {leo_comp_meta_with_dc_queue, "compare metadata w/remote-node"},
+                          {leo_sync_obj_with_dc_queue,  "sync objs w/remote-node"},
+                          {leo_recovery_node_queue,     "recovery objs of node"},
+                          {leo_async_deletion_queue,    "async deletion of objs"},
+                          {leo_rebalance_queue,         "rebalance objs"},
+                          {leo_sync_by_vnode_id_queue,  "sync objs by vnode-id"},
+                          {leo_per_object_queue,        "recover inconsistent objs"}]).
