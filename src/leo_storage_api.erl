@@ -506,8 +506,8 @@ get_mq_consumer_state() ->
                             case leo_misc:get_value(MQId, ?mq_id_and_alias, []) of
                                 [] ->
                                     [];
-                                Alias ->
-                                    S#mq_state{alias = Alias}
+                                Desc ->
+                                    S#mq_state{desc = Desc}
                             end
                     end, StateList)),
             {ok, StateList_1}
@@ -531,8 +531,8 @@ get_mq_consumer_state(MQId) ->
 get_mq_consumer_state_1([],_MQId) ->
     not_found;
 get_mq_consumer_state_1([#mq_state{id = MQId} = State|_], MQId) ->
-    Alias = leo_misc:get_value(MQId, ?mq_id_and_alias, []),
-    {ok, State#mq_state{alias = Alias}};
+    Desc = leo_misc:get_value(MQId, ?mq_id_and_alias, []),
+    {ok, State#mq_state{desc = Desc}};
 get_mq_consumer_state_1([_|Rest], MQId) ->
     get_mq_consumer_state_1(Rest, MQId).
 
