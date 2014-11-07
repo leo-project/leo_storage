@@ -210,7 +210,7 @@
  ]}.
 
 
-%% @doc Maximum memory capacity of binary for rex(rpc) - default:32MB
+%% @doc Threshold memory capacity of binary for rex(rpc) - default:32MB
 {mapping,
  "watchdog.rex.threshold_mem_capacity",
  "leo_storage.wd_threshold_mem_capacity",
@@ -237,15 +237,15 @@
   {default, 5}
  ]}.
 
-%% @doc Maximum CPU load avg for 1min/5min - default:2
+%% @doc Threshold CPU load avg for 1min/5min - default:2.0
 {mapping,
  "watchdog.cpu.threshold_cpu_load_avg",
  "leo_storage.wd_threshold_cpu_load_avg",
  [
-  {default, 1.5}
+  {default, "2.0"}
  ]}.
 
-%% @doc Maximum CPU load util - default:100 = "100%"
+%% @doc Threshold CPU load util - default:100 = "100%"
 {mapping,
  "watchdog.cpu.threshold_cpu_util",
  "leo_storage.wd_threshold_cpu_util",
@@ -272,7 +272,7 @@
   {default, 1}
  ]}.
 
-%% @doc Maximum input size for interval - default:128MB
+%% @doc Threshold input size for interval - default:128MB
 {mapping,
  "watchdog.io.threshold_input_per_sec",
  "leo_storage.wd_threshold_input_per_sec",
@@ -281,7 +281,7 @@
   {default, 134217728}
  ]}.
 
-%% @doc Maximum output size for interval - default:128MB
+%% @doc Threshold output size for interval - default:128MB
 {mapping,
  "watchdog.io.threshold_output_per_sec",
  "leo_storage.wd_threshold_output_per_sec",
@@ -308,7 +308,7 @@
   {default, 1}
  ]}.
 
-%% @doc Maximum disk use% - default:85%
+%% @doc Threshold disk use% - default:85%
 {mapping,
  "watchdog.disk.threshold_disk_use",
  "leo_storage.wd_threshold_disk_use",
@@ -317,13 +317,13 @@
   {default, 85}
  ]}.
 
-%% @doc Maximum io wait - default:95%
+%% @doc Threshold disk util% - default:100%
 {mapping,
  "watchdog.disk.threshold_disk_util",
  "leo_storage.wd_threshold_disk_util",
  [
   {datatype, integer},
-  {default, 95}
+  {default, 100}
  ]}.
 
 
