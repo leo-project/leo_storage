@@ -43,10 +43,10 @@
 %% API
 %%--------------------------------------------------------------------
 %% @doc Compare local-metadatas with remote-metadatas
--spec(get_metadatas([tuple()]) ->
-             {ok, [#?METADATA{}]}).
-get_metadatas(ListAddrAndKey) ->
-    get_metadatas_1(ListAddrAndKey, []).
+-spec(get_metadatas(ListOfAddrAndKey) ->
+             {ok, [#?METADATA{}]} when ListOfAddrAndKey::[tuple()]).
+get_metadatas(ListOfAddrAndKey) ->
+    get_metadatas_1(ListOfAddrAndKey, []).
 
 %% @private
 get_metadatas_1([], Acc) ->
@@ -65,8 +65,8 @@ get_metadatas_1([AddrAndKey|Rest], Acc) ->
 
 %% @doc Synchronize object with remote-cluster(s)
 %%
--spec(force_sync(atom()) ->
-             ok).
+-spec(force_sync(ClusterId) ->
+             ok when ClusterId::atom()).
 force_sync(ClusterId) when is_atom(ClusterId) ->
     case leo_mdcr_tbl_cluster_stat:get(ClusterId) of
         {ok, #?CLUSTER_STAT{state = ?STATE_RUNNING}} ->
@@ -86,8 +86,9 @@ force_sync(_) ->
 %%      then compare with metadatas of remote-storage
 %%      if found an inconsist metadata then fix it
 %%
--spec(send_addrid_and_key_to_remote(atom(), list(tuple())) ->
-             ok).
+-spec(send_addrid_and_key_to_remote(ClusterId, ListOfAddrIdAndKey) ->
+             ok when ClusterId::atom(),
+                     ListOfAddrIdAndKey::[tuple()]).
 send_addrid_and_key_to_remote(ClusterId, ListAddrIdAndKey) ->
     case leo_sync_remote_cluster:get_cluster_members(ClusterId) of
         {ok, ListMembers} ->
@@ -106,7 +107,7 @@ send_addrid_and_key_to_remote_1([#mdc_replication_info{
                                     cluster_members = Members}|Rest],
                                 ClusterId, ListAddrIdAndKey) ->
     {ok, RetL} = send_addrid_and_key_to_remote_2(
-                   Members, ClusterId, ListAddrIdAndKey, 0),   
+                   Members, ClusterId, ListAddrIdAndKey, 0),
     ok = leo_sync_remote_cluster:compare_metadata(RetL),
     send_addrid_and_key_to_remote_1(Rest, ClusterId, ListAddrIdAndKey).
 
@@ -167,8 +168,8 @@ handle_call(ClusterId) ->
 %%--------------------------------------------------------------------
 %% @doc synchronize objects with a remote-cluster
 %% @private
--spec(send_metadata(atom()) ->
-             ok).
+-spec(send_metadata(ClusterId) ->
+             ok when ClusterId::atom()).
 send_metadata(ClusterId) ->
     Callback = send_addrid_and_key_callback(ClusterId),
     case catch leo_object_storage_api:fetch_by_addr_id(0, Callback) of

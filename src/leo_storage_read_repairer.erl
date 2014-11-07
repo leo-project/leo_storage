@@ -36,7 +36,7 @@
 %% API
 -export([repair/4]).
 
--record(state, {addr_id = 0       :: integer(),
+-record(state, {addr_id = 0       :: non_neg_integer(),
                 key               :: string(),
                 read_quorum = 0   :: integer(),
                 redundancies = [] :: list(),
@@ -50,8 +50,11 @@
 %%--------------------------------------------------------------------
 %% @doc Repair an object.
 %% @end
--spec(repair(#read_parameter{}, [#redundant_node{}], #?METADATA{}, function()) ->
-             any()).
+-spec(repair(ReadParms, Redundancies, Metadata, Callback) ->
+             any() when ReadParms::#read_parameter{},
+                        Redundancies::[#redundant_node{}],
+                        Metadata::#?METADATA{},
+                        Callback::function()).
 repair(#read_parameter{quorum = ReadQuorum,
                        req_id = ReqId}, Redundancies, Metadata, Callback) ->
     Ref    = make_ref(),
@@ -84,8 +87,14 @@ repair(#read_parameter{quorum = ReadQuorum,
 
 %% @doc Waiting for messages (compare a metadata)
 %%
--spec(loop(integer(), reference(), pid(), non_neg_integer(), {integer(), binary(), [any()]}, function()) ->
-             {ok, reference()} | {error, reference(),  any()}).
+-spec(loop(R, Ref, From, NumOfNodes, Errors, Callback) ->
+             {ok, reference()} |
+             {error, reference(), any()} when R::non_neg_integer(),
+                                              Ref::reference(),
+                                              From::pid(),
+                                              NumOfNodes::non_neg_integer(),
+                                              Errors::{integer(), binary(), [any()]},
+                                              Callback::function()).
 loop(0,_Ref,_From,_NumOfNodes, {_,_,_E}, Callback) ->
     Callback(ok);
 loop(R,_Ref,_From, NumOfNodes, {_,_, E}, Callback) when (NumOfNodes - R) < length(E) ->
@@ -112,8 +121,12 @@ loop(R, Ref, From, NumOfNodes, {ReqId, Key, E} = Args, Callback) ->
 %%--------------------------------------------------------------------
 %% @doc Compare local-metadata with remote-metadata
 %% @private
--spec(compare(reference(), pid(), rpc:key(), atom(), #state{}) ->
-             ok).
+-spec(compare(Ref, Pid, RPCKey, Node, State) ->
+             ok when Ref::reference(),
+                     Pid::pid(),
+                     RPCKey::rpc:key(),
+                     Node::atom(),
+                     State::#state{}).
 compare(Ref, Pid, RPCKey, Node, #state{metadata = #?METADATA{addr_id = AddrId,
                                                              key     = Key,
                                                              clock   = Clock}}) ->
@@ -145,8 +158,9 @@ compare(Ref, Pid, RPCKey, Node, #state{metadata = #?METADATA{addr_id = AddrId,
 
 %% @doc Insert a message into the queue
 %% @private
--spec(enqueue(integer(), binary()) ->
-             ok | {error, any()}).
+-spec(enqueue(AddrId, Key) ->
+             ok | {error, any()} when AddrId::non_neg_integer(),
+                                      Key::binary()).
 enqueue(AddrId, Key) ->
     leo_storage_mq:publish(
       ?QUEUE_TYPE_PER_OBJECT, AddrId, Key, ?ERR_TYPE_RECOVER_DATA).

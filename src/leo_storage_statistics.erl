@@ -52,6 +52,8 @@
 %%--------------------------------------------------------------------
 %% API
 %%--------------------------------------------------------------------
+-spec(start_link(Window) ->
+             ok when Window::non_neg_integer()).
 start_link(Window) ->
     ok = leo_statistics_sup:start_child(?MODULE, Window),
     ok.

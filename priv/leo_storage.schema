@@ -122,7 +122,7 @@
  "leo_storage.system_version",
  [
   {datatype, string},
-  {default, "1.1.5"}
+  {default, "1.2.0"}
  ]}.
 
 %% @doc Path of object-container
@@ -194,6 +194,136 @@
  [
   {datatype, integer},
   {default, 168}
+ ]}.
+
+
+%% --------------------------------------------------------------------
+%% STORAGE - Watchdog
+%% --------------------------------------------------------------------
+%% @doc Check inteval (sec) - defalut:5sec
+{mapping,
+ "watchdog.rex.interval",
+ "leo_storage.wd_rex_interval",
+ [
+  {datatype, integer},
+  {default, 5}
+ ]}.
+
+
+%% @doc Threshold memory capacity of binary for rex(rpc) - default:32MB
+{mapping,
+ "watchdog.rex.threshold_mem_capacity",
+ "leo_storage.wd_threshold_mem_capacity",
+ [
+  {datatype, integer},
+  {default, 33554432}
+ ]}.
+
+%% @doc CPU - Is enabled
+{mapping,
+ "watchdog.cpu.is_enabled",
+ "leo_storage.wd_cpu_enabled",
+ [
+  {datatype, atom},
+  {default, false}
+ ]}.
+
+%% @doc Check inteval (sec) - defalut:5sec
+{mapping,
+ "watchdog.cpu.interval",
+ "leo_storage.wd_cpu_interval",
+ [
+  {datatype, integer},
+  {default, 5}
+ ]}.
+
+%% @doc Threshold CPU load avg for 1min/5min - default:2.0
+{mapping,
+ "watchdog.cpu.threshold_cpu_load_avg",
+ "leo_storage.wd_threshold_cpu_load_avg",
+ [
+  {default, "2.0"}
+ ]}.
+
+%% @doc Threshold CPU load util - default:100 = "100%"
+{mapping,
+ "watchdog.cpu.threshold_cpu_util",
+ "leo_storage.wd_threshold_cpu_util",
+ [
+  {datatype, integer},
+  {default, 100}
+ ]}.
+
+%% @doc IO - Is enabled
+{mapping,
+ "watchdog.io.is_enabled",
+ "leo_storage.wd_io_enabled",
+ [
+  {datatype, atom},
+  {default, false}
+ ]}.
+
+%% @doc Check inteval (sec) - defalut:1sec
+{mapping,
+ "watchdog.io.interval",
+ "leo_storage.wd_io_interval",
+ [
+  {datatype, integer},
+  {default, 1}
+ ]}.
+
+%% @doc Threshold input size for interval - default:128MB
+{mapping,
+ "watchdog.io.threshold_input_per_sec",
+ "leo_storage.wd_threshold_input_per_sec",
+ [
+  {datatype, integer},
+  {default, 134217728}
+ ]}.
+
+%% @doc Threshold output size for interval - default:128MB
+{mapping,
+ "watchdog.io.threshold_output_per_sec",
+ "leo_storage.wd_threshold_output_per_sec",
+ [
+  {datatype, integer},
+  {default, 134217728}
+ ]}.
+
+%% @doc Disk - Is enabled
+{mapping,
+ "watchdog.disk.is_enabled",
+ "leo_storage.wd_disk_enabled",
+ [
+  {datatype, atom},
+  {default, false}
+ ]}.
+
+%% @doc Check inteval (sec) - defalut:1sec
+{mapping,
+ "watchdog.disk.interval",
+ "leo_storage.wd_disk_interval",
+ [
+  {datatype, integer},
+  {default, 1}
+ ]}.
+
+%% @doc Threshold disk use% - default:85%
+{mapping,
+ "watchdog.disk.threshold_disk_use",
+ "leo_storage.wd_threshold_disk_use",
+ [
+  {datatype, integer},
+  {default, 85}
+ ]}.
+
+%% @doc Threshold disk util% - default:100%
+{mapping,
+ "watchdog.disk.threshold_disk_util",
+ "leo_storage.wd_threshold_disk_util",
+ [
+  {datatype, integer},
+  {default, 100}
  ]}.
 
 
@@ -836,6 +966,9 @@
  ]}.
 
 %% @doc Tweak GC to run more often
+%% A non-negative integer which indicates
+%% how many times generational garbage collections
+%% can be done without forcing a fullsweep collection
 {mapping,
  "erlang.fullsweep_after",
  "vm_args.-env ERL_FULLSWEEP_AFTER",
@@ -866,6 +999,32 @@
  "vm_args.-smp",
  [
   {default, "enable"}
+ ]}.
+
+%% @doc Erlang scheduler's compaction of load
+{mapping,
+ "erlang.schedulers.compaction_of_load",
+ "vm_args.+scl",
+ [
+  {datatype, atom},
+  {default, 'true'}
+ ]}.
+
+%% Erlang scheduler's balancing of load
+%% {mapping,
+%%  "erlang.schedulers.utilization_balancing",
+%%  "vm_args.+sub",
+%%  [
+%%   {datatype, atom},
+%%   {default, 'false'}
+%%  ]}.
+
+%% Sender-side network distribution buffer size
+{mapping,
+ "erlang.distribution_buffer_size",
+ "vm_args.+zdbbl",
+ [
+  {default, "16384"}
  ]}.
 
 %% %% @doc Raise the ETS table limit

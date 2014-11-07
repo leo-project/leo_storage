@@ -19,8 +19,7 @@
 %% under the License.
 %%
 %% ---------------------------------------------------------------------
-%% LeoFS Storage - Directory Handler
-%% @doc
+%% @doc Handling a directory
 %% @end
 %%======================================================================
 -module(leo_storage_handler_directory).
@@ -43,8 +42,12 @@
 %%--------------------------------------------------------------------
 %% @doc Find by index from the backenddb.
 %%
--spec(find_by_parent_dir(string(), string()|null, string()|null, integer()) ->
-             {ok, list()} | {error, any()}).
+-spec(find_by_parent_dir(ParentDir, Delimiter, Marker, MaxKeys) ->
+             {ok, list()} |
+             {error, any()} when ParentDir::binary(),
+                                 Delimiter::binary()|null,
+                                 Marker::binary()|null,
+                                 MaxKeys::integer()).
 find_by_parent_dir(ParentDir, _Delimiter, Marker, MaxKeys) ->
     NewMaxKeys = case is_integer(MaxKeys) of
                      true  -> MaxKeys;
@@ -66,22 +69,23 @@ find_by_parent_dir(ParentDir, _Delimiter, Marker, MaxKeys) ->
     {ResL0, _BadNodes} = rpc:multicall(Nodes, leo_storage_handler_object, prefix_search,
                                        [ParentDir, NewMarker, NewMaxKeys], ?DEF_REQ_TIMEOUT),
 
-    case lists:foldl(fun({ok, List}, Acc0) ->
-                             lists:foldl(
-                               fun(#?METADATA{key = Key} = Meta0, Acc1) ->
-                                       case lists:keyfind(Key, 2, Acc1) of
-                                           false ->
-                                               [Meta0|Acc1];
-                                           #?METADATA{clock = Clock} when Meta0#?METADATA.clock > Clock ->
-                                               Acc2 = lists:keydelete(Key, 2, Acc1),
-                                               [Meta0|Acc2];
-                                           _ ->
-                                               Acc1
-                                       end
-                               end, Acc0, List);
-                        (_, Acc0) ->
-                             Acc0
-                     end, [], ResL0) of
+    case lists:foldl(
+           fun({ok, List}, Acc0) ->
+                   lists:foldl(
+                     fun(#?METADATA{key = Key} = Meta0, Acc1) ->
+                             case lists:keyfind(Key, 2, Acc1) of
+                                 false ->
+                                     [Meta0|Acc1];
+                                 #?METADATA{clock = Clock} when Meta0#?METADATA.clock > Clock ->
+                                     Acc2 = lists:keydelete(Key, 2, Acc1),
+                                     [Meta0|Acc2];
+                                 _ ->
+                                     Acc1
+                             end
+                     end, Acc0, List);
+              (_, Acc0) ->
+                   Acc0
+           end, [], ResL0) of
         [] ->
             {ok, []};
         List ->
@@ -91,7 +95,7 @@ find_by_parent_dir(ParentDir, _Delimiter, Marker, MaxKeys) ->
 
 %% @doc Remove objects in the parent directory - request from Gateway
 %%
--spec(delete_objects_in_parent_dir(binary()) ->
-             {ok, [_]} | not_found).
+-spec(delete_objects_in_parent_dir(ParentDir) ->
+             {ok, [_]} | not_found when ParentDir::binary()).
 delete_objects_in_parent_dir(ParentDir) ->
     leo_storage_handler_object:prefix_search_and_remove_objects(ParentDir).

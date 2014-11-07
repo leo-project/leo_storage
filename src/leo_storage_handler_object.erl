@@ -19,8 +19,7 @@
 %% under the License.
 %%
 %% ---------------------------------------------------------------------
-%% LeoFS Storage - Object Handler
-%% @doc
+%% @doc Handling an object, which is included in put, get, delete and head operation
 %% @end
 %%======================================================================
 -module(leo_storage_handler_object).
@@ -68,9 +67,9 @@
 %%--------------------------------------------------------------------
 %% @doc get object (from storage-node#1).
 %%
--spec(get({reference(), binary()}) ->
+-spec(get(RefAndKey) ->
              {ok, reference(), binary(), binary(), binary()} |
-             {error, reference(), any()}).
+             {error, reference(), any()} when RefAndKey::{reference(), binary()}).
 get({Ref, Key}) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_GET),
     case leo_redundant_manager_api:get_redundancies_by_key(get, Key) of
@@ -87,10 +86,11 @@ get({Ref, Key}) ->
 
 %% @doc get object (from storage-node#2).
 %%
--spec(get(#read_parameter{}, [#redundant_node{}]) ->
+-spec(get(ReadParams, Redundancies) ->
              {ok, #?METADATA{}, binary()} |
              {ok, match} |
-             {error, any()}).
+             {error, any()} when ReadParams::#read_parameter{},
+                                 Redundancies::[#redundant_node{}]).
 get(#read_parameter{addr_id = AddrId} = ReadParameter, []) ->
     case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
         {ok, #redundancies{nodes = Redundancies,
@@ -106,9 +106,11 @@ get(ReadParameter, Redundancies) ->
 
 %% @doc Retrieve an object which is requested from gateway.
 %%
--spec(get(integer(), binary(), integer()) ->
+-spec(get(AddrId, Key, ReqId) ->
              {ok, #?METADATA{}, binary()} |
-             {error, any()}).
+             {error, any()} when AddrId::integer(),
+                                 Key::binary(),
+                                 ReqId::integer()).
 get(AddrId, Key, ReqId) ->
     get(#read_parameter{ref = make_ref(),
                         addr_id   = AddrId,
@@ -117,10 +119,13 @@ get(AddrId, Key, ReqId) ->
 
 %% @doc Retrieve an object which is requested from gateway w/etag.
 %%
--spec(get(integer(), binary(), integer(), integer()) ->
+-spec(get(AddrId, Key, ETag, ReqId) ->
              {ok, #?METADATA{}, binary()} |
              {ok, match} |
-             {error, any()}).
+             {error, any()} when AddrId::integer(),
+                                 Key::binary(),
+                                 ETag::integer(),
+                                 ReqId::integer()).
 get(AddrId, Key, ETag, ReqId) ->
     get(#read_parameter{ref = make_ref(),
                         addr_id   = AddrId,
@@ -130,10 +135,14 @@ get(AddrId, Key, ETag, ReqId) ->
 
 %% @doc Retrieve a part of an object.
 %%
--spec(get(integer(), binary(), integer(), integer(), integer()) ->
+-spec(get(AddrId, Key, StartPos, EndPos, ReqId) ->
              {ok, #?METADATA{}, binary()} |
              {ok, match} |
-             {error, any()}).
+             {error, any()} when AddrId::integer(),
+                                 Key::binary(),
+                                 StartPos::integer(),
+                                 EndPos::integer(),
+                                 ReqId::integer()).
 get(AddrId, Key, StartPos, EndPos, ReqId) ->
     get(#read_parameter{ref = make_ref(),
                         addr_id   = AddrId,
@@ -145,23 +154,36 @@ get(AddrId, Key, StartPos, EndPos, ReqId) ->
 
 %% @doc read data (common).
 %% @private
--spec(get_fun(integer(), binary()) ->
+-spec(get_fun(AddrId, Key) ->
              {ok, #?METADATA{}, #?OBJECT{}} |
-             {error, any()}).
+             {error, any()} when AddrId::integer(),
+                                 Key::binary()).
 get_fun(AddrId, Key) ->
     get_fun(AddrId, Key, 0, 0).
 
--spec(get_fun(integer(), binary(), integer(), integer()) ->
+-spec(get_fun(AddrId, Key, StartPos, EndPos) ->
              {ok, #?METADATA{}, #?OBJECT{}} |
-             {error, any()}).
+             {error, any()} when AddrId::integer(),
+                                 Key::binary(),
+                                 StartPos::integer(),
+                                 EndPos::integer()).
 get_fun(AddrId, Key, StartPos, EndPos) ->
-    case leo_object_storage_api:get({AddrId, Key}, StartPos, EndPos) of
-        {ok, Metadata, Object} ->
-            {ok, Metadata, Object};
-        not_found = Cause ->
-            {error, Cause};
-        {error, Cause} ->
-            {error, Cause}
+    %% Check state of the node
+    case leo_watchdog_state:find_not_safe_items() of
+        not_found ->
+            %% Retrieve the object
+            case leo_object_storage_api:get(
+                   {AddrId, Key}, StartPos, EndPos) of
+                {ok, Metadata, Object} ->
+                    {ok, Metadata, Object};
+                not_found = Cause ->
+                    {error, Cause};
+                {error, Cause} ->
+                    {error, Cause}
+            end;
+        {ok, ErrorItems} ->
+            ?debug("get_fun/4", "error-items:~p", [ErrorItems]),
+            {error, unavailable}
     end.
 
 
@@ -170,9 +192,9 @@ get_fun(AddrId, Key, StartPos, EndPos) ->
 %%--------------------------------------------------------------------
 %% @doc Insert an object (request from gateway).
 %%
--spec(put({#?OBJECT{}, reference()}) ->
+-spec(put(ObjAndRef) ->
              {ok, reference(), tuple()} |
-             {error, reference(), any()}).
+             {error, reference(), any()} when ObjAndRef::{#?OBJECT{}, reference()}).
 put({Object, Ref}) ->
     AddrId = Object#?OBJECT.addr_id,
     Key    = Object#?OBJECT.key,
@@ -207,8 +229,9 @@ put({Object, Ref}) ->
 
 %% @doc Insert an object (request from gateway).
 %%
--spec(put(#?OBJECT{}, integer()) ->
-             ok | {error, any()}).
+-spec(put(Object, ReqId) ->
+             ok | {error, any()} when Object::#?OBJECT{},
+                                      ReqId::integer()).
 put(Object, ReqId) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
     replicate_fun(?REP_LOCAL, ?CMD_PUT, Object#?OBJECT.addr_id,
@@ -219,8 +242,12 @@ put(Object, ReqId) ->
 
 %% @doc Insert an  object (request from remote-storage-nodes/replicator).
 %%
--spec(put(reference(), pid(), #?OBJECT{}, integer()) ->
-             {ok, atom()} | {error, any()}).
+-spec(put(Ref, From, Object, ReqId) ->
+             {ok, atom()} |
+             {error, any()} when Ref::reference(),
+                                 From::pid(),
+                                 Object::#?OBJECT{},
+                                 ReqId::integer()).
 put(Ref, From, Object, ReqId) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
     case replicate_fun(?REP_REMOTE, ?CMD_PUT, Object) of
@@ -237,21 +264,35 @@ put(Ref, From, Object, ReqId) ->
 
 %% Input an object into the object-storage
 %% @private
--spec(put_fun(reference(), integer(), binary(), #?OBJECT{}) ->
-             {ok, reference(), tuple()} | {error, reference(), any()}).
+-spec(put_fun(Ref, AddrId, Key, Object) ->
+             {ok, reference(), tuple()} |
+             {error, reference(), any()} when Ref::reference(),
+                                              AddrId::integer(),
+                                              Key::binary(),
+                                              Object::#?OBJECT{}).
 put_fun(Ref, AddrId, Key, Object) ->
-    case leo_object_storage_api:put({AddrId, Key}, Object) of
-        {ok, ETag} ->
-            {ok, Ref, {etag, ETag}};
-        {error, Cause} ->
-            {error, Ref, Cause}
+    %% Check state of the node
+    case leo_watchdog_state:find_not_safe_items() of
+        not_found ->
+            %% Put the object to the local object-storage
+            case leo_object_storage_api:put({AddrId, Key}, Object) of
+                {ok, ETag} ->
+                    {ok, Ref, {etag, ETag}};
+                {error, Cause} ->
+                    {error, Ref, Cause}
+            end;
+        {ok, ErrorItems} ->
+            ?debug("put_fun/4", "error-items:~p", [ErrorItems]),
+            {error, Ref, unavailable}
     end.
+
 
 
 %% Remove chunked objects from the object-storage
 %% @private
--spec(delete_chunked_objects(integer(), binary()) ->
-             ok | {error, any()}).
+-spec(delete_chunked_objects(CIndex, ParentKey) ->
+             ok | {error, any()} when CIndex::integer(),
+                                      ParentKey::binary()).
 delete_chunked_objects(0,_) ->
     ok;
 delete_chunked_objects(CIndex, ParentKey) ->
@@ -275,8 +316,9 @@ delete_chunked_objects(CIndex, ParentKey) ->
 %%--------------------------------------------------------------------
 %% @doc Remove an object (request from storage)
 %%
--spec(delete({#?OBJECT{}, reference()}) ->
-             {ok, reference()} | {error, reference(), any()}).
+-spec(delete(ObjAndRef) ->
+             {ok, reference()} |
+             {error, reference(), any()} when ObjAndRef::{#?OBJECT{}, reference()}).
 delete({Object, Ref}) ->
     AddrId = Object#?OBJECT.addr_id,
     Key    = Object#?OBJECT.key,
@@ -305,9 +347,10 @@ delete({Object, Ref}) ->
 
 %% @doc Remova an object (request from gateway)
 %%
--spec(delete(#?OBJECT{}, integer()|reference()) ->
-             ok | {error, any()}).
-delete(Object, ReqId) when is_integer(ReqId) ->
+-spec(delete(Object, ReqId) ->
+             ok | {error, any()} when Object::#?OBJECT{},
+                                      ReqId::integer()|reference()).
+delete(Object, ReqId) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
     case replicate_fun(?REP_LOCAL, ?CMD_DELETE,
                        Object#?OBJECT.addr_id,
@@ -328,61 +371,84 @@ delete(Object, ReqId) when is_integer(ReqId) ->
     end.
 
 
+%% Deletion object related constants
+-define(BIN_SLASH, <<"/">>).
+-define(BIN_NL,    <<"\n">>).
+
 %% @doc Remove objects of the under directory
 %%
--spec(delete_objects_under_dir(#?OBJECT{}) ->
-             ok).
+-spec(delete_objects_under_dir(Object) ->
+             ok when Object::#?OBJECT{}).
 delete_objects_under_dir(Object) ->
-    Key   = Object#?OBJECT.key,
+    Key = Object#?OBJECT.key,
     KSize = byte_size(Key),
 
     case catch binary:part(Key, (KSize - 1), 1) of
         {'EXIT',_} ->
             void;
-        Bin when Bin == <<"/">> orelse
-                 Bin == <<"\n">> ->
+         Bin ->
+            Targets = case Bin == ?BIN_SLASH of
+                          true ->
+                              [ Bin,
+                                undefined];
+                          false when Bin == ?BIN_NL ->
+                              [ undefined,
+                                << Key/binary, ?BIN_NL/binary >> ];
+                          false ->
+                              [ << Key/binary, ?BIN_SLASH/binary >>,
+                                << Key/binary, ?BIN_NL/binary >> ]
+                      end,
+
             %% for remote storage nodes
+            Ref = make_ref(),
             case leo_redundant_manager_api:get_members_by_status(?STATE_RUNNING) of
                 {ok, RetL} ->
                     Nodes = [N||#member{node = N} <- RetL],
-                    Ref = make_ref(),
-                    {ok, Ref} = delete_objects_under_dir(Nodes, Ref, Key),
+                    spawn(
+                      fun() ->
+                              {ok, Ref} = delete_objects_under_dir(Nodes, Ref, Targets)
+                      end),
                     ok;
                 _ ->
                     void
             end,
             %% for local object storage
-            prefix_search_and_remove_objects(Key);
-        _ ->
-            void
+            delete_objects_under_dir(Ref, Targets)
     end,
     ok.
 
 
 %% @doc Remove objects of the under directory for remote-nodes
 %%
--spec(delete_objects_under_dir(reference(), binary()) ->
-             {ok, reference()}).
-delete_objects_under_dir(Ref, Key) ->
-    _ = prefix_search_and_remove_objects(Key),
-    {ok, Ref}.
-
-
--spec(delete_objects_under_dir([atom()], reference(), binary()) ->
-             {ok, reference()}).
-delete_objects_under_dir([], Ref,_) ->
+-spec(delete_objects_under_dir(Ref, Keys) ->
+             {ok, Ref} when Ref::reference(),
+                            Keys::[binary()|undefined]).
+delete_objects_under_dir(Ref, []) ->
     {ok, Ref};
-delete_objects_under_dir([Node|Rest], Ref, Key) ->
+delete_objects_under_dir(Ref, [undefined|Rest]) ->
+    delete_objects_under_dir(Ref, Rest);
+delete_objects_under_dir(Ref, [Key|Rest]) ->
+    _ = prefix_search_and_remove_objects(Key),
+    delete_objects_under_dir(Ref, Rest).
+
+
+-spec(delete_objects_under_dir(Nodes, Ref, Keys) ->
+             {ok, Ref} when Nodes::[atom()],
+                            Ref::reference(),
+                            Keys::[binary()|undefined]).
+delete_objects_under_dir([], Ref,_Keys) ->
+    {ok, Ref};
+delete_objects_under_dir([Node|Rest], Ref, Keys) ->
     RPCKey = rpc:async_call(Node, ?MODULE,
-                            delete_objects_under_dir, [Ref, Key]),
+                            delete_objects_under_dir, [Ref, Keys]),
     case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
         {value, {ok, Ref}} ->
             ok;
         _Other ->
             %% enqueu a fail message into the mq
-            ok = leo_storage_mq:publish(?QUEUE_TYPE_DEL_DIR, Node, Key)
+            ok = leo_storage_mq:publish(?QUEUE_TYPE_DEL_DIR, Node, Keys)
     end,
-    delete_objects_under_dir(Rest, Ref, Key).
+    delete_objects_under_dir(Rest, Ref, Keys).
 
 
 %%--------------------------------------------------------------------
@@ -390,14 +456,17 @@ delete_objects_under_dir([Node|Rest], Ref, Key) ->
 %%--------------------------------------------------------------------
 %% @doc retrieve a meta-data from mata-data-server (file).
 %%
--spec(head(integer(), binary()) ->
-             {ok, #?METADATA{}} | {error, any}).
+-spec(head(AddrId, Key) ->
+             {ok, #?METADATA{}} | {error, any} when AddrId::integer(),
+                                                    Key::binary()).
 head(AddrId, Key) ->
     %% Do retry when being invoked as usual method
     head(AddrId, Key, true).
 
--spec(head(integer(), binary(), boolean()) ->
-             {ok, #?METADATA{}} | {error, any}).
+-spec(head(AddrId, Key, CanRetry) ->
+             {ok, #?METADATA{}} | {error, any} when AddrId::integer(),
+                                                    Key::binary(),
+                                                    CanRetry::boolean()).
 head(AddrId, Key, false) ->
     %% No retry when being invoked from recover/rebalance
     case leo_object_storage_api:head({AddrId, Key}) of
@@ -443,18 +512,24 @@ head_1([_|Rest], AddrId, Key) ->
 %% @doc Retrieve a metada/data from backend_db/object-storage
 %%      AND calc MD5 based on the body data
 %%
--spec(head_with_calc_md5(integer(), string(), any()) ->
-             {ok, #?METADATA{}, any()} | {error, any()}).
+-spec(head_with_calc_md5(AddrId, Key, MD5Context) ->
+             {ok, #?METADATA{}, any()} |
+             {error, any()} when AddrId::integer(),
+                                 Key::binary(),
+                                 MD5Context::any()).
 head_with_calc_md5(AddrId, Key, MD5Context) ->
     leo_object_storage_api:head_with_calc_md5({AddrId, Key}, MD5Context).
+
 
 %%--------------------------------------------------------------------
 %% API - COPY/STACK-SEND/RECEIVE-STORE
 %%--------------------------------------------------------------------
 %% @doc Replicate an object, which is requested from remote-cluster
 %%
--spec(replicate(#?OBJECT{}) ->
-             ok | {ok, reference()} | {error, reference()|any()}).
+-spec(replicate(Object) ->
+             ok |
+             {ok, reference()} |
+             {error, reference()|any()} when Object::#?OBJECT{}).
 replicate(Object) ->
     %% Transform an object to a metadata
     Metadata = leo_object_storage_transformer:object_to_metadata(Object),
@@ -486,8 +561,12 @@ replicate(Object) ->
 
 %% @doc Replicate an object from local to remote
 %%
--spec(replicate([atom()], integer(), binary()) ->
-             ok | not_found | {error, any()}).
+-spec(replicate(DestNodes, AddrId, Key) ->
+             ok |
+             not_found |
+             {error, any()} when DestNodes::[atom()],
+                                 AddrId::integer(),
+                                 Key::binary()).
 replicate(DestNodes, AddrId, Key) ->
     Ref = make_ref(),
 
@@ -524,8 +603,8 @@ replicate(DestNodes, AddrId, Key) ->
 %% API - Prefix Search (Fetch)
 %%--------------------------------------------------------------------
 prefix_search(ParentDir, Marker, MaxKeys) ->
-    Fun = fun(Key, V, Acc0) when length(Acc0) =< MaxKeys ->
-                  Meta0   = binary_to_term(V),
+    Fun = fun(Key, V, Acc) when length(Acc) =< MaxKeys ->
+                  Meta = binary_to_term(V),
                   InRange = case Marker of
                                 [] -> true;
                                 Key -> false;
@@ -533,81 +612,89 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
                                     (Marker == hd(lists:sort([Marker, Key])))
                             end,
 
-                  Token0 = leo_misc:binary_tokens(ParentDir, ?DEF_DELIMITER),
-                  Token1 = leo_misc:binary_tokens(Key,       ?DEF_DELIMITER),
-                  Length0 = erlang:length(Token0),
-                  Length1 = Length0 + 1,
-                  Length2 = erlang:length(Token1),
-
+                  Token_1  = leo_misc:binary_tokens(ParentDir, ?DEF_DELIMITER),
+                  Token_2  = leo_misc:binary_tokens(Key,       ?DEF_DELIMITER),
+                  Length_1 = erlang:length(Token_1),
+                  Length_2 = Length_1 + 1,
+                  Length_3 = erlang:length(Token_2),
                   IsChunkedObj = (nomatch /= binary:match(Key, <<"\n">>)),
 
                   Pos_1 = case binary:match(Key, [ParentDir]) of
                               nomatch ->
                                   -1;
-                              {Pos0, _} ->
-                                  Pos0
+                              {Pos, _} ->
+                                  Pos
                           end,
-                  case (InRange == true andalso Pos_1 == 0) of
+
+                  case (InRange == true
+                        andalso Pos_1 == 0) of
                       true ->
-                          case (Length2 -1) of
-                              Length0 when Meta0#?METADATA.del == ?DEL_FALSE andalso
-                                           IsChunkedObj == false ->
+                          case (Length_3 - 1) of
+                              Length_1 when Meta#?METADATA.del == ?DEL_FALSE
+                                            andalso IsChunkedObj == false ->
                                   KeyLen = byte_size(Key),
 
-                                  case (binary:part(Key, KeyLen - 1, 1) == ?DEF_DELIMITER andalso KeyLen > 1) of
+                                  case (binary:part(Key, KeyLen - 1, 1) == ?DEF_DELIMITER
+                                        andalso KeyLen > 1) of
                                       true  ->
-                                          case lists:keyfind(Key, 2, Acc0) of
+                                          case lists:keyfind(Key, 2, Acc) of
                                               false ->
-                                                  ordsets:add_element(#?METADATA{key      = Key,
-                                                                                 dsize    = -1}, Acc0);
+                                                  ordsets:add_element(#?METADATA{key   = Key,
+                                                                                 dsize = -1}, Acc);
                                               _ ->
-                                                  Acc0
+                                                  Acc
                                           end;
                                       false ->
-                                          case lists:keyfind(Key, 2, Acc0) of
+                                          case lists:keyfind(Key, 2, Acc) of
                                               false ->
-                                                  ordsets:add_element(Meta0#?METADATA{offset    = 0,
-                                                                                      ring_hash = 0}, Acc0);
-                                              #?METADATA{clock = Clock} when Meta0#?METADATA.clock > Clock ->
-                                                  Acc1 = lists:keydelete(Key, 2, Acc0),
-                                                  ordsets:add_element(Meta0#?METADATA{offset    = 0,
-                                                                                      ring_hash = 0}, Acc1);
+                                                  ordsets:add_element(Meta#?METADATA{offset    = 0,
+                                                                                     ring_hash = 0}, Acc);
+                                              #?METADATA{clock = Clock} when Meta#?METADATA.clock > Clock ->
+                                                  Acc_1 = lists:keydelete(Key, 2, Acc),
+                                                  ordsets:add_element(Meta#?METADATA{offset    = 0,
+                                                                                     ring_hash = 0}, Acc_1);
                                               _ ->
-                                                  Acc0
+                                                  Acc
                                           end
                                   end;
 
-                              _Any when Meta0#?METADATA.del == ?DEL_FALSE andalso
-                                           IsChunkedObj == false ->
-                                  {Token2, _} = lists:split(Length1, Token1),
-                                  Dir = lists:foldl(fun(Bin0, <<>>) ->
-                                                            << Bin0/binary, ?DEF_DELIMITER/binary >>;
-                                                       (Bin0, Bin1) ->
-                                                            << Bin1/binary, Bin0/binary, ?DEF_DELIMITER/binary >>
+                              _Any when Meta#?METADATA.del == ?DEL_FALSE
+                                        andalso IsChunkedObj == false ->
+                                  {Token2, _} = lists:split(Length_2, Token_2),
+                                  Dir = lists:foldl(fun(Bin_1, <<>>) ->
+                                                            << Bin_1/binary,
+                                                               ?DEF_DELIMITER/binary >>;
+                                                       (Bin_1, Bin_2) ->
+                                                            << Bin_2/binary,
+                                                               Bin_1/binary,
+                                                               ?DEF_DELIMITER/binary >>
                                                     end, <<>>, Token2),
-                                  case lists:keyfind(Dir, 2, Acc0) of
+                                  case lists:keyfind(Dir, 2, Acc) of
                                       false ->
                                           ordsets:add_element(#?METADATA{key   = Dir,
-                                                                         dsize = -1}, Acc0);
+                                                                         dsize = -1}, Acc);
                                       _ ->
-                                          Acc0
+                                          Acc
                                   end;
                               _ ->
-                                  Acc0
+                                  Acc
                           end;
                       false ->
-                          Acc0
+                          Acc
                   end;
-             (_, _, Acc0) ->
-                  Acc0
+             (_, _, Acc) ->
+                  Acc
           end,
     leo_object_storage_api:fetch_by_key(ParentDir, Fun).
 
 
 %% @doc Retrieve object of deletion from object-storage by key
 %%
--spec(prefix_search_and_remove_objects(binary()) ->
-             {ok, [_]} | not_found).
+-spec(prefix_search_and_remove_objects(ParentDir) ->
+             {ok, [_]} |
+             not_found when ParentDir::undefined|binary()).
+prefix_search_and_remove_objects(undefined) ->
+    not_found;
 prefix_search_and_remove_objects(ParentDir) ->
     Fun = fun(Key, V, Acc) ->
                   Metadata = binary_to_term(V),
@@ -634,8 +721,8 @@ prefix_search_and_remove_objects(ParentDir) ->
 
 %% @doc Find already uploaded objects by original-filename
 %%
--spec(find_uploaded_objects_by_key(binary()) ->
-             {ok, list()} | not_found).
+-spec(find_uploaded_objects_by_key(OriginalKey) ->
+             {ok, list()} | not_found when OriginalKey::binary()).
 find_uploaded_objects_by_key(OriginalKey) ->
     Fun = fun(Key, V, Acc) ->
                   Metadata       = binary_to_term(V),
@@ -664,10 +751,11 @@ find_uploaded_objects_by_key(OriginalKey) ->
 %%--------------------------------------------------------------------
 %% @doc read reapir - compare with remote-node's meta-data.
 %%
--spec(read_and_repair(#read_parameter{}, [#redundant_node{}]) ->
+-spec(read_and_repair(ReadParams, Redundancies) ->
              {ok, #?METADATA{}, binary()} |
              {ok, match} |
-             {error, any()}).
+             {error, any()} when ReadParams::#read_parameter{},
+                                 Redundancies::[#redundant_node{}]).
 read_and_repair(_, []) ->
     {error, not_found};
 
@@ -785,22 +873,29 @@ read_and_repair_1(_,_,_) ->
 -spec(replicate_fun(replication(), request_verb(), integer(), #?OBJECT{}) ->
              ok | {error, any()}).
 replicate_fun(?REP_LOCAL, Method, AddrId, Object) ->
-    case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
-        {ok, #redundancies{nodes     = Redundancies,
-                           w         = WriteQuorum,
-                           d         = DeleteQuorum,
-                           ring_hash = RingHash}} ->
+    %% Check state of the node
+    case leo_watchdog_state:find_not_safe_items() of
+        not_found ->
+            case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
+                {ok, #redundancies{nodes     = Redundancies,
+                                   w         = WriteQuorum,
+                                   d         = DeleteQuorum,
+                                   ring_hash = RingHash}} ->
 
-            Quorum = case Method of
-                         ?CMD_PUT    -> WriteQuorum;
-                         ?CMD_DELETE -> DeleteQuorum
-                     end,
+                    Quorum = case Method of
+                                 ?CMD_PUT    -> WriteQuorum;
+                                 ?CMD_DELETE -> DeleteQuorum
+                             end,
 
-            leo_storage_replicator:replicate(
-              Method, Quorum, Redundancies, Object#?OBJECT{ring_hash = RingHash},
-              replicate_callback(Object));
-        {error,_Cause} ->
-            {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
+                    leo_storage_replicator:replicate(
+                      Method, Quorum, Redundancies, Object#?OBJECT{ring_hash = RingHash},
+                      replicate_callback(Object));
+                {error,_Cause} ->
+                    {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
+            end;
+        {ok, ErrorItems}->
+            ?debug("replicate_fun/4", "error-items:~p", [ErrorItems]),
+            {error, unavailable}
     end.
 
 %% @doc obj-replication request from remote node.

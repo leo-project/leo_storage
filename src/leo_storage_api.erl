@@ -30,19 +30,28 @@
 -include("leo_storage.hrl").
 -include_lib("leo_commons/include/leo_commons.hrl").
 -include_lib("leo_logger/include/leo_logger.hrl").
+-include_lib("leo_mq/include/leo_mq.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
+-include_lib("leo_watchdog/include/leo_watchdog.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 %% API
 -export([register_in_monitor/1, register_in_monitor/2,
-         get_disk_usage/0,
          get_routing_table_chksum/0,
          update_manager_nodes/1, recover_remote/2,
-         start/1, start/2, start/3, stop/0, attach/1, synchronize/1, synchronize/2,
+         start/1, start/2, start/3, stop/0, attach/1,
+         synchronize/1, synchronize/2,
          compact/1, compact/3, diagnose_data/0,
          get_node_status/0,
-         rebalance/1, rebalance/3]).
+         rebalance/1, rebalance/3,
+         get_disk_usage/0
+        ]).
+-export([get_mq_consumer_state/0,
+         get_mq_consumer_state/1,
+         mq_suspend/1,
+         mq_resume/1
+        ]).
 
 %% interval to notify to leo_manager
 -define(CHECK_INTERVAL, 3000).
@@ -52,8 +61,8 @@
 %%--------------------------------------------------------------------
 %% @doc register into the manager's monitor.
 %%
--spec(register_in_monitor(first | again) ->
-             ok | {error, not_found}).
+-spec(register_in_monitor(RequestedTimes) ->
+             ok | {error, not_found} when RequestedTimes::first|again).
 register_in_monitor(RequestedTimes) ->
     case whereis(leo_storage_sup) of
         undefined ->
@@ -62,8 +71,9 @@ register_in_monitor(RequestedTimes) ->
             register_in_monitor(Pid, RequestedTimes)
     end.
 
--spec(register_in_monitor(pid(), first | again) ->
-             ok | {error, any()}).
+-spec(register_in_monitor(Pid, RequestedTimes) ->
+             ok | {error, any()} when Pid::pid(),
+                                      RequestedTimes::first|again).
 register_in_monitor(Pid, RequestedTimes) ->
     Fun = fun(Node0, Res) ->
                   Node1 = case is_atom(Node0) of
@@ -78,7 +88,7 @@ register_in_monitor(Pid, RequestedTimes) ->
                           RPCPort = ?env_rpc_port(),
 
                           case rpc:call(Node1, leo_manager_api, register,
-                                        [RequestedTimes, Pid, erlang:node(), storage,
+                                        [RequestedTimes, Pid, erlang:node(), ?PERSISTENT_NODE,
                                          GroupL1, GroupL2, NumOfNodes, RPCPort],
                                         ?DEF_REQ_TIMEOUT) of
                               {ok, SystemConf} ->
@@ -121,16 +131,33 @@ get_routing_table_chksum() ->
 
 %% @doc update manager nodes
 %%
--spec(update_manager_nodes(list()) ->
-             ok).
+-spec(update_manager_nodes(Managers) ->
+             ok when Managers::[atom()]).
 update_manager_nodes(Managers) ->
     ?update_env_manager_nodes(leo_storage, Managers),
     leo_membership_cluster_local:update_manager_nodes(Managers).
 
+
+%% recover a remote cluster's object
+-spec(recover_remote(AddrId, Key) ->
+             ok | {error, any()} when AddrId::integer(),
+                                      Key::binary()).
+recover_remote(AddrId, Key) ->
+    case leo_object_storage_api:get({AddrId, Key}) of
+        {ok, _Metadata, Object} ->
+            leo_sync_remote_cluster:defer_stack(Object);
+        not_found = Cause ->
+            {error, Cause};
+        {error, Cause} ->
+            {error, Cause}
+    end.
+
+
 %% @doc start storage-server.
 %%
--spec(start(list()) ->
-             {ok, {atom(), integer()}} | {error, {atom(), any()}}).
+-spec(start(MembersCur) ->
+             {ok, {atom(), integer()}} |
+             {error, {atom(), any()}} when MembersCur::[#member{}]).
 start(MembersCur) ->
     start(MembersCur, undefined).
 start([], _) ->
@@ -191,8 +218,8 @@ stop() ->
 
 %% @doc attach a cluster.
 %%
--spec(attach(#?SYSTEM_CONF{}) ->
-             ok | {error, any()}).
+-spec(attach(SystemConf) ->
+             ok | {error, any()} when SystemConf::#?SYSTEM_CONF{}).
 attach(SystemConf) ->
     ok = leo_redundant_manager_api:set_options(
            [{cluster_id, SystemConf#?SYSTEM_CONF.cluster_id},
@@ -211,28 +238,34 @@ attach(SystemConf) ->
 %%--------------------------------------------------------------------
 %% @doc synchronize a data.
 %%
--spec(synchronize(atom()) ->
-             ok | {error, any()}).
+-spec(synchronize(Node) ->
+             ok | {error, any()} when Node::atom()).
 synchronize(Node) ->
     leo_storage_mq:publish(?QUEUE_TYPE_RECOVERY_NODE, Node).
 
--spec(synchronize([atom()]|binary(), #?METADATA{}|atom()) ->
-             ok | not_found | {error, any()}).
+-spec(synchronize(SyncTarget, SyncVal) ->
+             ok |
+             not_found |
+             {error, any()} when SyncTarget::[atom()]|binary(),
+                                 SyncVal::#?METADATA{}|atom()).
 synchronize(InconsistentNodes, #?METADATA{addr_id = AddrId,
                                           key     = Key}) ->
     leo_storage_handler_object:replicate(InconsistentNodes, AddrId, Key);
 
 synchronize(Key, ErrorType) ->
-    {ok, #redundancies{vnode_id_to = VNodeId}} = leo_redundant_manager_api:get_redundancies_by_key(Key),
+    {ok, #redundancies{vnode_id_to = VNodeId}} =
+        leo_redundant_manager_api:get_redundancies_by_key(Key),
     leo_storage_mq:publish(?QUEUE_TYPE_PER_OBJECT, VNodeId, Key, ErrorType).
 
 
 %%--------------------------------------------------------------------
 %% API for Admin and System#4
 %%--------------------------------------------------------------------
-%% @doc
-%%
--spec(compact(atom(), 'all' | integer(), integer()) -> ok | {error, any()}).
+%% @doc Execute data-compaction
+-spec(compact(start, NumOfTargets, MaxProc) ->
+             ok |
+             {error, any()} when NumOfTargets::'all' | integer(),
+                                 MaxProc:: integer()).
 compact(start, NumOfTargets, MaxProc) ->
     case leo_redundant_manager_api:get_member_by_node(erlang:node()) of
         {ok, #member{state = ?STATE_RUNNING}} ->
@@ -266,6 +299,9 @@ compact(start, NumOfTargets, MaxProc) ->
             {error,'not_running'}
     end.
 
+-spec(compact(Method) ->
+             ok |
+             {error, any()} when Method::atom()).
 compact(Method) ->
     case leo_redundant_manager_api:get_member_by_node(erlang:node()) of
         {ok, #member{state = ?STATE_RUNNING}} ->
@@ -293,8 +329,7 @@ diagnose_data() ->
 %%--------------------------------------------------------------------
 %% Maintenance
 %%--------------------------------------------------------------------
-%%
-%%
+%% @doc Retrieve the current node status
 -spec(get_node_status() ->
              {ok, [tuple()]}).
 get_node_status() ->
@@ -363,22 +398,41 @@ get_node_status() ->
           {dirs,          Directories},
           {avs,           ?env_storage_device()},
           {ring_checksum, RingHashes},
+          {watchdog,
+           [{cpu_enabled,    ?env_wd_cpu_enabled(leo_storage)},
+            {io_enabled,     ?env_wd_io_enabled(leo_storage)},
+            {disk_enabled,   ?env_wd_disk_enabled(leo_storage)},
+            {rex_interval,   ?env_wd_rex_interval(leo_storage)},
+            {cpu_interval,   ?env_wd_cpu_interval(leo_storage)},
+            {io_interval,    ?env_wd_io_interval(leo_storage)},
+            {disk_interval,  ?env_wd_disk_interval(leo_storage)},
+            {rex_threshold_mem_capacity, ?env_wd_threshold_mem_capacity(leo_storage)},
+            {cpu_threshold_cpu_load_avg, ?env_wd_threshold_cpu_load_avg(leo_storage)},
+            {cpu_threshold_cpu_util,     ?env_wd_threshold_cpu_util(leo_storage)},
+            {io_threshold_input_per_sec,  ?env_wd_threshold_input_per_sec(leo_storage)},
+            {io_threshold_output_per_sec, ?env_wd_threshold_output_per_sec(leo_storage)},
+            {disk_threshold_disk_use,     ?env_wd_threshold_disk_use(leo_storage)},
+            {disk_threshold_disk_util,    ?env_wd_threshold_disk_util(leo_storage)}
+           ]
+          },
           {statistics,    Statistics}
          ]}.
 
 
 %% @doc Do rebalance which means "Objects are copied to the specified node".
 %% @param RebalanceInfo: [{VNodeId, DestNode}]
-%%
--spec(rebalance([tuple()]) ->
-             ok).
+-spec(rebalance(RebalanceList) ->
+             ok when RebalanceList::[tuple()]).
 rebalance(RebalanceList) ->
     catch leo_redundant_manager_api:force_sync_workers(),
     rebalance_1(RebalanceList).
 
 
--spec(rebalance(list(), list(#member{}), list(#member{})) ->
-             ok | {error, any()}).
+-spec(rebalance(RebalanceList, MembersCur, MembersPrev) ->
+             ok |
+             {error, any()} when RebalanceList::[tuple()],
+                                 MembersCur::[#member{}],
+                                 MembersPrev::[#member{}]).
 rebalance(RebalanceList, MembersCur, MembersPrev) ->
     case leo_redundant_manager_api:synchronize(
            ?SYNC_TARGET_BOTH, [{?VER_CUR,  MembersCur},
@@ -390,7 +444,6 @@ rebalance(RebalanceList, MembersCur, MembersPrev) ->
             Error
     end.
 
-
 %% @private
 -spec(rebalance_1([tuple()]) ->
              ok).
@@ -401,22 +454,10 @@ rebalance_1([{VNodeId, Node}|T]) ->
     rebalance_1(T).
 
 
-%% recover a remote cluster's object
--spec(recover_remote(integer(), binary()) ->
-             ok | {error, any()}).
-recover_remote(AddrId, Key) ->
-    case leo_object_storage_api:get({AddrId, Key}) of
-        {ok, _Metadata, Object} ->
-            leo_sync_remote_cluster:defer_stack(Object);
-        not_found = Cause ->
-            {error, Cause};
-        {error, Cause} ->
-            {error, Cause}
-    end.
-
-%% @doc
-%% Get the disk usage(Total, Free) on leo_storage in KByte
--spec(get_disk_usage() -> {ok, {Total::pos_integer(), Free::pos_integer()}}).
+%% @doc Get the disk usage(Total, Free) on leo_storage in KByte
+-spec(get_disk_usage() ->
+             {ok, {Total, Free}} when Total::pos_integer(),
+                                      Free::pos_integer()).
 get_disk_usage() ->
     PathList = case ?env_storage_device() of
                    [] -> [];
@@ -443,3 +484,68 @@ get_disk_usage([Path|Rest], Dict) ->
             {error, Error}
     end.
 
+
+%%--------------------------------------------------------------------
+%% MQ-related
+%%--------------------------------------------------------------------
+%% @doc Retrieve mq-consumer state
+-spec(get_mq_consumer_state() ->
+             {ok, StateList} | not_found when StateList::{MQId, State, MsgCount},
+                                              MQId::atom(),
+                                              State::atom(),
+                                              MsgCount::non_neg_integer()).
+get_mq_consumer_state() ->
+    case leo_mq_api:consumers() of
+        {ok,  []} ->
+            not_found;
+        {ok, StateList} ->
+            StateList_1 =
+                lists:flatten(
+                  lists:map(
+                    fun(#mq_state{id = MQId} = S) ->
+                            case leo_misc:get_value(MQId, ?mq_id_and_alias, []) of
+                                [] ->
+                                    [];
+                                Desc ->
+                                    S#mq_state{desc = Desc}
+                            end
+                    end, StateList)),
+            {ok, StateList_1}
+    end.
+
+-spec(get_mq_consumer_state(MQId) ->
+             {ok, StateList} | not_found when MQId::atom(),
+                                              StateList::{Id, State, MsgCount},
+                                              Id::atom(),
+                                              State::atom(),
+                                              MsgCount::non_neg_integer()).
+get_mq_consumer_state(MQId) ->
+    case leo_mq_api:consumers() of
+        {ok,  []} ->
+            not_found;
+        {ok, Consumers} ->
+            get_mq_consumer_state_1(Consumers, MQId)
+    end.
+
+%% @private
+get_mq_consumer_state_1([],_MQId) ->
+    not_found;
+get_mq_consumer_state_1([#mq_state{id = MQId} = State|_], MQId) ->
+    Desc = leo_misc:get_value(MQId, ?mq_id_and_alias, []),
+    {ok, State#mq_state{desc = Desc}};
+get_mq_consumer_state_1([_|Rest], MQId) ->
+    get_mq_consumer_state_1(Rest, MQId).
+
+
+%% @doc Suspend comsumption msg of the mq-consumer
+-spec(mq_suspend(MQId) ->
+             ok when MQId::atom()).
+mq_suspend(MQId) ->
+    leo_mq_api:suspend(MQId).
+
+
+%% @doc Resume comsumption msg of the mq-consumer
+-spec(mq_resume(MQId) ->
+             ok when MQId::atom()).
+mq_resume(MQId) ->
+    leo_mq_api:resume(MQId).

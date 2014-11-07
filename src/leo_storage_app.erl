@@ -32,7 +32,9 @@
 -include("leo_storage.hrl").
 -include_lib("leo_commons/include/leo_commons.hrl").
 -include_lib("leo_logger/include/leo_logger.hrl").
+-include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("leo_statistics/include/leo_statistics.hrl").
+-include_lib("leo_watchdog/include/leo_watchdog.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 %% Application and Supervisor callbacks
@@ -42,6 +44,7 @@
 %% Application behaviour callbacks
 %%----------------------------------------------------------------------
 start(_Type, _Args) ->
+    application:start(leo_watchdog),
     Res = leo_storage_sup:start_link(),
     after_proc(Res).
 
@@ -107,6 +110,65 @@ after_proc({ok, Pid}) ->
 
     %% Launch leo-rpc
     ok = leo_rpc:start(),
+
+    %% Launch leo-watchdog
+    %% Watchdog for rex's binary usage
+    MaxMemCapacity = ?env_wd_threshold_mem_capacity(leo_storage),
+    IntervalRex = ?env_wd_rex_interval(leo_storage),
+    leo_watchdog_sup:start_child(
+      rex, [MaxMemCapacity], IntervalRex),
+
+    %% Wachdog for CPU
+    case ?env_wd_cpu_enabled(leo_storage) of
+        true ->
+            MaxCPULoadAvg = ?env_wd_threshold_cpu_load_avg(leo_storage),
+            MaxCPUUtil    = ?env_wd_threshold_cpu_util(leo_storage),
+            IntervalCpu   = ?env_wd_cpu_interval(leo_storage),
+            leo_watchdog_sup:start_child(
+              cpu, [MaxCPULoadAvg, MaxCPUUtil], IntervalCpu);
+        false ->
+            void
+    end,
+
+    %% Wachdog for IO
+    case ?env_wd_io_enabled(leo_storage) of
+        true ->
+            MaxInput    = ?env_wd_threshold_input_per_sec(leo_storage),
+            MaxOutput   = ?env_wd_threshold_output_per_sec(leo_storage),
+            IntervalIo  = ?env_wd_io_interval(leo_storage),
+            leo_watchdog_sup:start_child(
+              io, [MaxInput, MaxOutput], IntervalIo);
+        false ->
+            void
+    end,
+
+    %% Wachdog for Disk
+    case ?env_wd_disk_enabled(leo_storage) of
+        true ->
+            TargetPaths = lists:map(
+                            fun(Item) ->
+                                    {ok, Curr} = file:get_cwd(),
+                                    Path = leo_misc:get_value(path, Item),
+                                    Path1 = case Path of
+                                                "/"   ++ _Rest -> Path;
+                                                "../" ++ _Rest -> Path;
+                                                "./"  ++  Rest -> Curr ++ "/" ++ Rest;
+                                                _              -> Curr ++ "/" ++ Path
+                                            end,
+                                    Path2 = case (string:len(Path1) == string:rstr(Path1, "/")) of
+                                                true  -> Path1;
+                                                false -> Path1 ++ "/"
+                                            end,
+                                    Path2
+                            end, ?env_storage_device()),
+            MaxDiskUse   = ?env_wd_threshold_disk_use(leo_storage),
+            MaxDiskUtil  = ?env_wd_threshold_disk_util(leo_storage),
+            IntervalDisk = ?env_wd_disk_interval(leo_storage),
+            leo_watchdog_sup:start_child(
+              disk, [TargetPaths, MaxDiskUse, MaxDiskUtil], IntervalDisk);
+        false ->
+            void
+    end,
     {ok, Pid};
 
 after_proc(Error) ->
@@ -130,15 +192,17 @@ launch_logger() ->
 %% @doc Launch Object-Storage
 %%
 launch_object_storage(RefSup) ->
-    ObjStoageInfo = case ?env_storage_device() of
-                        [] -> [];
-                        Devices ->
-                            lists:map(fun(Item) ->
-                                              Containers = leo_misc:get_value(num_of_containers, Item),
-                                              Path       = leo_misc:get_value(path,              Item),
-                                              {Containers, Path}
-                                      end, Devices)
-                    end,
+    ObjStoageInfo =
+        case ?env_storage_device() of
+            [] -> [];
+            Devices ->
+                lists:map(
+                  fun(Item) ->
+                          Containers = leo_misc:get_value(num_of_containers, Item),
+                          Path       = leo_misc:get_value(path,              Item),
+                          {Containers, Path}
+                  end, Devices)
+        end,
 
     ChildSpec = {leo_object_storage_sup,
                  {leo_object_storage_sup, start_link, [ObjStoageInfo]},
@@ -151,7 +215,8 @@ launch_object_storage(RefSup) ->
 %% @private
 launch_redundant_manager(RefSup, Managers, QueueDir) ->
     ChildSpec = {leo_redundant_manager_sup,
-                 {leo_redundant_manager_sup, start_link, [storage, Managers, QueueDir]},
+                 {leo_redundant_manager_sup, start_link,
+                  [?PERSISTENT_NODE, Managers, QueueDir]},
                  permanent, 2000, supervisor, [leo_redundant_manager_sup]},
     {ok, _} = supervisor:start_child(RefSup, ChildSpec),
     ok.
