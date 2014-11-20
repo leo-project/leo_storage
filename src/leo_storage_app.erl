@@ -39,7 +39,9 @@
 
 %% Application and Supervisor callbacks
 -export([start/2, prep_stop/1, stop/1]).
--export([start_apps/0]).
+-export([start_mnesia/0,
+         start_statistics/0
+        ]).
 
 %%----------------------------------------------------------------------
 %% Application behaviour callbacks
@@ -61,21 +63,41 @@ stop(_State) ->
     ok.
 
 
-%% @doc Start mnesia-related processes and statistics
-start_apps() ->
-    %% Create cluster-related tables
-    ok = leo_cluster_tbl_conf:create_table(ram_copies, [node()]),
-    ok = leo_mdcr_tbl_cluster_info:create_table(ram_copies, [node()]),
-    ok = leo_mdcr_tbl_cluster_stat:create_table(ram_copies, [node()]),
-    ok = leo_mdcr_tbl_cluster_mgr:create_table(ram_copies, [node()]),
-    ok = leo_mdcr_tbl_cluster_member:create_table(ram_copies, [node()]),
+%% @doc Start mnesia and create tables
+start_mnesia() ->
+    try
+        %% Create cluster-related tables
+        application:ensure_started(mnesia),
+        leo_cluster_tbl_conf:create_table(ram_copies, [node()]),
+        leo_cluster_tbl_conf:create_table(ram_copies, [node()]),
+        leo_mdcr_tbl_cluster_info:create_table(ram_copies, [node()]),
+        leo_mdcr_tbl_cluster_stat:create_table(ram_copies, [node()]),
+        leo_mdcr_tbl_cluster_mgr:create_table(ram_copies, [node()]),
+        leo_mdcr_tbl_cluster_member:create_table(ram_copies, [node()])
+    catch
+        _:_Cause ->
+            ?debugVal(_Cause),
+            timer:apply_after(timer:seconds(1), ?MODULE, start_mnesia, [])
+    end,
+    ok.
 
-    %% Launch metric-servers
-    ok = leo_statistics_api:start_link(leo_storage),
-    ok = leo_statistics_api:create_tables(ram_copies, [node()]),
-    ok = leo_metrics_vm:start_link(?SNMP_SYNC_INTERVAL_10S),
-    ok = leo_metrics_req:start_link(?SNMP_SYNC_INTERVAL_60S),
-    ok = leo_storage_statistics:start_link(?SNMP_SYNC_INTERVAL_60S),
+%% @doc Start statistics
+start_statistics() ->
+    try
+        %% Launch metric-servers
+        application:ensure_started(mnesia),
+        application:ensure_started(snmp),
+
+        leo_statistics_api:start_link(leo_storage),
+        leo_statistics_api:create_tables(ram_copies, [node()]),
+        leo_metrics_vm:start_link(?SNMP_SYNC_INTERVAL_10S),
+        leo_metrics_req:start_link(?SNMP_SYNC_INTERVAL_60S),
+        leo_storage_statistics:start_link(?SNMP_SYNC_INTERVAL_60S)
+    catch
+        _:_Cause ->
+            ?debugVal(_Cause),
+            timer:apply_after(timer:seconds(1), ?MODULE, start_statistics, [])
+    end,
     ok.
 
 
@@ -176,7 +198,8 @@ after_proc({ok, Pid}) ->
     end,
 
     %% Launch statistics/mnesia-related processes
-    timer:apply_after(timer:seconds(1), ?MODULE, start_apps, []),
+    timer:apply_after(timer:seconds(3), ?MODULE, start_mnesia, []),
+    timer:apply_after(timer:seconds(3), ?MODULE, start_statistics, []),
     {ok, Pid};
 
 after_proc(Error) ->
