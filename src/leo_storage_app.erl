@@ -39,6 +39,7 @@
 
 %% Application and Supervisor callbacks
 -export([start/2, prep_stop/1, stop/1]).
+-export([start_apps/0]).
 
 %%----------------------------------------------------------------------
 %% Application behaviour callbacks
@@ -57,6 +58,24 @@ prep_stop(_State) ->
     ok.
 
 stop(_State) ->
+    ok.
+
+
+%% @doc Start mnesia-related processes and statistics
+start_apps() ->
+    %% Create cluster-related tables
+    ok = leo_cluster_tbl_conf:create_table(ram_copies, [node()]),
+    ok = leo_mdcr_tbl_cluster_info:create_table(ram_copies, [node()]),
+    ok = leo_mdcr_tbl_cluster_stat:create_table(ram_copies, [node()]),
+    ok = leo_mdcr_tbl_cluster_mgr:create_table(ram_copies, [node()]),
+    ok = leo_mdcr_tbl_cluster_member:create_table(ram_copies, [node()]),
+
+    %% Launch metric-servers
+    ok = leo_statistics_api:start_link(leo_storage),
+    ok = leo_statistics_api:create_tables(ram_copies, [node()]),
+    ok = leo_metrics_vm:start_link(?SNMP_SYNC_INTERVAL_10S),
+    ok = leo_metrics_req:start_link(?SNMP_SYNC_INTERVAL_60S),
+    ok = leo_storage_statistics:start_link(?SNMP_SYNC_INTERVAL_60S),
     ok.
 
 
@@ -93,20 +112,6 @@ after_proc({ok, Pid}) ->
     %% After processing
     ensure_started(rex, rpc, start_link, worker, 2000),
     ok = leo_storage_api:register_in_monitor(first),
-
-    %% Launch metric-servers
-    ok = leo_statistics_api:start_link(leo_storage),
-    ok = leo_statistics_api:create_tables(ram_copies, [node()]),
-    ok = leo_metrics_vm:start_link(?SNMP_SYNC_INTERVAL_10S),
-    ok = leo_metrics_req:start_link(?SNMP_SYNC_INTERVAL_60S),
-    ok = leo_storage_statistics:start_link(?SNMP_SYNC_INTERVAL_60S),
-
-    %% Create cluster-related tables
-    ok = leo_cluster_tbl_conf:create_table(ram_copies, [node()]),
-    ok = leo_mdcr_tbl_cluster_info:create_table(ram_copies, [node()]),
-    ok = leo_mdcr_tbl_cluster_stat:create_table(ram_copies, [node()]),
-    ok = leo_mdcr_tbl_cluster_mgr:create_table(ram_copies, [node()]),
-    ok = leo_mdcr_tbl_cluster_member:create_table(ram_copies, [node()]),
 
     %% Launch leo-rpc
     ok = leo_rpc:start(),
@@ -169,6 +174,9 @@ after_proc({ok, Pid}) ->
         false ->
             void
     end,
+
+    %% Launch statistics/mnesia-related processes
+    timer:apply_after(timer:seconds(1), ?MODULE, start_apps, []),
     {ok, Pid};
 
 after_proc(Error) ->
