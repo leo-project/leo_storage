@@ -225,7 +225,7 @@
  "leo_storage.wd_cpu_enabled",
  [
   {datatype, atom},
-  {default, false}
+  {default, true}
  ]}.
 
 %% @doc Check inteval (sec) - defalut:5sec
@@ -296,7 +296,7 @@
  "leo_storage.wd_disk_enabled",
  [
   {datatype, atom},
-  {default, false}
+  {default, true}
  ]}.
 
 %% @doc Check inteval (sec) - defalut:1sec
@@ -321,6 +321,24 @@
 {mapping,
  "watchdog.disk.threshold_disk_util",
  "leo_storage.wd_threshold_disk_util",
+ [
+  {datatype, integer},
+  {default, 100}
+ ]}.
+
+%% @doc Threshold disk read kb/sec - default:65536
+{mapping,
+ "watchdog.disk.threshold_disk_rkb",
+ "leo_storage.wd_threshold_disk_rkb",
+ [
+  {datatype, integer},
+  {default, 100}
+ ]}.
+
+%% @doc Threshold disk write kb/sec - default:65536
+{mapping,
+ "watchdog.disk.threshold_disk_wkb",
+ "leo_storage.wd_threshold_disk_wkb",
  [
   {datatype, integer},
   {default, 100}
