@@ -200,6 +200,9 @@
 %% --------------------------------------------------------------------
 %% STORAGE - Watchdog
 %% --------------------------------------------------------------------
+%%
+%%  Watchdog.REX
+%%
 %% @doc Check inteval (sec) - defalut:5sec
 {mapping,
  "watchdog.rex.interval",
@@ -219,6 +222,9 @@
   {default, 33554432}
  ]}.
 
+%%
+%%  Watchdog.CPU
+%%
 %% @doc CPU - Is enabled
 {mapping,
  "watchdog.cpu.is_enabled",
@@ -226,6 +232,15 @@
  [
   {datatype, atom},
   {default, true}
+ ]}.
+
+%% @doc CPU - Raised error times - defalut:3
+{mapping,
+ "watchdog.cpu.raised_error_times",
+ "leo_storage.wd_cpu_raised_error_times",
+ [
+  {datatype, integer},
+  {default, 3}
  ]}.
 
 %% @doc Check inteval (sec) - defalut:5sec
@@ -254,6 +269,9 @@
   {default, 100}
  ]}.
 
+%%
+%%  Watchdog.IO
+%%
 %% @doc IO - Is enabled
 {mapping,
  "watchdog.io.is_enabled",
@@ -290,6 +308,9 @@
   {default, 134217728}
  ]}.
 
+%%
+%%  Watchdog.DISK
+%%
 %% @doc Disk - Is enabled
 {mapping,
  "watchdog.disk.is_enabled",
@@ -297,6 +318,15 @@
  [
   {datatype, atom},
   {default, true}
+ ]}.
+
+%% @doc Disk - Raised error times - defalut:3
+{mapping,
+ "watchdog.disk.raised_error_times",
+ "leo_storage.wd_disk_raised_error_times",
+ [
+  {datatype, integer},
+  {default, 3}
  ]}.
 
 %% @doc Check inteval (sec) - defalut:1sec
