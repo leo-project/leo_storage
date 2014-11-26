@@ -84,10 +84,11 @@ handle_notify() ->
     %% set size of stored data
     {ok, Ret4} = leo_object_storage_api:stats(),
     {TSize2, ASize2, TObjs2, AObjs2} =
-        lists:foldl(fun({ok, #storage_stats{total_sizes  = TSize0,
-                                            active_sizes = ASize0,
-                                            total_num    = TObjs0,
-                                            active_num   = AObjs0}}, {TSize1, ASize1, TObjs1, AObjs1}) ->
+        lists:foldl(fun(#storage_stats{total_sizes  = TSize0,
+                                       active_sizes = ASize0,
+                                       total_num    = TObjs0,
+                                       active_num   = AObjs0},
+                        {TSize1, ASize1, TObjs1, AObjs1}) ->
                             {TSize0 + TSize1,
                              ASize0 + ASize1,
                              TObjs0 + TObjs1,
