@@ -252,7 +252,7 @@
   {default, 5}
  ]}.
 
-%% @doc Threshold CPU load avg for 1min/5min - default:2.5
+%% @doc Threshold CPU load avg for 1min/5min - default:3.0
 {mapping,
  "watchdog.cpu.threshold_cpu_load_avg",
  "leo_storage.wd_threshold_cpu_load_avg",
