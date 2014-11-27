@@ -252,12 +252,12 @@
   {default, 5}
  ]}.
 
-%% @doc Threshold CPU load avg for 1min/5min - default:2.0
+%% @doc Threshold CPU load avg for 1min/5min - default:2.5
 {mapping,
  "watchdog.cpu.threshold_cpu_load_avg",
  "leo_storage.wd_threshold_cpu_load_avg",
  [
-  {default, "2.0"}
+  {default, "3.0"}
  ]}.
 
 %% @doc Threshold CPU load util - default:100 = "100%"
@@ -290,7 +290,8 @@
   {default, 1}
  ]}.
 
-%% @doc Threshold input size for interval - default:128MB
+%% @doc Threshold input size for interval
+%%      default:134217728(B) - 128MB
 {mapping,
  "watchdog.io.threshold_input_per_sec",
  "leo_storage.wd_threshold_input_per_sec",
@@ -299,7 +300,8 @@
   {default, 134217728}
  ]}.
 
-%% @doc Threshold output size for interval - default:128MB
+%% @doc Threshold output size for interval
+%%      default:134217728(B) - 128MB
 {mapping,
  "watchdog.io.threshold_output_per_sec",
  "leo_storage.wd_threshold_output_per_sec",
@@ -356,22 +358,24 @@
   {default, 100}
  ]}.
 
-%% @doc Threshold disk read kb/sec - default:65536
+%% @doc Threshold disk read kb/sec
+%%      default:131072(KB) - 128MB
 {mapping,
  "watchdog.disk.threshold_disk_rkb",
  "leo_storage.wd_threshold_disk_rkb",
  [
   {datatype, integer},
-  {default, 100}
+  {default, 131072}
  ]}.
 
-%% @doc Threshold disk write kb/sec - default:65536
+%% @doc Threshold disk write kb/sec
+%%      default:131072(KB) - 128MB
 {mapping,
  "watchdog.disk.threshold_disk_wkb",
  "leo_storage.wd_threshold_disk_wkb",
  [
   {datatype, integer},
-  {default, 100}
+  {default, 131072}
  ]}.
 
 
