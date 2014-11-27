@@ -472,3 +472,46 @@
                           {leo_rebalance_queue,         "rebalance objs"},
                           {leo_sync_by_vnode_id_queue,  "sync objs by vnode-id"},
                           {leo_per_object_queue,        "recover inconsistent objs"}]).
+
+
+%% Storage watchdog related
+%%
+%% @doc Threshold active size ratio:
+%%    * round(active-size/total-size)
+%%    * default:50%
+-ifdef(TEST).
+-define(DEF_WARN_ACTIVE_SIZE_RATIO,      95).
+-define(DEF_THRESHOLD_ACTIVE_SIZE_RATIO, 90).
+-define(DEF_STORAGE_WATHDOG_INTERVAL, timer:seconds(3)).
+-else.
+-define(DEF_WARN_ACTIVE_SIZE_RATIO,      55).
+-define(DEF_THRESHOLD_ACTIVE_SIZE_RATIO, 50).
+-define(DEF_STORAGE_WATHDOG_INTERVAL, timer:seconds(10)).
+-endif.
+
+-define(WD_ITEM_ACTIVE_SIZE_RATIO, 'active_size_ratio').
+-define(WD_EXCLUDE_ITEMS, ['leo_storage_watchdog']).
+
+-define(env_warn_active_size_ratio(),
+        case application:get_env(leo_storage, warn_active_size_ratio) of
+            {ok, EnvWarnActiveSizeRatio} ->
+                EnvWarnActiveSizeRatio;
+            _ ->
+                ?DEF_WARN_ACTIVE_SIZE_RATIO
+        end).
+
+-define(env_threshold_active_size_ratio(),
+        case application:get_env(leo_storage, threshold_active_size_ratio) of
+            {ok, EnvThresholdActiveSizeRatio} ->
+                EnvThresholdActiveSizeRatio;
+            _ ->
+                ?DEF_THRESHOLD_ACTIVE_SIZE_RATIO
+        end).
+
+-define(env_storage_watchdog_interval(),
+        case application:get_env(leo_storage, storage_watchdog_interval) of
+            {ok, EnvStorageWatchdogInterval} ->
+                EnvStorageWatchdogInterval;
+            _ ->
+                ?DEF_STORAGE_WATHDOG_INTERVAL
+        end).

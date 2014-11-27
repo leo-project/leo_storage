@@ -76,7 +76,6 @@ start_mnesia() ->
         leo_mdcr_tbl_cluster_member:create_table(ram_copies, [node()])
     catch
         _:_Cause ->
-            ?debugVal(_Cause),
             timer:apply_after(timer:seconds(1), ?MODULE, start_mnesia, [])
     end,
     ok.
@@ -95,7 +94,6 @@ start_statistics() ->
         leo_storage_statistics:start_link(?SNMP_SYNC_INTERVAL_60S)
     catch
         _:_Cause ->
-            ?debugVal(_Cause),
             timer:apply_after(timer:seconds(1), ?MODULE, start_statistics, [])
     end,
     ok.
@@ -172,30 +170,44 @@ after_proc({ok, Pid}) ->
     %% Wachdog for Disk
     case ?env_wd_disk_enabled(leo_storage) of
         true ->
-            TargetPaths = lists:map(
-                            fun(Item) ->
-                                    {ok, Curr} = file:get_cwd(),
-                                    Path = leo_misc:get_value(path, Item),
-                                    Path1 = case Path of
-                                                "/"   ++ _Rest -> Path;
-                                                "../" ++ _Rest -> Path;
-                                                "./"  ++  Rest -> Curr ++ "/" ++ Rest;
-                                                _              -> Curr ++ "/" ++ Path
-                                            end,
-                                    Path2 = case (string:len(Path1) == string:rstr(Path1, "/")) of
-                                                true  -> Path1;
-                                                false -> Path1 ++ "/"
-                                            end,
-                                    Path2
-                            end, ?env_storage_device()),
-            MaxDiskUse   = ?env_wd_threshold_disk_use(leo_storage),
-            MaxDiskUtil  = ?env_wd_threshold_disk_util(leo_storage),
-            IntervalDisk = ?env_wd_disk_interval(leo_storage),
+            TargetPaths =
+                lists:map(
+                  fun(Item) ->
+                          {ok, Curr} = file:get_cwd(),
+                          Path = leo_misc:get_value(path, Item),
+                          Path1 = case Path of
+                                      "/"   ++ _Rest -> Path;
+                                      "../" ++ _Rest -> Path;
+                                      "./"  ++  Rest -> Curr ++ "/" ++ Rest;
+                                      _              -> Curr ++ "/" ++ Path
+                                  end,
+                          Path2 = case (string:len(Path1) == string:rstr(Path1, "/")) of
+                                      true  -> Path1;
+                                      false -> Path1 ++ "/"
+                                  end,
+                          Path2
+                  end, ?env_storage_device()),
             leo_watchdog_sup:start_child(
-              disk, [TargetPaths, MaxDiskUse, MaxDiskUtil], IntervalDisk);
+              disk, [TargetPaths,
+                     ?env_wd_threshold_disk_use(leo_storage),
+                     ?env_wd_threshold_disk_util(leo_storage)],
+              ?env_wd_disk_interval(leo_storage));
         false ->
             void
     end,
+
+    %% Watchdog for Storage
+    {ok, _} = supervisor:start_child(
+                leo_watchdog_sup, {leo_storage_watchdog,
+                                   {leo_storage_watchdog, start_link,
+                                    [?env_warn_active_size_ratio(),
+                                     ?env_threshold_active_size_ratio(),
+                                     ?env_storage_watchdog_interval()
+                                    ]},
+                                   permanent,
+                                   2000,
+                                   worker,
+                                   [leo_storage_watchdog]}),
 
     %% Launch statistics/mnesia-related processes
     timer:apply_after(timer:seconds(3), ?MODULE, start_mnesia, []),

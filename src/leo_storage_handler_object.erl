@@ -169,7 +169,7 @@ get_fun(AddrId, Key) ->
                                  EndPos::integer()).
 get_fun(AddrId, Key, StartPos, EndPos) ->
     %% Check state of the node
-    case leo_watchdog_state:find_not_safe_items() of
+    case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
         not_found ->
             %% Retrieve the object
             case leo_object_storage_api:get(
@@ -272,7 +272,7 @@ put(Ref, From, Object, ReqId) ->
                                               Object::#?OBJECT{}).
 put_fun(Ref, AddrId, Key, Object) ->
     %% Check state of the node
-    case leo_watchdog_state:find_not_safe_items() of
+    case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
         not_found ->
             %% Put the object to the local object-storage
             case leo_object_storage_api:put({AddrId, Key}, Object) of
@@ -874,7 +874,7 @@ read_and_repair_1(_,_,_) ->
              ok | {error, any()}).
 replicate_fun(?REP_LOCAL, Method, AddrId, Object) ->
     %% Check state of the node
-    case leo_watchdog_state:find_not_safe_items() of
+    case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
         not_found ->
             case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
                 {ok, #redundancies{nodes     = Redundancies,
