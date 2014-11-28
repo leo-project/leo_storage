@@ -67,9 +67,9 @@ start() ->
                  ok | {error, any()} when Id::atom(),
                                           Alarm::term(),
                                           Unixtime::non_neg_integer()).
-handle_notify(?WD_SUB_ID_1 = Id, Alarm, Unixtime) ->
-    %% @TODO - increase waiting time of data-compaction/batch-proc
-    ?debugVal({Id, Alarm, Unixtime}),
+handle_notify(?WD_SUB_ID_1,_Alarm,_Unixtime) ->
+    %% Increase waiting time of data-compaction/batch-proc
+    ok = leo_compact_fsm_controller:incr_waiting_time(),
     ok;
 handle_notify(?WD_SUB_ID_2, #watchdog_alarm{state = #watchdog_state{
                                                        level = Level,
@@ -99,7 +99,7 @@ handle_notify(?WD_SUB_ID_2, #watchdog_alarm{state = #watchdog_state{
                                       SafeTimes::non_neg_integer(),
                                       Unixtime::non_neg_integer()).
 handle_notify(?WD_SUB_ID_1,_State,_SafeTimes,_Unixtime) ->
-    %% @TODO - decrease waiting time of data-compaction/batch-proc
+    ok = leo_compact_fsm_controller:decr_waiting_time(),
     ok;
 handle_notify(?WD_SUB_ID_2,_State,_SafeTimes,_Unixtime) ->
     ok.
