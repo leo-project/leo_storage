@@ -71,9 +71,9 @@ handle_notify(?WD_SUB_ID_1 = Id, Alarm, Unixtime) ->
     %% @TODO - increase waiting time of data-compaction/batch-proc
     ?debugVal({Id, Alarm, Unixtime}),
     ok;
-handle_notify(?WD_SUB_ID_2 = Id, #watchdog_alarm{state = #watchdog_state{
-                                                            level = Level,
-                                                            props = Props}} = Alarm, Unixtime) ->
+handle_notify(?WD_SUB_ID_2, #watchdog_alarm{state = #watchdog_state{
+                                                       level = Level,
+                                                       props = Props}},_Unixtime) ->
     case (Level >= ?WD_LEVEL_ERROR) of
         true ->
             case leo_compact_fsm_controller:state() of
@@ -82,7 +82,9 @@ handle_notify(?WD_SUB_ID_2 = Id, #watchdog_alarm{state = #watchdog_state{
                     ok =leo_object_storage_api:compact_data(
                           PendingTargets, ?DEF_MAX_COMPACTION_PROCS,
                           fun leo_redundant_manager_api:has_charge_of_node/2),
-                    ?info("handle_notify/3", "run-data-compaction:~p", [Props]),
+                    Ratio = leo_misc:get_value('ratio', Props),
+                    ?info("handle_notify/3",
+                          "run-data-compaction - level:~w, ratio:~w%", [Level, Ratio]),
                     ok;
                 _ ->
                     ok
