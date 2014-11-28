@@ -208,6 +208,7 @@ after_proc({ok, Pid}) ->
                                    2000,
                                    worker,
                                    [leo_storage_watchdog]}),
+    ok = leo_storage_watchdog_sub:start(),
 
     %% Launch statistics/mnesia-related processes
     timer:apply_after(timer:seconds(3), ?MODULE, start_mnesia, []),
