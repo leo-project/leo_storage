@@ -491,7 +491,7 @@
 
 -define(WD_ITEM_ACTIVE_SIZE_RATIO, 'active_size_ratio').
 -define(WD_EXCLUDE_ITEMS, ['leo_storage_watchdog']).
--define(DEF_MAX_COMPACTION_PROCS, 3).
+-define(DEF_MAX_COMPACTION_PROCS, 1).
 
 -define(env_warn_active_size_ratio(),
         case application:get_env(leo_storage, warn_active_size_ratio) of

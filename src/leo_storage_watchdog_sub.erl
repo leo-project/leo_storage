@@ -45,7 +45,7 @@
 
 -define(WD_SUB_ID_1, 'leo_watchdog_sub_1').
 -define(WD_SUB_ID_2, 'leo_watchdog_sub_2').
-
+-define(DEF_WAIT_TIME, 100).
 
 %%--------------------------------------------------------------------
 %% API
@@ -76,12 +76,13 @@ handle_notify(?WD_SUB_ID_2, #watchdog_alarm{state = #watchdog_state{
                                                        props = Props}},_Unixtime) ->
     case (Level >= ?WD_LEVEL_ERROR) of
         true ->
+            timer:sleep(?DEF_WAIT_TIME),
             case leo_compact_fsm_controller:state() of
                 {ok, #compaction_stats{status = ?ST_IDLING,
                                        pending_targets = PendingTargets}} when PendingTargets /= [] ->
-                    ok =leo_object_storage_api:compact_data(
-                          PendingTargets, ?DEF_MAX_COMPACTION_PROCS,
-                          fun leo_redundant_manager_api:has_charge_of_node/2),
+                    timer:apply_after(?DEF_WAIT_TIME, leo_object_storage_api, compact_data,
+                                      [PendingTargets, ?DEF_MAX_COMPACTION_PROCS,
+                                       fun leo_redundant_manager_api:has_charge_of_node/2]),
                     Ratio = leo_misc:get_value('ratio', Props),
                     ?info("handle_notify/3",
                           "run-data-compaction - level:~w, ratio:~w%", [Level, Ratio]),
