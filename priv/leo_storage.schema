@@ -231,7 +231,7 @@
  "leo_storage.wd_cpu_enabled",
  [
   {datatype, atom},
-  {default, true}
+  {default, false}
  ]}.
 
 %% @doc CPU - Raised error times - defalut:3
