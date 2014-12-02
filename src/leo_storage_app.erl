@@ -196,19 +196,24 @@ after_proc({ok, Pid}) ->
             void
     end,
 
-    %% Watchdog for Storage
-    {ok, _} = supervisor:start_child(
-                leo_watchdog_sup, {leo_storage_watchdog,
-                                   {leo_storage_watchdog, start_link,
-                                    [?env_warn_active_size_ratio(),
-                                     ?env_threshold_active_size_ratio(),
-                                     ?env_storage_watchdog_interval()
-                                    ]},
-                                   permanent,
-                                   2000,
-                                   worker,
-                                   [leo_storage_watchdog]}),
-    ok = leo_storage_watchdog_sub:start(),
+    %% Watchdog for Storage in order to operate 'auto-compaction' automatically
+    case ?env_auto_compaction_enabled() of
+        true ->
+            {ok, _} = supervisor:start_child(
+                        leo_watchdog_sup, {leo_storage_watchdog,
+                                           {leo_storage_watchdog, start_link,
+                                            [?env_warn_active_size_ratio(),
+                                             ?env_threshold_active_size_ratio(),
+                                             ?env_storage_watchdog_interval()
+                                            ]},
+                                           permanent,
+                                           2000,
+                                           worker,
+                                           [leo_storage_watchdog]}),
+            ok = leo_storage_watchdog_sub:start();
+        false ->
+            void
+    end,
 
     %% Launch statistics/mnesia-related processes
     timer:apply_after(timer:seconds(3), ?MODULE, start_mnesia, []),

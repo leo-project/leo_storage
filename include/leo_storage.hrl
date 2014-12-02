@@ -516,3 +516,14 @@
             _ ->
                 ?DEF_STORAGE_WATHDOG_INTERVAL
         end).
+
+
+%% Storage autonomic-operation related
+%%
+-define(env_auto_compaction_enabled(),
+        case application:get_env(leo_storage, auto_compaction_enabled) of
+            {ok, EnvAutoCompactionEnabled} ->
+                EnvAutoCompactionEnabled;
+            _ ->
+                false
+        end).

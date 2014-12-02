@@ -384,6 +384,19 @@
 %% --------------------------------------------------------------------
 %% @doc A number of mq-server's processes
 {mapping,
+ "autonomic_op.compaction.is_enabled",
+ "leo_storage.auto_compaction_enabled",
+ [
+  {datatype, atom},
+  {default, false}
+ ]}.
+
+
+%% --------------------------------------------------------------------
+%% STORAGE - MQ
+%% --------------------------------------------------------------------
+%% @doc A number of mq-server's processes
+{mapping,
  "mq.num_of_mq_procs",
  "leo_storage.num_of_mq_procs",
  [

@@ -415,6 +415,7 @@ get_node_status() ->
             {disk_threshold_disk_util,    ?env_wd_threshold_disk_util(leo_storage)}
            ]
           },
+          {auto_compaction_enabled, ?env_auto_compaction_enabled()},
           {statistics,    Statistics}
          ]}.
 
