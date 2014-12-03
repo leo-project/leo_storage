@@ -415,10 +415,16 @@ get_node_status() ->
             {disk_threshold_disk_util,    ?env_wd_threshold_disk_util(leo_storage)}
            ]
           },
+          %% mq-related
+          {mq_num_of_procs,       ?env_num_of_mq_procs()},
+          {mq_num_of_batch_procs, ?env_mq_num_of_batch_procs()},
+          {mq_waiting_time_min,   ?env_mq_waiting_time_min()},
+          {mq_waiting_time_max,   ?env_mq_waiting_time_max()},
+          %% auto-compaction-related
           {auto_compaction_enabled, ?env_auto_compaction_enabled()},
           {auto_compaction_warn_active_size_ratio,      ?env_warn_active_size_ratio()},
           {auto_compaction_threshold_active_size_ratio, ?env_threshold_active_size_ratio()},
-          {auto_compaction_parallel_procs, ?env_auto_compaction_parallel_procs()},
+          {auto_compaction_parallel_procs,              ?env_auto_compaction_parallel_procs()},
           {statistics, Statistics}
          ]}.
 
