@@ -71,7 +71,14 @@ handle_notify(?WD_SUB_ID_1,_Alarm,_Unixtime) ->
     %% Increase waiting time of data-compaction/batch-proc
     ok = leo_compact_fsm_controller:incr_waiting_time(),
     %% Increase waiting time of mq-compsumption
-    %% @TODO
+    ok = leo_mq_api:incr_waiting_time(?QUEUE_ID_PER_OBJECT),
+    ok = leo_mq_api:incr_waiting_time(?QUEUE_ID_SYNC_BY_VNODE_ID),
+    ok = leo_mq_api:incr_waiting_time(?QUEUE_ID_REBALANCE),
+    ok = leo_mq_api:incr_waiting_time(?QUEUE_ID_ASYNC_DELETION),
+    ok = leo_mq_api:incr_waiting_time(?QUEUE_ID_RECOVERY_NODE),
+    ok = leo_mq_api:incr_waiting_time(?QUEUE_ID_SYNC_OBJ_WITH_DC),
+    ok = leo_mq_api:incr_waiting_time(?QUEUE_ID_COMP_META_WITH_DC),
+    ok = leo_mq_api:incr_waiting_time(?QUEUE_ID_DEL_DIR),
     ok;
 handle_notify(?WD_SUB_ID_2, #watchdog_alarm{state = #watchdog_state{
                                                        level = Level,
@@ -108,9 +115,17 @@ handle_notify(?WD_SUB_ID_2, #watchdog_alarm{state = #watchdog_state{
                                       SafeTimes::non_neg_integer(),
                                       Unixtime::non_neg_integer()).
 handle_notify(?WD_SUB_ID_1,_State,_SafeTimes,_Unixtime) ->
+    %% Decrease waiting time of data-compaction/batch-proc
     ok = leo_compact_fsm_controller:decr_waiting_time(),
     %% Decrease waiting time of mq-compsumption
-    %% @TODO
+    ok = leo_mq_api:decr_waiting_time(?QUEUE_ID_PER_OBJECT),
+    ok = leo_mq_api:decr_waiting_time(?QUEUE_ID_SYNC_BY_VNODE_ID),
+    ok = leo_mq_api:decr_waiting_time(?QUEUE_ID_REBALANCE),
+    ok = leo_mq_api:decr_waiting_time(?QUEUE_ID_ASYNC_DELETION),
+    ok = leo_mq_api:decr_waiting_time(?QUEUE_ID_RECOVERY_NODE),
+    ok = leo_mq_api:decr_waiting_time(?QUEUE_ID_SYNC_OBJ_WITH_DC),
+    ok = leo_mq_api:decr_waiting_time(?QUEUE_ID_COMP_META_WITH_DC),
+    ok = leo_mq_api:decr_waiting_time(?QUEUE_ID_DEL_DIR),
     ok;
 handle_notify(?WD_SUB_ID_2,_State,_SafeTimes,_Unixtime) ->
     ok.
