@@ -125,9 +125,7 @@ after_proc({ok, Pid}) ->
     QueueDir = ?env_queue_dir(leo_storage),
     Managers = ?env_manager_nodes(leo_storage),
     ok = launch_redundant_manager(Pid, Managers, QueueDir),
-
-    Intervals = ?env_mq_consumption_intervals(),
-    ok = leo_storage_mq:start(Pid, Intervals, QueueDir),
+    ok = leo_storage_mq:start(Pid, QueueDir),
 
     %% After processing
     ensure_started(rex, rpc, start_link, worker, 2000),

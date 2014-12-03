@@ -431,186 +431,34 @@
   {default, 8}
  ]}.
 
-%% @doc MQ recover per_object
-%%
+%% @doc A number of mq-server's processes
+%%      default: 100
 {mapping,
- "mq.recover_per_object.num_of_batch_process",
- "leo_storage.cns_num_of_batch_process_per_object",
+ "mq.num_of_batch_process",
+ "leo_storage.mq_num_of_batch_process",
  [
   {datatype, integer},
-  {default, 1}
+  {default, 100}
  ]}.
 
+%% @doc Minimum value of compaction-proc waiting time/batch-proc(msec)
+%%      default: 8msec
 {mapping,
- "mq.recover_per_object.interval_min",
- "leo_storage.cns_interval_per_object_min",
- [
-  {datatype, integer},
-  {default, 1}
- ]}.
-
-{mapping,
- "mq.recover_per_object.interval_max",
- "leo_storage.cns_interval_per_object_max",
- [
-  {datatype, integer},
-  {default, 1}
- ]}.
-
-
-%% @doc MQ synchronize objects by vnode-id
-%%
-{mapping,
- "mq.sync_by_vnode_id.num_of_batch_process",
- "leo_storage.cns_num_of_batch_process_sync_by_vnode_id",
- [
-  {datatype, integer},
-  {default, 1}
- ]}.
-
-{mapping,
- "mq.sync_by_vnode_id.interval_min",
- "leo_storage.cns_interval_sync_by_vnode_id_min",
+ "mq.waiting_time_min",
+ "leo_storage.mq_waiting_time_min",
  [
   {datatype, integer},
   {default, 8}
  ]}.
 
+%% @doc Maximum value of compaction-proc waiting time/batch-proc(msec)
+%%      default: 1000msec (1sec)
 {mapping,
- "mq.sync_by_vnode_id.interval_max",
- "leo_storage.cns_interval_sync_by_vnode_id_max",
+ "mq.waiting_time_max",
+ "leo_storage.mq_waiting_time_max",
  [
   {datatype, integer},
-  {default, 32}
- ]}.
-
-
-%% @doc MQ rebalance objects
-{mapping,
- "mq.rebalance.num_of_batch_process",
- "leo_storage.cns_num_of_batch_process_rebalance",
- [
-  {datatype, integer},
-  {default, 1}
- ]}.
-
-{mapping,
- "mq.rebalance.interval_min",
- "leo_storage.cns_interval_rebalance_min",
- [
-  {datatype, integer},
-  {default, 1}
- ]}.
-
-{mapping,
- "mq.rebalance.interval_max",
- "leo_storage.cns_interval_rebalance_max",
- [
-  {datatype, integer},
-  {default, 1}
- ]}.
-
-
-%% @doc MQ delete objects
-{mapping,
- "mq.delete_object.num_of_batch_process",
- "leo_storage.cns_num_of_batch_process_async_deletion",
- [
-  {datatype, integer},
-  {default, 1}
- ]}.
-
-{mapping,
- "mq.delete_object.interval_min",
- "leo_storage.cns_interval_async_deletion_min",
- [
-  {datatype, integer},
-  {default, 1}
- ]}.
-
-{mapping,
- "mq.delete_object.interval_max",
- "leo_storage.cns_interval_async_deletion_max",
- [
-  {datatype, integer},
-  {default, 1}
- ]}.
-
-
-%% @doc MQ recover a node's object
-{mapping,
- "mq.recovery_node.num_of_batch_process",
- "leo_storage.cns_num_of_batch_process_recovery_node",
- [
-  {datatype, integer},
-  {default, 1}
- ]}.
-
-{mapping,
- "mq.recovery_node.interval_min",
- "leo_storage.cns_interval_recovery_node_min",
- [
-  {datatype, integer},
-  {default, 1}
- ]}.
-
-{mapping,
- "mq.recovery_node.interval_max",
- "leo_storage.cns_interval_recovery_node_max",
- [
-  {datatype, integer},
-  {default, 1}
- ]}.
-
-
-%% @doc MQ sync obj with dc
-{mapping,
- "mq.sync_obj_with_dc.num_of_batch_process",
- "leo_storage.cns_num_of_batch_process_sync_obj_with_dc",
- [
-  {datatype, integer},
-  {default, 1}
- ]}.
-
-{mapping,
- "mq.sync_obj_with_dc.interval_min",
- "leo_storage.cns_interval_sync_obj_with_dc_min",
- [
-  {datatype, integer},
-  {default, 8}
- ]}.
-
-{mapping,
- "mq.sync_obj_with_dc.interval_max",
- "leo_storage.cns_interval_sync_obj_with_dc_max",
- [
-  {datatype, integer},
-  {default, 32}
- ]}.
-
-%% @doc MQ compare metadata with dc
-{mapping,
- "mq.comp_meta_with_dc.num_of_batch_process",
- "leo_storage.cns_num_of_batch_process_comp_meta_with_dc",
- [
-  {datatype, integer},
-  {default, 1}
- ]}.
-
-{mapping,
- "mq.comp_meta_with_dc.interval_min",
- "leo_storage.cns_interval_comp_meta_with_dc_min",
- [
-  {datatype, integer},
-  {default, 8}
- ]}.
-
-{mapping,
- "mq.comp_meta_with_dc.interval_max",
- "leo_storage.cns_interval_comp_meta_with_dc_max",
- [
-  {datatype, integer},
-  {default, 32}
+  {default, 1000}
  ]}.
 
 
