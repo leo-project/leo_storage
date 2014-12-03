@@ -380,15 +380,33 @@
 
 
 %% --------------------------------------------------------------------
-%% STORAGE - MQ
+%% STORAGE - Autonomic operation
 %% --------------------------------------------------------------------
-%% @doc A number of mq-server's processes
+%% @doc [compaction] enabled compaction? - default:false
 {mapping,
  "autonomic_op.compaction.is_enabled",
  "leo_storage.auto_compaction_enabled",
  [
   {datatype, atom},
   {default, false}
+ ]}.
+
+%% @doc [compaction] warning ratio of active size - default:70%
+{mapping,
+ "autonomic_op.compaction.warn_active_size_ratio",
+ "leo_storage.warn_active_size_ratio",
+ [
+  {datatype, integer},
+  {default, 70}
+ ]}.
+
+%% @doc [compaction] threshold ratio of active size - default:60%
+{mapping,
+ "autonomic_op.compaction.threshold_active_size_ratio",
+ "leo_storage.threshold_active_size_ratio",
+ [
+  {datatype, integer},
+  {default, 60}
  ]}.
 
 
