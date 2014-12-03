@@ -517,7 +517,6 @@
                 ?DEF_STORAGE_WATHDOG_INTERVAL
         end).
 
-
 %% Storage autonomic-operation related
 %%
 -define(env_auto_compaction_enabled(),
@@ -526,4 +525,12 @@
                 EnvAutoCompactionEnabled;
             _ ->
                 false
+        end).
+
+-define(env_auto_compaction_parallel_procs(),
+        case application:get_env(leo_storage, auto_compaction_parallel_procs) of
+            {ok, EnvAutoCompactionParallelProcs} ->
+                EnvAutoCompactionParallelProcs;
+            _ ->
+                ?DEF_MAX_COMPACTION_PROCS
         end).

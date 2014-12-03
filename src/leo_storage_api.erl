@@ -418,6 +418,7 @@ get_node_status() ->
           {auto_compaction_enabled, ?env_auto_compaction_enabled()},
           {auto_compaction_warn_active_size_ratio,      ?env_warn_active_size_ratio()},
           {auto_compaction_threshold_active_size_ratio, ?env_threshold_active_size_ratio()},
+          {auto_compaction_parallel_procs, ?env_auto_compaction_parallel_procs()},
           {statistics, Statistics}
          ]}.
 

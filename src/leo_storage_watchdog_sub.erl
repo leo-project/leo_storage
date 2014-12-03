@@ -70,6 +70,8 @@ start() ->
 handle_notify(?WD_SUB_ID_1,_Alarm,_Unixtime) ->
     %% Increase waiting time of data-compaction/batch-proc
     ok = leo_compact_fsm_controller:incr_waiting_time(),
+    %% Increase waiting time of mq-compsumption
+    %% @TODO
     ok;
 handle_notify(?WD_SUB_ID_2, #watchdog_alarm{state = #watchdog_state{
                                                        level = Level,
@@ -80,8 +82,10 @@ handle_notify(?WD_SUB_ID_2, #watchdog_alarm{state = #watchdog_state{
             case leo_compact_fsm_controller:state() of
                 {ok, #compaction_stats{status = ?ST_IDLING,
                                        pending_targets = PendingTargets}} when PendingTargets /= [] ->
+                    ProcsOfParallelProcessing = ?env_auto_compaction_parallel_procs(),
+
                     case leo_object_storage_api:compact_data(
-                           PendingTargets, ?DEF_MAX_COMPACTION_PROCS,
+                           PendingTargets, ProcsOfParallelProcessing,
                            fun leo_redundant_manager_api:has_charge_of_node/2) of
                         ok ->
                             Ratio = leo_misc:get_value('ratio', Props),
@@ -105,6 +109,13 @@ handle_notify(?WD_SUB_ID_2, #watchdog_alarm{state = #watchdog_state{
                                       Unixtime::non_neg_integer()).
 handle_notify(?WD_SUB_ID_1,_State,_SafeTimes,_Unixtime) ->
     ok = leo_compact_fsm_controller:decr_waiting_time(),
+    %% Decrease waiting time of mq-compsumption
+    %% @TODO
     ok;
 handle_notify(?WD_SUB_ID_2,_State,_SafeTimes,_Unixtime) ->
     ok.
+
+
+%%--------------------------------------------------------------------
+%% Internal Function
+%%--------------------------------------------------------------------

@@ -391,6 +391,15 @@
   {default, false}
  ]}.
 
+%% @doc [compaction] number of parallel procs - default:1
+{mapping,
+ "autonomic_op.compaction.parallel_procs",
+ "leo_storage.auto_compaction_parallel_procs",
+ [
+  {datatype, integer},
+  {default, 1}
+ ]}.
+
 %% @doc [compaction] warning ratio of active size - default:70%
 {mapping,
  "autonomic_op.compaction.warn_active_size_ratio",
