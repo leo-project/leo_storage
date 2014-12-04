@@ -75,45 +75,8 @@ register_in_monitor(RequestedTimes) ->
              ok | {error, any()} when Pid::pid(),
                                       RequestedTimes::first|again).
 register_in_monitor(Pid, RequestedTimes) ->
-    Fun = fun(Node0, Res) ->
-                  Node1 = case is_atom(Node0) of
-                              true  -> Node0;
-                              false -> list_to_atom(Node0)
-                          end,
-                  case leo_misc:node_existence(Node1) of
-                      true ->
-                          GroupL1 = ?env_grp_level_1(),
-                          GroupL2 = ?env_grp_level_2(),
-                          NumOfNodes = ?env_num_of_vnodes(),
-                          RPCPort = ?env_rpc_port(),
-
-                          case rpc:call(Node1, leo_manager_api, register,
-                                        [RequestedTimes, Pid, erlang:node(), ?PERSISTENT_NODE,
-                                         GroupL1, GroupL2, NumOfNodes, RPCPort],
-                                        ?DEF_REQ_TIMEOUT) of
-                              {ok, SystemConf} ->
-                                  case leo_cluster_tbl_conf:update(SystemConf) of
-                                      ok ->
-                                          Options = lists:zip(
-                                                      record_info(
-                                                        fields, ?SYSTEM_CONF),
-                                                      tl(tuple_to_list(SystemConf))),
-                                          ok = leo_redundant_manager_api:set_options(Options),
-                                          true;
-                                      _ ->
-                                          false
-                                  end;
-                              Error ->
-                                  ?error("register_in_monitor/1",
-                                         "manager:~w, cause:~p", [Node1, Error]),
-                                  Res
-                          end;
-                      false ->
-                          Res
-                  end
-          end,
-
-    case lists:foldl(Fun, false, ?env_manager_nodes(leo_storage)) of
+    case register_in_monitor_1(?env_manager_nodes(leo_storage),
+                               Pid, RequestedTimes) of
         true ->
             ok;
         false ->
@@ -121,6 +84,54 @@ register_in_monitor(Pid, RequestedTimes) ->
                               [Pid, RequestedTimes]),
             ok
     end.
+
+%% private
+register_in_monitor_1([],_Pid,_RequestedTimes) ->
+    false;
+register_in_monitor_1([Node|Rest], Pid, RequestedTimes) ->
+    Node_1 = case is_atom(Node) of
+                true  -> Node;
+                false -> list_to_atom(Node)
+            end,
+
+    Ret = case leo_misc:node_existence(Node_1) of
+              true ->
+                  GroupL_1   = ?env_grp_level_1(),
+                  GroupL_2   = ?env_grp_level_2(),
+                  NumOfNodes = ?env_num_of_vnodes(),
+                  RPCPort    = ?env_rpc_port(),
+
+                  case rpc:call(Node_1, leo_manager_api, register,
+                                [RequestedTimes, Pid, erlang:node(), ?PERSISTENT_NODE,
+                                 GroupL_1, GroupL_2, NumOfNodes, RPCPort], ?DEF_REQ_TIMEOUT) of
+                      {ok, SystemConf} ->
+                          case leo_cluster_tbl_conf:update(SystemConf) of
+                              ok ->
+                                  Options = lists:zip(
+                                              record_info(
+                                                fields, ?SYSTEM_CONF),
+                                              tl(tuple_to_list(SystemConf))),
+                                  ok = leo_redundant_manager_api:set_options(Options),
+                                  true;
+                              _ ->
+                                  false
+                          end;
+                      Error ->
+                          ?error("register_in_monitor/1",
+                                 "manager:~w, cause:~p", [Node_1, Error]),
+                          false
+                  end;
+              false ->
+                  false
+          end,
+
+    case Ret of
+        false ->
+            register_in_monitor_1(Rest, Pid, RequestedTimes);
+        _ ->
+            Ret
+    end.
+
 
 %% @doc get routing_table's checksum.
 %%
