@@ -534,8 +534,17 @@
 
 
 %% --------------------------------------------------------------------
-%% STORAGE - Compaction
+%% STORAGE - Data Compaction
 %% --------------------------------------------------------------------
+%% @doc Limit of a number of procs to execute data-compaction in parallel
+{mapping,
+ "compaction.limit_num_of_compaction_procs",
+ "leo_object_storage.limit_num_of_compaction_procs",
+ [
+  {datatype, integer},
+  {default, 4}
+ ]}.
+
 %% @doc Minimum waiting time/batch-proc (msec)
 {mapping,
  "compaction.min_waiting_time",
