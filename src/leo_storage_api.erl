@@ -436,6 +436,15 @@ get_node_status() ->
           {auto_compaction_warn_active_size_ratio,      ?env_warn_active_size_ratio()},
           {auto_compaction_threshold_active_size_ratio, ?env_threshold_active_size_ratio()},
           {auto_compaction_parallel_procs,              ?env_auto_compaction_parallel_procs()},
+          %% compaction-related
+          {limit_num_of_compaction_procs, ?env_limit_num_of_compaction_procs()},
+          {min_compaction_waiting_time,   ?env_min_compaction_waiting_time()},
+          {max_compaction_waiting_time,   ?env_max_compaction_waiting_time()},
+          {step_compaction_waiting_time,  ?env_step_compaction_waiting_time()},
+          {max_compaction_batch_procs,    ?env_max_batch_procs()},
+          {min_compaction_batch_procs,    ?env_min_batch_procs()},
+          {step_compaction_batch_procs,   ?env_step_batch_procs()},
+          %% others
           {statistics, Statistics}
          ]}.
 

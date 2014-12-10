@@ -420,6 +420,74 @@
 
 
 %% --------------------------------------------------------------------
+%% STORAGE - Data Compaction
+%% --------------------------------------------------------------------
+%% @doc Limit of a number of procs to execute data-compaction in parallel
+{mapping,
+ "compaction.limit_num_of_compaction_procs",
+ "leo_object_storage.limit_num_of_compaction_procs",
+ [
+  {datatype, integer},
+  {default, 4}
+ ]}.
+
+%% @doc Minimum waiting time/batch-proc (msec)
+{mapping,
+ "compaction.min_waiting_time",
+ "leo_object_storage.min_compaction_waiting_time",
+ [
+  {datatype, integer},
+  {default, 10}
+ ]}.
+
+%% @doc Maximum waiting time/batch-proc (msec)
+{mapping,
+ "compaction.max_waiting_time",
+ "leo_object_storage.max_compaction_waiting_time",
+ [
+  {datatype, integer},
+  {default, 1000}
+ ]}.
+
+%% @doc Step of compaction-proc waiting time(msec)
+{mapping,
+ "compaction.step_waiting_time",
+ "leo_object_storage.step_compaction_waiting_time",
+ [
+  {datatype, integer},
+  {default, 100}
+ ]}.
+
+
+%% @doc Minimum compaction batch processes
+{mapping,
+ "compaction.min_batch_procs",
+ "leo_object_storage.min_batch_procs",
+ [
+  {datatype, integer},
+  {default, 10}
+ ]}.
+
+%% @doc Maximum compaction batch processes
+{mapping,
+ "compaction.max_batch_procs",
+ "leo_object_storage.max_batch_procs",
+ [
+  {datatype, integer},
+  {default, 1000}
+ ]}.
+
+%% @doc Step compaction batch processes
+{mapping,
+ "compaction.step_batch_procs",
+ "leo_object_storage.step_batch_procs",
+ [
+  {datatype, integer},
+  {default, 100}
+ ]}.
+
+
+%% --------------------------------------------------------------------
 %% STORAGE - MQ
 %% --------------------------------------------------------------------
 %% @doc A number of mq-server's processes
@@ -441,7 +509,7 @@
   {default, 100}
  ]}.
 
-%% @doc Minimum value of compaction-proc waiting time/batch-proc(msec)
+%% @doc Minimum value of waiting-time/batch-proc(msec)
 %%      default: 8msec
 {mapping,
  "mq.waiting_time_min",
@@ -451,7 +519,7 @@
   {default, 8}
  ]}.
 
-%% @doc Maximum value of compaction-proc waiting time/batch-proc(msec)
+%% @doc Maximum value of waiting-time/batch-proc(msec)
 %%      default: 1000msec (1sec)
 {mapping,
  "mq.waiting_time_max",
@@ -530,55 +598,6 @@
  [
   {datatype, integer},
   {default, 1}
- ]}.
-
-
-%% --------------------------------------------------------------------
-%% STORAGE - Data Compaction
-%% --------------------------------------------------------------------
-%% @doc Limit of a number of procs to execute data-compaction in parallel
-{mapping,
- "compaction.limit_num_of_compaction_procs",
- "leo_object_storage.limit_num_of_compaction_procs",
- [
-  {datatype, integer},
-  {default, 4}
- ]}.
-
-%% @doc Minimum waiting time/batch-proc (msec)
-{mapping,
- "compaction.min_waiting_time",
- "leo_object_storage.min_compaction_waiting_time",
- [
-  {datatype, integer},
-  {default, 10}
- ]}.
-
-%% @doc Maximum waiting time/batch-proc (msec)
-{mapping,
- "compaction.max_waiting_time",
- "leo_object_storage.max_compaction_waiting_time",
- [
-  {datatype, integer},
-  {default, 1000}
- ]}.
-
-%% @doc Step of compaction-proc waiting time(msec)
-{mapping,
- "compaction.step_waiting_time",
- "leo_object_storage.step_compaction_waiting_time",
- [
-  {datatype, integer},
-  {default, 100}
- ]}.
-
-%% @doc Step of compaction-proc waiting time(msec)
-{mapping,
- "compaction.num_of_batch_procs",
- "leo_object_storage.compaction_batch_procs",
- [
-  {datatype, integer},
-  {default, 100}
  ]}.
 
 
