@@ -178,6 +178,17 @@
  end}.
 
 
+%% Leo' Object-Storage (v1.2.2-)
+%% @doc leo-object-storage.metadata_storage
+{mapping,
+ "obj_containers.metadata_storage",
+ "leo_object_storage.metadata_storage",
+ [
+  {datatype, atom},
+  {default, 'leveldb'}
+ ]}.
+
+
 %% @doc A number of virtual-nodes for the redundant-manager
 {mapping,
  "num_of_vnodes",
@@ -187,13 +198,15 @@
   {default, 168}
  ]}.
 
-%% @doc A number of virtual-nodes for the redundant-manager
+
+%% @doc leo-object-storage.is_strict_check
+%% @deprecated (v1.2.2-)
 {mapping,
- "num_of_vnodes",
- "leo_storage.num_of_vnodes",
+ "object_storage.is_strict_check",
+ "leo_object_storage.is_strict_check",
  [
-  {datatype, integer},
-  {default, 168}
+  {datatype, {enum, [true, false]}},
+  {default, false}
  ]}.
 
 
@@ -490,6 +503,18 @@
 %% --------------------------------------------------------------------
 %% STORAGE - MQ
 %% --------------------------------------------------------------------
+%% Leo' MQ
+%% @doc leo-mq.backend_db
+%% @deprecated (v1.2.2-)
+{mapping,
+ "mq.backend_db",
+ "leo_storage.mq_backend_db",
+ [
+  {datatype, atom},
+  {default, 'leveldb'}
+ ]}.
+
+
 %% @doc A number of mq-server's processes
 {mapping,
  "mq.num_of_mq_procs",
@@ -687,35 +712,6 @@
 %%======================================================================
 %% Other libs
 %%======================================================================
-%% Leo' MQ
-%% @doc leo-mq.backend_db
-{mapping,
- "leo_mq.backend_db",
- "leo_mq.backend_db",
- [
-  {datatype, atom},
-  {default, 'bitcask'}
- ]}.
-
-%% Leo' Object-Storage
-%% @doc leo-object-storage.metadata_storage
-{mapping,
- "leo_object_storage.metadata_storage",
- "leo_object_storage.metadata_storage",
- [
-  {datatype, atom},
-  {default, 'leveldb'}
- ]}.
-
-%% @doc leo-object-storage.is_strict_check
-{mapping,
- "leo_object_storage.is_strict_check",
- "leo_object_storage.is_strict_check",
- [
-  {datatype, {enum, [true, false]}},
-  {default, false}
- ]}.
-
 %% Leo' Ordning-Reda
 %% @doc leo-ordning-reda.send_after_interval
 {mapping,

@@ -203,6 +203,14 @@
             _ -> 8
         end).
 
+-define(env_mq_backend_db(),
+        case application:get_env(leo_storage, mq_backend_db) of
+            {ok, EnvMQBackendDB} ->
+                EnvMQBackendDB;
+            _ ->
+                'leveldb'
+        end).
+
 -define(env_num_of_mq_procs(),
         case application:get_env(leo_storage, num_of_mq_procs) of
             {ok, NumOfMQProcs} -> NumOfMQProcs;

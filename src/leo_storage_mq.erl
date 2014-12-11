@@ -104,6 +104,7 @@ start_1([{Id, Path}|Rest], Sup, Root) ->
     leo_mq_api:new(Sup, Id, [{?MQ_PROP_MOD, ?MODULE},
                              {?MQ_PROP_FUN, ?MQ_SUBSCRIBE_FUN},
                              {?MQ_PROP_ROOT_PATH, Root ++ Path},
+                             {?MQ_PROP_DB_NAME,   ?env_mq_backend_db()},
                              {?MQ_PROP_DB_PROCS,  ?env_num_of_mq_procs()},
                              {?MQ_PROP_NUM_OF_BATCH_PROC, ?env_mq_num_of_batch_procs()},
                              {?MQ_PROP_MAX_INTERVAL,      ?env_mq_waiting_time_max()},
