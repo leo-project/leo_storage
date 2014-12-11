@@ -54,6 +54,7 @@
              ok).
 start() ->
     ok = leo_watchdog_sup:start_subscriber(?WD_SUB_ID_1, [?WD_ITEM_CPU_UTIL,
+                                                          ?WD_ITEM_LOAD_AVG,
                                                           ?WD_ITEM_DISK_UTIL,
                                                           ?WD_ITEM_DISK_IO], ?MODULE),
     ok = leo_watchdog_sup:start_subscriber(?WD_SUB_ID_2, [?WD_ITEM_ACTIVE_SIZE_RATIO], ?MODULE),

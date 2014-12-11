@@ -178,6 +178,8 @@ get_fun(AddrId, Key, StartPos, EndPos) ->
                     {ok, Metadata, Object};
                 not_found = Cause ->
                     {error, Cause};
+                {error, ?ERROR_LOCKED_CONTAINER} ->
+                    {error, unavailable};
                 {error, Cause} ->
                     {error, Cause}
             end;
@@ -278,6 +280,8 @@ put_fun(Ref, AddrId, Key, Object) ->
             case leo_object_storage_api:put({AddrId, Key}, Object) of
                 {ok, ETag} ->
                     {ok, Ref, {etag, ETag}};
+                {error, ?ERROR_LOCKED_CONTAINER} ->
+                    {error, unavailable};
                 {error, Cause} ->
                     {error, Ref, Cause}
             end;
