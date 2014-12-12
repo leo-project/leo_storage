@@ -73,7 +73,7 @@ handle_notify(?WD_SUB_ID_1,_Alarm,_Unixtime) ->
     ok = leo_compact_fsm_controller:incr_interval(),
     %% Decrease the number of batch-procs
     ok = leo_compact_fsm_controller:decr_batch_of_msgs(),
-    %% Increase waiting time of mq-compsumption
+    %% Increase interval of mq-compsumption
     ok = leo_mq_api:incr_interval(?QUEUE_ID_PER_OBJECT),
     ok = leo_mq_api:incr_interval(?QUEUE_ID_SYNC_BY_VNODE_ID),
     ok = leo_mq_api:incr_interval(?QUEUE_ID_REBALANCE),
@@ -82,6 +82,15 @@ handle_notify(?WD_SUB_ID_1,_Alarm,_Unixtime) ->
     ok = leo_mq_api:incr_interval(?QUEUE_ID_SYNC_OBJ_WITH_DC),
     ok = leo_mq_api:incr_interval(?QUEUE_ID_COMP_META_WITH_DC),
     ok = leo_mq_api:incr_interval(?QUEUE_ID_DEL_DIR),
+    %% Decrease a batch of messages
+    ok = leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_PER_OBJECT),
+    ok = leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_SYNC_BY_VNODE_ID),
+    ok = leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_REBALANCE),
+    ok = leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_ASYNC_DELETION),
+    ok = leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_RECOVERY_NODE),
+    ok = leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_SYNC_OBJ_WITH_DC),
+    ok = leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_COMP_META_WITH_DC),
+    ok = leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_DEL_DIR),
     ok;
 handle_notify(?WD_SUB_ID_2, #watchdog_alarm{state = #watchdog_state{
                                                        level = Level,
@@ -131,6 +140,15 @@ handle_notify(?WD_SUB_ID_1,_State,_SafeTimes,_Unixtime) ->
     ok = leo_mq_api:decr_interval(?QUEUE_ID_SYNC_OBJ_WITH_DC),
     ok = leo_mq_api:decr_interval(?QUEUE_ID_COMP_META_WITH_DC),
     ok = leo_mq_api:decr_interval(?QUEUE_ID_DEL_DIR),
+    %% Increase a batch of messages
+    ok = leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_PER_OBJECT),
+    ok = leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_SYNC_BY_VNODE_ID),
+    ok = leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_REBALANCE),
+    ok = leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_ASYNC_DELETION),
+    ok = leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_RECOVERY_NODE),
+    ok = leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_SYNC_OBJ_WITH_DC),
+    ok = leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_COMP_META_WITH_DC),
+    ok = leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_DEL_DIR),
     ok;
 handle_notify(?WD_SUB_ID_2,_State,_SafeTimes,_Unixtime) ->
     ok.
