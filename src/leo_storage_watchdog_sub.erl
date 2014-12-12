@@ -70,9 +70,9 @@ start() ->
                                           Unixtime::non_neg_integer()).
 handle_notify(?WD_SUB_ID_1,_Alarm,_Unixtime) ->
     %% Increase waiting time of data-compaction/batch-proc
-    ok = leo_compact_fsm_controller:incr_waiting_time(),
+    ok = leo_compact_fsm_controller:incr_interval(),
     %% Decrease the number of batch-procs
-    ok = leo_compact_fsm_controller:decr_batch_procs(),
+    ok = leo_compact_fsm_controller:decr_batch_of_msgs(),
     %% Increase waiting time of mq-compsumption
     ok = leo_mq_api:incr_interval(?QUEUE_ID_PER_OBJECT),
     ok = leo_mq_api:incr_interval(?QUEUE_ID_SYNC_BY_VNODE_ID),
@@ -119,9 +119,9 @@ handle_notify(?WD_SUB_ID_2, #watchdog_alarm{state = #watchdog_state{
                                       Unixtime::non_neg_integer()).
 handle_notify(?WD_SUB_ID_1,_State,_SafeTimes,_Unixtime) ->
     %% Decrease waiting time of data-compaction/batch-proc
-    ok = leo_compact_fsm_controller:decr_waiting_time(),
+    ok = leo_compact_fsm_controller:decr_interval(),
     %% Increase the number of batch-procs
-    ok = leo_compact_fsm_controller:incr_batch_procs(),
+    ok = leo_compact_fsm_controller:incr_batch_of_msgs(),
     %% Decrease waiting time of mq-compsumption
     ok = leo_mq_api:decr_interval(?QUEUE_ID_PER_OBJECT),
     ok = leo_mq_api:decr_interval(?QUEUE_ID_SYNC_BY_VNODE_ID),
