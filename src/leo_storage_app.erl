@@ -134,66 +134,6 @@ after_proc({ok, Pid}) ->
     %% Launch leo-rpc
     ok = leo_rpc:start(),
 
-    %% Launch leo-watchdog
-    %% Watchdog for rex's binary usage
-    MaxMemCapacity = ?env_wd_threshold_mem_capacity(leo_storage),
-    IntervalRex = ?env_wd_rex_interval(leo_storage),
-    leo_watchdog_sup:start_child(
-      rex, [MaxMemCapacity], IntervalRex),
-
-    %% Wachdog for CPU
-    case ?env_wd_cpu_enabled(leo_storage) of
-        true ->
-            MaxCPULoadAvg = ?env_wd_threshold_cpu_load_avg(leo_storage),
-            MaxCPUUtil    = ?env_wd_threshold_cpu_util(leo_storage),
-            IntervalCpu   = ?env_wd_cpu_interval(leo_storage),
-            leo_watchdog_sup:start_child(
-              cpu, [MaxCPULoadAvg, MaxCPUUtil], IntervalCpu);
-        false ->
-            void
-    end,
-
-    %% Wachdog for IO
-    case ?env_wd_io_enabled(leo_storage) of
-        true ->
-            MaxInput    = ?env_wd_threshold_input_per_sec(leo_storage),
-            MaxOutput   = ?env_wd_threshold_output_per_sec(leo_storage),
-            IntervalIo  = ?env_wd_io_interval(leo_storage),
-            leo_watchdog_sup:start_child(
-              io, [MaxInput, MaxOutput], IntervalIo);
-        false ->
-            void
-    end,
-
-    %% Wachdog for Disk
-    case ?env_wd_disk_enabled(leo_storage) of
-        true ->
-            TargetPaths =
-                lists:map(
-                  fun(Item) ->
-                          {ok, Curr} = file:get_cwd(),
-                          Path = leo_misc:get_value(path, Item),
-                          Path1 = case Path of
-                                      "/"   ++ _Rest -> Path;
-                                      "../" ++ _Rest -> Path;
-                                      "./"  ++  Rest -> Curr ++ "/" ++ Rest;
-                                      _              -> Curr ++ "/" ++ Path
-                                  end,
-                          Path2 = case (string:len(Path1) == string:rstr(Path1, "/")) of
-                                      true  -> Path1;
-                                      false -> Path1 ++ "/"
-                                  end,
-                          Path2
-                  end, ?env_storage_device()),
-            leo_watchdog_sup:start_child(
-              disk, [TargetPaths,
-                     ?env_wd_threshold_disk_use(leo_storage),
-                     ?env_wd_threshold_disk_util(leo_storage)],
-              ?env_wd_disk_interval(leo_storage));
-        false ->
-            void
-    end,
-
     %% Watchdog for Storage in order to operate 'auto-compaction' automatically
     case ?env_auto_compaction_enabled() of
         true ->
