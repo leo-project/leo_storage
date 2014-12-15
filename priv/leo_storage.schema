@@ -602,34 +602,92 @@
   {default, 8}
  ]}.
 
-%% @doc A number of mq-server's processes
+
+%%
+%% [Number of batch processes of message]
+%%
+%% @doc Minimum number of mq-server's processes
 %%      default: 100
 {mapping,
- "mq.num_of_batch_process",
- "leo_storage.mq_num_of_batch_process",
+ "mq.num_of_batch_process_min",
+ "leo_storage.mq_num_of_batch_process_min",
  [
   {datatype, integer},
   {default, 100}
  ]}.
 
-%% @doc Minimum value of waiting-time/batch-proc(msec)
-%%      default: 8msec
+%% @doc Maximum number of mq-server's processes
+%%      default: 10000
 {mapping,
- "mq.waiting_time_min",
- "leo_storage.mq_waiting_time_min",
+ "mq.num_of_batch_process_max",
+ "leo_storage.mq_num_of_batch_process_max",
  [
   {datatype, integer},
-  {default, 8}
+  {default, 10000}
  ]}.
 
-%% @doc Maximum value of waiting-time/batch-proc(msec)
-%%      default: 1000msec (1sec)
+%% @doc Regular number of mq-server's processes
+%%      default: 1000
 {mapping,
- "mq.waiting_time_max",
- "leo_storage.mq_waiting_time_max",
+ "mq.num_of_batch_process_regular",
+ "leo_storage.mq_num_of_batch_process_reg",
+ [
+  {datatype, integer},
+  {default, 5000}
+ ]}.
+
+%% @doc Step number of mq-server's processes
+%%      default: 1000
+{mapping,
+ "mq.num_of_batch_process_step",
+ "leo_storage.mq_num_of_batch_process_step",
  [
   {datatype, integer},
   {default, 1000}
+ ]}.
+
+
+%%
+%% [Interval between batch-procs (msec)]
+%%
+%% @doc Minimum value of interval between batch proccesses
+%%      default: 10
+{mapping,
+ "mq.interval_beween_batch_procs_min",
+ "leo_storage.mq_interval_between_batch_procs_min",
+ [
+  {datatype, integer},
+  {default, 10}
+ ]}.
+
+%% @doc Maximum value of interval between batch proccesses
+%%      default: 1000
+{mapping,
+ "mq.interval_beween_batch_procs_max",
+ "leo_storage.mq_interval_between_batch_procs_max",
+ [
+  {datatype, integer},
+  {default, 1000}
+ ]}.
+
+%% @doc Regular value of interval between batch proccesses
+%%      default: 1000
+{mapping,
+ "mq.interval_beween_batch_procs_regular",
+ "leo_storage.mq_interval_between_batch_procs_reg",
+ [
+  {datatype, integer},
+  {default, 100}
+ ]}.
+
+%% @doc Step value of interval between batch proccesses
+%%      default: 1000
+{mapping,
+ "mq.interval_beween_batch_procs_step",
+ "leo_storage.mq_interval_between_batch_procs_step",
+ [
+  {datatype, integer},
+  {default, 100}
  ]}.
 
 
