@@ -423,7 +423,11 @@ get_node_status() ->
             {io_threshold_input_per_sec,  ?env_wd_threshold_input_per_sec()},
             {io_threshold_output_per_sec, ?env_wd_threshold_output_per_sec()},
             {disk_threshold_disk_use,     ?env_wd_threshold_disk_use()},
-            {disk_threshold_disk_util,    ?env_wd_threshold_disk_util()}
+            {disk_threshold_disk_util,    ?env_wd_threshold_disk_util()},
+            {disk_threshold_disk_rkb,     ?env_wd_threshold_disk_rkb()},
+            {disk_threshold_disk_wkb,     ?env_wd_threshold_disk_wkb()},
+            {disk_target_devices,         ?env_wd_disk_target_devices()},
+            {disk_target_paths,           ?env_wd_disk_target_paths()}
            ]
           },
           %% mq-related
