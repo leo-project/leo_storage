@@ -219,7 +219,7 @@
 %% @doc Check inteval (sec) - defalut:5sec
 {mapping,
  "watchdog.rex.interval",
- "leo_watchdog.wd_rex_interval",
+ "leo_watchdog.rex_interval",
  [
   {datatype, integer},
   {default, 5}
@@ -229,7 +229,7 @@
 %% @doc Threshold memory capacity of binary for rex(rpc) - default:32MB
 {mapping,
  "watchdog.rex.threshold_mem_capacity",
- "leo_watchdog.wd_threshold_mem_capacity",
+ "leo_watchdog.rex_threshold_mem_capacity",
  [
   {datatype, integer},
   {default, 33554432}
@@ -241,7 +241,7 @@
 %% @doc CPU - Is enabled
 {mapping,
  "watchdog.cpu.is_enabled",
- "leo_watchdog.wd_cpu_enabled",
+ "leo_watchdog.cpu_enabled",
  [
   {datatype, atom},
   {default, false}
@@ -250,7 +250,7 @@
 %% @doc CPU - Raised error times - defalut:3
 {mapping,
  "watchdog.cpu.raised_error_times",
- "leo_watchdog.wd_cpu_raised_error_times",
+ "leo_watchdog.cpu_raised_error_times",
  [
   {datatype, integer},
   {default, 3}
@@ -259,7 +259,7 @@
 %% @doc Check inteval (sec) - defalut:5sec
 {mapping,
  "watchdog.cpu.interval",
- "leo_watchdog.wd_cpu_interval",
+ "leo_watchdog.cpu_interval",
  [
   {datatype, integer},
   {default, 5}
@@ -268,27 +268,27 @@
 %% @doc Threshold CPU load avg for 1min/5min - default:3.0
 {mapping,
  "watchdog.cpu.threshold_cpu_load_avg",
- "leo_watchdog.wd_threshold_cpu_load_avg",
+ "leo_watchdog.cpu_threshold_load_avg",
  [
-  {default, "3.0"}
+  {default, "5.0"}
  ]}.
 
 %% @doc Threshold CPU load util - default:100 = "100%"
 {mapping,
  "watchdog.cpu.threshold_cpu_util",
- "leo_watchdog.wd_threshold_cpu_util",
+ "leo_watchdog.cpu_threshold_util",
  [
   {datatype, integer},
   {default, 100}
  ]}.
 
 %%
-%%  Watchdog.IO
+%%  Watchdog.Erlang IO
 %%
 %% @doc IO - Is enabled
 {mapping,
  "watchdog.io.is_enabled",
- "leo_watchdog.wd_io_enabled",
+ "leo_watchdog.io_enabled",
  [
   {datatype, atom},
   {default, false}
@@ -297,7 +297,7 @@
 %% @doc Check inteval (sec) - defalut:1sec
 {mapping,
  "watchdog.io.interval",
- "leo_watchdog.wd_io_interval",
+ "leo_watchdog.io_interval",
  [
   {datatype, integer},
   {default, 1}
@@ -307,7 +307,7 @@
 %%      default:134217728(B) - 128MB
 {mapping,
  "watchdog.io.threshold_input_per_sec",
- "leo_watchdog.wd_threshold_input_per_sec",
+ "leo_watchdog.io__threshold_input_per_sec",
  [
   {datatype, integer},
   {default, 134217728}
@@ -317,7 +317,7 @@
 %%      default:134217728(B) - 128MB
 {mapping,
  "watchdog.io.threshold_output_per_sec",
- "leo_watchdog.wd_threshold_output_per_sec",
+ "leo_watchdog.io_threshold_output_per_sec",
  [
   {datatype, integer},
   {default, 134217728}
@@ -329,7 +329,7 @@
 %% @doc Disk - Is enabled
 {mapping,
  "watchdog.disk.is_enabled",
- "leo_watchdog.wd_disk_enabled",
+ "leo_watchdog.disk_enabled",
  [
   {datatype, atom},
   {default, true}
@@ -338,7 +338,7 @@
 %% @doc Disk - Raised error times - defalut:3
 {mapping,
  "watchdog.disk.raised_error_times",
- "leo_watchdog.wd_disk_raised_error_times",
+ "leo_watchdog.disk_raised_error_times",
  [
   {datatype, integer},
   {default, 3}
@@ -347,7 +347,7 @@
 %% @doc Check inteval (sec) - defalut:1sec
 {mapping,
  "watchdog.disk.interval",
- "leo_watchdog.wd_disk_interval",
+ "leo_watchdog.disk_interval",
  [
   {datatype, integer},
   {default, 1}
@@ -357,13 +357,13 @@
 %% @doc
 {mapping,
  "watchdog.disk.target_paths",
- "leo_watchdog.wd_disk_target_paths",
+ "leo_watchdog.disk_target_paths",
  [
   {datatype, string},
   {default, []}
  ]}.
 
-{translation, "leo_watchdog.wd_disk_target_paths",
+{translation, "leo_watchdog.disk_target_paths",
  fun(Conf) ->
          %% retrieve pathes
          Paths = cuttlefish_util:conf_get_value("obj_containers.path", Conf),
@@ -394,7 +394,7 @@
 %% @doc Threshold disk use% - default:85%
 {mapping,
  "watchdog.disk.threshold_disk_use",
- "leo_watchdog.wd_threshold_disk_use",
+ "leo_watchdog.disk_threshold_use",
  [
   {datatype, integer},
   {default, 85}
@@ -403,31 +403,53 @@
 %% @doc Threshold disk util% - default:100%
 {mapping,
  "watchdog.disk.threshold_disk_util",
- "leo_watchdog.wd_threshold_disk_util",
+ "leo_watchdog.disk_threshold_util",
  [
   {datatype, integer},
   {default, 100}
  ]}.
 
 %% @doc Threshold disk read kb/sec
-%%      default:131072(KB) - 128MB
+%%      default:131072(KB) - 256MB
 {mapping,
  "watchdog.disk.threshold_disk_rkb",
- "leo_watchdog.wd_threshold_disk_rkb",
+ "leo_watchdog.disk_threshold_rkb",
  [
   {datatype, integer},
-  {default, 131072}
+  {default, 262144}
  ]}.
 
 %% @doc Threshold disk write kb/sec
-%%      default:131072(KB) - 128MB
+%%      default:131072(KB) - 256MB
 {mapping,
  "watchdog.disk.threshold_disk_wkb",
- "leo_watchdog.wd_threshold_disk_wkb",
+ "leo_watchdog.disk_threshold_wkb",
  [
   {datatype, integer},
-  {default, 131072}
+  {default, 262144}
  ]}.
+
+
+%% @doc Threshold disk write kb/sec
+%%      default:131072(KB) - 256MB
+{mapping,
+ "watchdog.disk.target_devices",
+ "leo_watchdog.disk_target_devices",
+ [
+  {datatype, string},
+  {default, []}
+ ]}.
+
+{translation, "leo_watchdog.disk_target_devices",
+ fun(Conf) ->
+         Managers = cuttlefish_util:conf_get_value("watchdog.disk.target_devices", Conf),
+         case string:tokens(Managers, "[ , ]") of
+             [] ->
+                 [];
+             Tokens ->
+                 Tokens
+         end
+ end}.
 
 
 %% --------------------------------------------------------------------
