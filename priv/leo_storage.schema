@@ -461,7 +461,7 @@
  "leo_storage.auto_compaction_enabled",
  [
   {datatype, atom},
-  {default, false}
+  {default, true}
  ]}.
 
 %% @doc [compaction] number of parallel procs - default:1
@@ -1173,6 +1173,14 @@
 %%  [
 %%   {default, ""}
 %%  ]}.
+
+%% @doc Enable/Disable eager check I/O (Erlang 17.4/erts-6.3-, ref:OTP-12117)
+{mapping,
+ "erlang.secio",
+ "vm_args.+secio",
+ [
+  {default, false}
+ ]}.
 
 %% @doc Raise the default erlang process limit
 {mapping, "process_limit", "vm_args.+P",
