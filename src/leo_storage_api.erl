@@ -431,10 +431,15 @@ get_node_status() ->
            ]
           },
           %% mq-related
-          {mq_num_of_procs,       ?env_num_of_mq_procs()},
-          {mq_num_of_batch_procs, ?env_mq_num_of_batch_procs()},
-          {mq_waiting_time_min,   ?env_mq_waiting_time_min()},
-          {mq_waiting_time_max,   ?env_mq_waiting_time_max()},
+          {mq_num_of_procs, ?env_num_of_mq_procs()},
+          {mq_num_of_batch_process_step, ?env_mq_num_of_batch_process_step()},
+          {mq_num_of_batch_process_reg,  ?env_mq_num_of_batch_process_reg()},
+          {mq_num_of_batch_process_max,  ?env_mq_num_of_batch_process_max()},
+          {mq_num_of_batch_process_min,  ?env_mq_num_of_batch_process_min()},
+          {mq_interval_between_batch_procs_step, ?env_mq_interval_between_batch_procs_step()},
+          {mq_interval_between_batch_procs_reg,  ?env_mq_interval_between_batch_procs_reg()},
+          {mq_interval_between_batch_procs_max,  ?env_mq_interval_between_batch_procs_max()},
+          {mq_interval_between_batch_procs_min,  ?env_mq_interval_between_batch_procs_min()},
           %% auto-compaction-related
           {auto_compaction_enabled, ?env_auto_compaction_enabled()},
           {auto_compaction_warn_active_size_ratio,      ?env_warn_active_size_ratio()},
@@ -442,12 +447,14 @@ get_node_status() ->
           {auto_compaction_parallel_procs,              ?env_auto_compaction_parallel_procs()},
           %% compaction-related
           {limit_num_of_compaction_procs, ?env_limit_num_of_compaction_procs()},
-          {min_compaction_waiting_time,   ?env_min_compaction_waiting_time()},
-          {max_compaction_waiting_time,   ?env_max_compaction_waiting_time()},
-          {step_compaction_waiting_time,  ?env_step_compaction_waiting_time()},
-          {max_compaction_batch_procs,    ?env_max_batch_procs()},
-          {min_compaction_batch_procs,    ?env_min_batch_procs()},
-          {step_compaction_batch_procs,   ?env_step_batch_procs()},
+          {compaction_num_of_batch_procs_min,            ?env_compaction_num_of_batch_procs_min()},
+          {compaction_num_of_batch_procs_max,            ?env_compaction_num_of_batch_procs_max()},
+          {compaction_num_of_batch_procs_reg,            ?env_compaction_num_of_batch_procs_reg()},
+          {compaction_num_of_batch_procs_step,           ?env_compaction_num_of_batch_procs_step()},
+          {compaction_interval_between_batch_procs_min,  ?env_compaction_interval_between_batch_procs_min()},
+          {compaction_interval_between_batch_procs_max,  ?env_compaction_interval_between_batch_procs_max()},
+          {compaction_interval_between_batch_procs_reg,  ?env_compaction_interval_between_batch_procs_reg()},
+          {compaction_interval_between_batch_procs_step, ?env_compaction_interval_between_batch_procs_step()},
           %% others
           {statistics, Statistics}
          ]}.

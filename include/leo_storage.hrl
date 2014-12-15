@@ -217,23 +217,52 @@
             _ -> 3
         end).
 
--define(env_mq_num_of_batch_procs(),
-        case application:get_env(leo_storage, mq_num_of_batch_process) of
-            {ok, MQBatchProcs} -> MQBatchProcs;
+%% [MQ.interval beween batch processes]
+-define(env_mq_interval_between_batch_procs_min(),
+        case application:get_env(leo_storage, mq_interval_between_batch_procs_min) of
+            {ok, MQWaitingTimeMin} -> MQWaitingTimeMin;
+            _ -> 10
+        end).
+-define(env_mq_interval_between_batch_procs_max(),
+        case application:get_env(leo_storage, mq_interval_between_batch_procs_max) of
+            {ok, MQWaitingTimeMax} -> MQWaitingTimeMax;
+            _ -> 1000
+        end).
+
+-define(env_mq_interval_between_batch_procs_reg(),
+        case application:get_env(leo_storage, mq_interval_between_batch_procs_reg) of
+            {ok, MQWaitingTimeReg} -> MQWaitingTimeReg;
             _ -> 100
         end).
 
--define(env_mq_waiting_time_min(),
-        case application:get_env(leo_storage, mq_waiting_time_min) of
-            {ok, MQWaitingTimeMin} -> MQWaitingTimeMin;
-            _ -> 8
+-define(env_mq_interval_between_batch_procs_step(),
+        case application:get_env(leo_storage, mq_interval_between_batch_procs_step) of
+            {ok, MQWaitingTimeMax} -> MQWaitingTimeMax;
+            _ -> 100
         end).
 
--define(env_mq_waiting_time_max(),
-        case application:get_env(leo_storage, mq_waiting_time_max) of
-            {ok, MQWaitingTimeMax} -> MQWaitingTimeMax;
-            _ -> 8
+%% [MQ.batch prcoc of messages]
+-define(env_mq_num_of_batch_process_min(),
+        case application:get_env(leo_storage, mq_num_of_batch_process_min) of
+            {ok, MQBatchProcsMin} -> MQBatchProcsMin;
+            _ -> 100
         end).
+-define(env_mq_num_of_batch_process_max(),
+        case application:get_env(leo_storage, mq_num_of_batch_process_max) of
+            {ok, MQBatchProcsMax} -> MQBatchProcsMax;
+            _ -> 10000
+        end).
+-define(env_mq_num_of_batch_process_reg(),
+        case application:get_env(leo_storage, mq_num_of_batch_process_reg) of
+            {ok, MQBatchProcsReg} -> MQBatchProcsReg;
+            _ -> 5000
+        end).
+-define(env_mq_num_of_batch_process_step(),
+        case application:get_env(leo_storage, mq_num_of_batch_process_step) of
+            {ok, MQBatchProcsStep} -> MQBatchProcsStep;
+            _ -> 1000
+        end).
+
 
 -define(env_size_of_stacked_objs(),
         case application:get_env(leo_storage, size_of_stacked_objs) of

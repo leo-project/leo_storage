@@ -106,9 +106,14 @@ start_1([{Id, Path}|Rest], Sup, Root) ->
                              {?MQ_PROP_ROOT_PATH, Root ++ Path},
                              {?MQ_PROP_DB_NAME,   ?env_mq_backend_db()},
                              {?MQ_PROP_DB_PROCS,  ?env_num_of_mq_procs()},
-                             {?MQ_PROP_NUM_OF_BATCH_PROC, ?env_mq_num_of_batch_procs()},
-                             {?MQ_PROP_MAX_INTERVAL,      ?env_mq_waiting_time_max()},
-                             {?MQ_PROP_MIN_INTERVAL,      ?env_mq_waiting_time_min()}
+                             {?MQ_PROP_BATCH_MSGS_MIN,  ?env_mq_num_of_batch_process_min()},
+                             {?MQ_PROP_BATCH_MSGS_MAX,  ?env_mq_num_of_batch_process_max()},
+                             {?MQ_PROP_BATCH_MSGS_REG,  ?env_mq_num_of_batch_process_reg()},
+                             {?MQ_PROP_BATCH_MSGS_STEP, ?env_mq_num_of_batch_process_step()},
+                             {?MQ_PROP_INTERVAL_MIN,  ?env_mq_interval_between_batch_procs_min()},
+                             {?MQ_PROP_INTERVAL_MAX,  ?env_mq_interval_between_batch_procs_max()},
+                             {?MQ_PROP_INTERVAL_REG,  ?env_mq_interval_between_batch_procs_reg()},
+                             {?MQ_PROP_INTERVAL_STEP, ?env_mq_interval_between_batch_procs_step()}
                             ]),
     start_1(Rest, Sup, Root).
 
