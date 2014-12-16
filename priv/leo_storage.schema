@@ -265,7 +265,7 @@
   {default, 5}
  ]}.
 
-%% @doc Threshold CPU load avg for 1min/5min - default:3.0
+%% @doc Threshold CPU load avg for 1min/5min - default:5.0
 {mapping,
  "watchdog.cpu.threshold_cpu_load_avg",
  "leo_watchdog.cpu_threshold_load_avg",
@@ -332,7 +332,7 @@
  "leo_watchdog.disk_enabled",
  [
   {datatype, atom},
-  {default, true}
+  {default, false}
  ]}.
 
 %% @doc Disk - Raised error times - defalut:3
@@ -420,7 +420,7 @@
  ]}.
 
 %% @doc Threshold disk write kb/sec
-%%      default:131072(KB) - 256MB
+%%      default:262144(KB) - 256MB
 {mapping,
  "watchdog.disk.threshold_disk_wkb",
  "leo_watchdog.disk_threshold_wkb",
@@ -431,7 +431,7 @@
 
 
 %% @doc Threshold disk write kb/sec
-%%      default:131072(KB) - 256MB
+%%      default:262144(KB) - 256MB
 {mapping,
  "watchdog.disk.target_devices",
  "leo_watchdog.disk_target_devices",
@@ -461,7 +461,7 @@
  "leo_storage.auto_compaction_enabled",
  [
   {datatype, atom},
-  {default, true}
+  {default, false}
  ]}.
 
 %% @doc [compaction] number of parallel procs - default:1
