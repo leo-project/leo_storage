@@ -203,11 +203,66 @@
             _ -> 8
         end).
 
+-define(env_mq_backend_db(),
+        case application:get_env(leo_storage, mq_backend_db) of
+            {ok, EnvMQBackendDB} ->
+                EnvMQBackendDB;
+            _ ->
+                'leveldb'
+        end).
+
 -define(env_num_of_mq_procs(),
         case application:get_env(leo_storage, num_of_mq_procs) of
             {ok, NumOfMQProcs} -> NumOfMQProcs;
             _ -> 3
         end).
+
+%% [MQ.interval beween batch processes]
+-define(env_mq_interval_between_batch_procs_min(),
+        case application:get_env(leo_storage, mq_interval_between_batch_procs_min) of
+            {ok, MQWaitingTimeMin} -> MQWaitingTimeMin;
+            _ -> 10
+        end).
+-define(env_mq_interval_between_batch_procs_max(),
+        case application:get_env(leo_storage, mq_interval_between_batch_procs_max) of
+            {ok, MQWaitingTimeMax} -> MQWaitingTimeMax;
+            _ -> 1000
+        end).
+
+-define(env_mq_interval_between_batch_procs_reg(),
+        case application:get_env(leo_storage, mq_interval_between_batch_procs_reg) of
+            {ok, MQWaitingTimeReg} -> MQWaitingTimeReg;
+            _ -> 100
+        end).
+
+-define(env_mq_interval_between_batch_procs_step(),
+        case application:get_env(leo_storage, mq_interval_between_batch_procs_step) of
+            {ok, MQWaitingTimeMax} -> MQWaitingTimeMax;
+            _ -> 100
+        end).
+
+%% [MQ.batch prcoc of messages]
+-define(env_mq_num_of_batch_process_min(),
+        case application:get_env(leo_storage, mq_num_of_batch_process_min) of
+            {ok, MQBatchProcsMin} -> MQBatchProcsMin;
+            _ -> 100
+        end).
+-define(env_mq_num_of_batch_process_max(),
+        case application:get_env(leo_storage, mq_num_of_batch_process_max) of
+            {ok, MQBatchProcsMax} -> MQBatchProcsMax;
+            _ -> 10000
+        end).
+-define(env_mq_num_of_batch_process_reg(),
+        case application:get_env(leo_storage, mq_num_of_batch_process_reg) of
+            {ok, MQBatchProcsReg} -> MQBatchProcsReg;
+            _ -> 5000
+        end).
+-define(env_mq_num_of_batch_process_step(),
+        case application:get_env(leo_storage, mq_num_of_batch_process_step) of
+            {ok, MQBatchProcsStep} -> MQBatchProcsStep;
+            _ -> 1000
+        end).
+
 
 -define(env_size_of_stacked_objs(),
         case application:get_env(leo_storage, size_of_stacked_objs) of
@@ -243,147 +298,6 @@
 -define(DEF_MQ_NUM_OF_BATCH_PROC, 1).
 -define(DEF_MQ_INTERVAL_MAX, 32).
 -define(DEF_MQ_INTERVAL_MIN,  8).
-
--define(PROP_MQ_PER_OBJ_1,   cns_num_of_batch_process_per_object).
--define(PROP_MQ_PER_OBJ_2,   cns_interval_per_object_max).
--define(PROP_MQ_PER_OBJ_3,   cns_interval_per_object_min).
--define(PROP_MQ_SYNC_VN_1,   cns_num_of_batch_process_sync_by_vnode_id).
--define(PROP_MQ_SYNC_VN_2,   cns_interval_sync_by_vnode_id_max).
--define(PROP_MQ_SYNC_VN_3,   cns_interval_sync_by_vnode_id_min).
--define(PROP_MQ_REBALANCE_1, cns_num_of_batch_process_rebalance).
--define(PROP_MQ_REBALANCE_2, cns_interval_rebalance_max).
--define(PROP_MQ_REBALANCE_3, cns_interval_rebalance_min).
--define(PROP_MQ_DELETE_1,    cns_num_of_batch_process_async_deletion).
--define(PROP_MQ_DELETE_2,    cns_interval_async_deletion_max).
--define(PROP_MQ_DELETE_3,    cns_interval_async_deletion_min).
--define(PROP_MQ_RECOVERY_1,  cns_num_of_batch_process_recovery_node).
--define(PROP_MQ_RECOVERY_2,  cns_interval_recovery_node_max).
--define(PROP_MQ_RECOVERY_3,  cns_interval_recovery_node_min).
--define(PROP_MQ_SYNC_DC_1,   cns_num_of_batch_process_sync_obj_with_dc).
--define(PROP_MQ_SYNC_DC_2,   cns_interval_sync_obj_with_dc_max).
--define(PROP_MQ_SYNC_DC_3,   cns_interval_sync_obj_with_dc_min).
--define(PROP_MQ_COMP_DC_1,   cns_num_of_batch_process_comp_meta_with_dc).
--define(PROP_MQ_COMP_DC_2,   cns_interval_comp_meta_with_dc_max).
--define(PROP_MQ_COMP_DC_3,   cns_interval_comp_meta_with_dc_min).
--define(PROP_MQ_DEL_DIR_1,   cns_num_of_batch_process_del_dir).
--define(PROP_MQ_DEL_DIR_2,   cns_interval_del_dir_max).
--define(PROP_MQ_DEL_DIR_3,   cns_interval_del_dir_min).
-
--define(env_mq_consumption_intervals(),
-        [
-         %% per_object
-         {?PROP_MQ_PER_OBJ_1,
-          case application:get_env(leo_storage, ?PROP_MQ_PER_OBJ_1) of
-              {ok, _CnsNumofBatchProc1} -> _CnsNumofBatchProc1;
-              _ -> ?DEF_MQ_NUM_OF_BATCH_PROC
-          end},
-         {?PROP_MQ_PER_OBJ_2,
-          case application:get_env(leo_storage, ?PROP_MQ_PER_OBJ_2) of
-              {ok, _CnsInterval1_Min} -> _CnsInterval1_Min;
-              _ -> ?DEF_MQ_INTERVAL_MIN
-          end},
-         {?PROP_MQ_PER_OBJ_3,
-          case application:get_env(leo_storage, ?PROP_MQ_PER_OBJ_3) of
-              {ok, _CnsInterval1_Max} -> _CnsInterval1_Max;
-              _ -> ?DEF_MQ_INTERVAL_MAX
-          end},
-         %% sync_by_vnode_id
-         {?PROP_MQ_SYNC_VN_1,
-          case application:get_env(leo_storage, ?PROP_MQ_SYNC_VN_1) of
-              {ok, _CnsNumofBatchProc2} -> _CnsNumofBatchProc2;
-              _ -> ?DEF_MQ_NUM_OF_BATCH_PROC
-          end},
-         {?PROP_MQ_SYNC_VN_2,
-          case application:get_env(leo_storage, ?PROP_MQ_SYNC_VN_2) of
-              {ok, _CnsInterval2_Min} -> _CnsInterval2_Min;
-              _ -> ?DEF_MQ_INTERVAL_MIN
-          end},
-         {?PROP_MQ_SYNC_VN_3,
-          case application:get_env(leo_storage, ?PROP_MQ_SYNC_VN_3) of
-              {ok, _CnsInterval2_Max} -> _CnsInterval2_Max;
-              _ -> ?DEF_MQ_INTERVAL_MAX
-          end},
-         %% for rebalance
-         {?PROP_MQ_REBALANCE_1,
-          case application:get_env(leo_storage, ?PROP_MQ_REBALANCE_1) of
-              {ok, _CnsNumofBatchProc3} -> _CnsNumofBatchProc3;
-              _ -> ?DEF_MQ_NUM_OF_BATCH_PROC
-          end},
-         {?PROP_MQ_REBALANCE_2,
-          case application:get_env(leo_storage, ?PROP_MQ_REBALANCE_2) of
-              {ok, _CnsInterval3_Min} -> _CnsInterval3_Min;
-              _ -> ?DEF_MQ_INTERVAL_MIN
-          end},
-         {?PROP_MQ_REBALANCE_3,
-          case application:get_env(leo_storage, ?PROP_MQ_REBALANCE_3) of
-              {ok, _CnsInterval3_Max} -> _CnsInterval3_Max;
-              _ -> ?DEF_MQ_INTERVAL_MAX
-          end},
-         %% async deletion objects (after remove a bucket)
-         {?PROP_MQ_DELETE_1,
-          case application:get_env(leo_storage, ?PROP_MQ_DELETE_1) of
-              {ok, _CnsNumofBatchProc4} -> _CnsNumofBatchProc4;
-              _ -> ?DEF_MQ_NUM_OF_BATCH_PROC
-          end},
-         {?PROP_MQ_DELETE_2,
-          case application:get_env(leo_storage, ?PROP_MQ_DELETE_2) of
-              {ok, _CnsInterval3_Min} -> _CnsInterval3_Min;
-              _ -> ?DEF_MQ_INTERVAL_MIN
-          end},
-         {?PROP_MQ_DELETE_3,
-          case application:get_env(leo_storage, ?PROP_MQ_DELETE_3) of
-              {ok, _CnsInterval3_Max} -> _CnsInterval3_Max;
-              _ -> ?DEF_MQ_INTERVAL_MAX
-          end},
-         %% recovery node
-         {?PROP_MQ_RECOVERY_1,
-          case application:get_env(leo_storage, ?PROP_MQ_RECOVERY_1) of
-              {ok, _CnsNumofBatchProc5} -> _CnsNumofBatchProc5;
-              _ -> ?DEF_MQ_NUM_OF_BATCH_PROC
-          end},
-         {?PROP_MQ_RECOVERY_2,
-          case application:get_env(leo_storage, ?PROP_MQ_RECOVERY_2) of
-              {ok, _CnsInterval4_Min} -> _CnsInterval4_Min;
-              _ -> ?DEF_MQ_INTERVAL_MIN
-          end},
-         {?PROP_MQ_RECOVERY_3,
-          case application:get_env(leo_storage, ?PROP_MQ_RECOVERY_3) of
-              {ok, _CnsInterval4_Max} -> _CnsInterval4_Max;
-              _ -> ?DEF_MQ_INTERVAL_MAX
-          end},
-         %% sync obj with dc
-         {?PROP_MQ_SYNC_DC_1,
-          case application:get_env(leo_storage, ?PROP_MQ_SYNC_DC_1) of
-              {ok, _CnsNumofBatchProc6} -> _CnsNumofBatchProc6;
-              _ -> ?DEF_MQ_INTERVAL_MIN
-          end},
-         {?PROP_MQ_SYNC_DC_2,
-          case application:get_env(leo_storage, ?PROP_MQ_SYNC_DC_2) of
-              {ok, _CnsInterval5_Min} -> _CnsInterval5_Min;
-              _ -> ?DEF_MQ_INTERVAL_MIN
-          end},
-         {?PROP_MQ_SYNC_DC_3,
-          case application:get_env(leo_storage, ?PROP_MQ_SYNC_DC_3) of
-              {ok, _CnsInterval5_Max} -> _CnsInterval5_Max;
-              _ -> ?DEF_MQ_INTERVAL_MAX
-          end},
-         %% compare metadata with dc
-         {?PROP_MQ_COMP_DC_1,
-          case application:get_env(leo_storage, ?PROP_MQ_COMP_DC_1) of
-              {ok, _CnsNumofBatchProc7} -> _CnsNumofBatchProc7;
-              _ -> ?DEF_MQ_INTERVAL_MIN
-          end},
-         {?PROP_MQ_COMP_DC_2,
-          case application:get_env(leo_storage, ?PROP_MQ_COMP_DC_2) of
-              {ok, _CnsInterval6_Min} -> _CnsInterval6_Min;
-              _ -> ?DEF_MQ_INTERVAL_MIN
-          end},
-         {?PROP_MQ_COMP_DC_3,
-          case application:get_env(leo_storage, ?PROP_MQ_COMP_DC_3) of
-              {ok, _CnsInterval6_Max} -> _CnsInterval6_Max;
-              _ -> ?DEF_MQ_INTERVAL_MAX
-          end}
-        ]).
 
 %% Retrieve a quorum bv a method
 -define(quorum(_Method,_W,_D), case _Method of
@@ -472,3 +386,65 @@
                           {leo_rebalance_queue,         "rebalance objs"},
                           {leo_sync_by_vnode_id_queue,  "sync objs by vnode-id"},
                           {leo_per_object_queue,        "recover inconsistent objs"}]).
+
+
+%% Storage watchdog related
+%%
+%% @doc Threshold active size ratio:
+%%    * round(active-size/total-size)
+%%    * default:50%
+-ifdef(TEST).
+-define(DEF_WARN_ACTIVE_SIZE_RATIO,      95).
+-define(DEF_THRESHOLD_ACTIVE_SIZE_RATIO, 90).
+-define(DEF_STORAGE_WATHDOG_INTERVAL, timer:seconds(3)).
+-else.
+-define(DEF_WARN_ACTIVE_SIZE_RATIO,      55).
+-define(DEF_THRESHOLD_ACTIVE_SIZE_RATIO, 50).
+-define(DEF_STORAGE_WATHDOG_INTERVAL, timer:seconds(10)).
+-endif.
+
+-define(WD_ITEM_ACTIVE_SIZE_RATIO, 'active_size_ratio').
+-define(WD_EXCLUDE_ITEMS, ['leo_storage_watchdog']).
+-define(DEF_MAX_COMPACTION_PROCS, 1).
+
+-define(env_warn_active_size_ratio(),
+        case application:get_env(leo_storage, warn_active_size_ratio) of
+            {ok, EnvWarnActiveSizeRatio} ->
+                EnvWarnActiveSizeRatio;
+            _ ->
+                ?DEF_WARN_ACTIVE_SIZE_RATIO
+        end).
+
+-define(env_threshold_active_size_ratio(),
+        case application:get_env(leo_storage, threshold_active_size_ratio) of
+            {ok, EnvThresholdActiveSizeRatio} ->
+                EnvThresholdActiveSizeRatio;
+            _ ->
+                ?DEF_THRESHOLD_ACTIVE_SIZE_RATIO
+        end).
+
+-define(env_storage_watchdog_interval(),
+        case application:get_env(leo_storage, storage_watchdog_interval) of
+            {ok, EnvStorageWatchdogInterval} ->
+                EnvStorageWatchdogInterval;
+            _ ->
+                ?DEF_STORAGE_WATHDOG_INTERVAL
+        end).
+
+%% Storage autonomic-operation related
+%%
+-define(env_auto_compaction_enabled(),
+        case application:get_env(leo_storage, auto_compaction_enabled) of
+            {ok, EnvAutoCompactionEnabled} ->
+                EnvAutoCompactionEnabled;
+            _ ->
+                false
+        end).
+
+-define(env_auto_compaction_parallel_procs(),
+        case application:get_env(leo_storage, auto_compaction_parallel_procs) of
+            {ok, EnvAutoCompactionParallelProcs} ->
+                EnvAutoCompactionParallelProcs;
+            _ ->
+                ?DEF_MAX_COMPACTION_PROCS
+        end).

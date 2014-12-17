@@ -120,7 +120,7 @@ get_a0_({Node0, Node1}) ->
     meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
     meck:new(leo_watchdog_state, [non_strict]),
-    meck:expect(leo_watchdog_state, find_not_safe_items, fun() -> not_found end),
+    meck:expect(leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end),
 
     Ref = make_ref(),
     Res = leo_storage_handler_object:get({Ref, ?TEST_KEY_0}),
@@ -150,7 +150,7 @@ get_a1_({Node0, Node1}) ->
     meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
     meck:new(leo_watchdog_state, [non_strict]),
-    meck:expect(leo_watchdog_state, find_not_safe_items, fun() -> not_found end),
+    meck:expect(leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end),
 
     Ref = make_ref(),
     Res = leo_storage_handler_object:get({Ref, ?TEST_KEY_0}),
@@ -177,7 +177,7 @@ get_b0_({Node0, Node1}) ->
     meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
     meck:new(leo_watchdog_state, [non_strict]),
-    meck:expect(leo_watchdog_state, find_not_safe_items, fun() -> not_found end),
+    meck:expect(leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end),
 
     ok = rpc:call(Node1, meck, new,    [leo_redundant_manager_api, [no_link, non_strict]]),
     ok = rpc:call(Node1, meck, expect, [leo_redundant_manager_api, get_redundancies_by_addr_id, Fun1]),
@@ -196,7 +196,7 @@ get_b0_({Node0, Node1}) ->
     ok = rpc:call(Node1, meck, expect, [leo_metrics_req, notify, fun(_) -> ok end]),
 
     ok = rpc:call(Node1, meck, new,    [leo_watchdog_state, [no_link, non_strict]]),
-    ok = rpc:call(Node1, meck, expect, [leo_watchdog_state, find_not_safe_items, fun() -> not_found end]),
+    ok = rpc:call(Node1, meck, expect, [leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end]),
 
     Res = leo_storage_handler_object:get(0, ?TEST_KEY_0, 0),
     ?assertEqual({error,not_found}, Res),
@@ -229,7 +229,7 @@ get_b1_({Node0, Node1}) ->
     meck:expect(leo_object_storage_api, get, Fun2),
 
     meck:new(leo_watchdog_state, [non_strict]),
-    meck:expect(leo_watchdog_state, find_not_safe_items, fun() -> not_found end),
+    meck:expect(leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end),
 
     ok = rpc:call(Node1, meck, new,    [leo_object_storage_api, [no_link, non_strict]]),
     ok = rpc:call(Node1, meck, expect, [leo_object_storage_api, get, Fun2]),
@@ -248,7 +248,7 @@ get_b1_({Node0, Node1}) ->
     ok = rpc:call(Node1, meck, new,    [leo_metrics_req, [no_link, non_strict]]),
     ok = rpc:call(Node1, meck, expect, [leo_metrics_req, notify, fun(_) -> ok end]),
     ok = rpc:call(Node1, meck, new,    [leo_watchdog_state, [no_link, non_strict]]),
-    ok = rpc:call(Node1, meck, expect, [leo_watchdog_state, find_not_safe_items, fun() -> not_found end]),
+    ok = rpc:call(Node1, meck, expect, [leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end]),
 
     meck:new(leo_metrics_req, [non_strict]),
     meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
@@ -289,7 +289,7 @@ get_b2_({Node0, _Node1}) ->
     meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
     meck:new(leo_watchdog_state, [non_strict]),
-    meck:expect(leo_watchdog_state, find_not_safe_items, fun() -> not_found end),
+    meck:expect(leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end),
 
     Res = leo_storage_handler_object:get(0, ?TEST_KEY_0, 0),
     ?assertEqual({ok, ?TEST_META_0, <<"leofs">>}, Res),
@@ -342,7 +342,7 @@ get_b3_({Node0, Node1}) ->
     meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
     meck:new(leo_watchdog_state, [non_strict]),
-    meck:expect(leo_watchdog_state, find_not_safe_items, fun() -> not_found end),
+    meck:expect(leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end),
 
     %% Execute
     Res = leo_storage_handler_object:get(0, ?TEST_KEY_0, 0),
@@ -391,13 +391,13 @@ get_c0_({Node0, Node1}) ->
     ok = rpc:call(Node1, meck, new,    [leo_metrics_req, [no_link, non_strict]]),
     ok = rpc:call(Node1, meck, expect, [leo_metrics_req, notify, fun(_) -> ok end]),
     ok = rpc:call(Node1, meck, new,    [leo_watchdog_state, [no_link, non_strict]]),
-    ok = rpc:call(Node1, meck, expect, [leo_watchdog_state, find_not_safe_items, fun() -> not_found end]),
+    ok = rpc:call(Node1, meck, expect, [leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end]),
 
     meck:new(leo_metrics_req, [non_strict]),
     meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
     meck:new(leo_watchdog_state, [non_strict]),
-    meck:expect(leo_watchdog_state, find_not_safe_items, fun() -> not_found end),
+    meck:expect(leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end),
 
     %% Execute
     Res0 = leo_storage_handler_object:get(0, ?TEST_KEY_0, Checksum0, 0),
@@ -444,7 +444,7 @@ put_0_({Node0, Node1}) ->
     meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
     meck:new(leo_watchdog_state, [non_strict]),
-    meck:expect(leo_watchdog_state, find_not_safe_items, fun() -> not_found end),
+    meck:expect(leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end),
 
     Object = #?OBJECT{method    = ?CMD_PUT,
                       addr_id   = AddrId,
@@ -466,7 +466,7 @@ put_1_({_Node0, _Node1}) ->
                 end),
 
     meck:new(leo_watchdog_state, [non_strict]),
-    meck:expect(leo_watchdog_state, find_not_safe_items, fun() -> not_found end),
+    meck:expect(leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end),
 
     Ref = make_ref(),
     {ok, Ref, _Etag} = leo_storage_handler_object:put({#?OBJECT{}, Ref}),
@@ -512,7 +512,7 @@ delete_({Node0, Node1}) ->
                 end),
 
     meck:new(leo_watchdog_state, [non_strict]),
-    meck:expect(leo_watchdog_state, find_not_safe_items, fun() -> not_found end),
+    meck:expect(leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end),
 
     ok = rpc:call(Node1, meck, new,    [leo_metrics_req, [no_link, non_strict]]),
     ok = rpc:call(Node1, meck, expect, [leo_metrics_req, notify, fun(_) -> ok end]),
@@ -643,7 +643,7 @@ copy_({Node0, Node1}) ->
     meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
     meck:new(leo_watchdog_state, [non_strict]),
-    meck:expect(leo_watchdog_state, find_not_safe_items, fun() -> not_found end),
+    meck:expect(leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end),
 
     Res1 = leo_storage_handler_object:replicate([Node1, Node1], 0, ?TEST_KEY_0),
     ?assertEqual(ok, Res1),

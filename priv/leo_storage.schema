@@ -122,7 +122,7 @@
  "leo_storage.system_version",
  [
   {datatype, string},
-  {default, "1.2.1"}
+  {default, "1.2.2"}
  ]}.
 
 %% @doc Path of object-container
@@ -143,13 +143,13 @@
 {translation, "leo_storage.obj_containers",
  fun(Conf) ->
          %% retrieve pathes
-         Pathes = cuttlefish_util:conf_get_value("obj_containers.path", Conf),
-         Pathes_1 = case string:tokens(Pathes, "[ , ]") of
-                        [] ->
-                            ["./avs"];
-                        Tokens_1 ->
-                            Tokens_1
-                    end,
+         Paths = cuttlefish_util:conf_get_value("obj_containers.path", Conf),
+         Paths_1 = case string:tokens(Paths, "[ , ]") of
+                       [] ->
+                           ["./avs"];
+                       Tokens_1 ->
+                           Tokens_1
+                   end,
 
          %% retrieve num-of-containers
          Containers = cuttlefish_util:conf_get_value(
@@ -173,9 +173,20 @@
                                   end,
                               {Index + 1, [[{path, Path},
                                             {num_of_containers, NumOfContainers}]|Acc]}
-                      end, {1, []}, Pathes_1),
+                      end, {1, []}, Paths_1),
          lists:reverse(Ret)
  end}.
+
+
+%% Leo' Object-Storage (v1.2.2-)
+%% @doc leo-object-storage.metadata_storage
+{mapping,
+ "obj_containers.metadata_storage",
+ "leo_object_storage.metadata_storage",
+ [
+  {datatype, atom},
+  {default, 'leveldb'}
+ ]}.
 
 
 %% @doc A number of virtual-nodes for the redundant-manager
@@ -187,23 +198,28 @@
   {default, 168}
  ]}.
 
-%% @doc A number of virtual-nodes for the redundant-manager
+
+%% @doc leo-object-storage.is_strict_check
+%% @deprecated (v1.2.2-)
 {mapping,
- "num_of_vnodes",
- "leo_storage.num_of_vnodes",
+ "object_storage.is_strict_check",
+ "leo_object_storage.is_strict_check",
  [
-  {datatype, integer},
-  {default, 168}
+  {datatype, {enum, [true, false]}},
+  {default, false}
  ]}.
 
 
 %% --------------------------------------------------------------------
 %% STORAGE - Watchdog
 %% --------------------------------------------------------------------
+%%
+%%  Watchdog.REX
+%%
 %% @doc Check inteval (sec) - defalut:5sec
 {mapping,
  "watchdog.rex.interval",
- "leo_storage.wd_rex_interval",
+ "leo_watchdog.rex_interval",
  [
   {datatype, integer},
   {default, 5}
@@ -213,51 +229,66 @@
 %% @doc Threshold memory capacity of binary for rex(rpc) - default:32MB
 {mapping,
  "watchdog.rex.threshold_mem_capacity",
- "leo_storage.wd_threshold_mem_capacity",
+ "leo_watchdog.rex_threshold_mem_capacity",
  [
   {datatype, integer},
   {default, 33554432}
  ]}.
 
+%%
+%%  Watchdog.CPU
+%%
 %% @doc CPU - Is enabled
 {mapping,
  "watchdog.cpu.is_enabled",
- "leo_storage.wd_cpu_enabled",
+ "leo_watchdog.cpu_enabled",
  [
   {datatype, atom},
   {default, false}
  ]}.
 
+%% @doc CPU - Raised error times - defalut:3
+{mapping,
+ "watchdog.cpu.raised_error_times",
+ "leo_watchdog.cpu_raised_error_times",
+ [
+  {datatype, integer},
+  {default, 3}
+ ]}.
+
 %% @doc Check inteval (sec) - defalut:5sec
 {mapping,
  "watchdog.cpu.interval",
- "leo_storage.wd_cpu_interval",
+ "leo_watchdog.cpu_interval",
  [
   {datatype, integer},
   {default, 5}
  ]}.
 
-%% @doc Threshold CPU load avg for 1min/5min - default:2.0
+%% @doc Threshold CPU load avg for 1min/5min - default:5.0
 {mapping,
  "watchdog.cpu.threshold_cpu_load_avg",
- "leo_storage.wd_threshold_cpu_load_avg",
+ "leo_watchdog.cpu_threshold_load_avg",
  [
-  {default, "2.0"}
+  {default, "5.0"}
  ]}.
 
 %% @doc Threshold CPU load util - default:100 = "100%"
 {mapping,
  "watchdog.cpu.threshold_cpu_util",
- "leo_storage.wd_threshold_cpu_util",
+ "leo_watchdog.cpu_threshold_util",
  [
   {datatype, integer},
   {default, 100}
  ]}.
 
+%%
+%%  Watchdog.Erlang IO
+%%
 %% @doc IO - Is enabled
 {mapping,
  "watchdog.io.is_enabled",
- "leo_storage.wd_io_enabled",
+ "leo_watchdog.io_enabled",
  [
   {datatype, atom},
   {default, false}
@@ -266,52 +297,104 @@
 %% @doc Check inteval (sec) - defalut:1sec
 {mapping,
  "watchdog.io.interval",
- "leo_storage.wd_io_interval",
+ "leo_watchdog.io_interval",
  [
   {datatype, integer},
   {default, 1}
  ]}.
 
-%% @doc Threshold input size for interval - default:128MB
+%% @doc Threshold input size for interval
+%%      default:134217728(B) - 128MB
 {mapping,
  "watchdog.io.threshold_input_per_sec",
- "leo_storage.wd_threshold_input_per_sec",
+ "leo_watchdog.io__threshold_input_per_sec",
  [
   {datatype, integer},
   {default, 134217728}
  ]}.
 
-%% @doc Threshold output size for interval - default:128MB
+%% @doc Threshold output size for interval
+%%      default:134217728(B) - 128MB
 {mapping,
  "watchdog.io.threshold_output_per_sec",
- "leo_storage.wd_threshold_output_per_sec",
+ "leo_watchdog.io_threshold_output_per_sec",
  [
   {datatype, integer},
   {default, 134217728}
  ]}.
 
+%%
+%%  Watchdog.DISK
+%%
 %% @doc Disk - Is enabled
 {mapping,
  "watchdog.disk.is_enabled",
- "leo_storage.wd_disk_enabled",
+ "leo_watchdog.disk_enabled",
  [
   {datatype, atom},
   {default, false}
  ]}.
 
+%% @doc Disk - Raised error times - defalut:3
+{mapping,
+ "watchdog.disk.raised_error_times",
+ "leo_watchdog.disk_raised_error_times",
+ [
+  {datatype, integer},
+  {default, 3}
+ ]}.
+
 %% @doc Check inteval (sec) - defalut:1sec
 {mapping,
  "watchdog.disk.interval",
- "leo_storage.wd_disk_interval",
+ "leo_watchdog.disk_interval",
  [
   {datatype, integer},
   {default, 1}
  ]}.
 
+
+%% @doc
+{mapping,
+ "watchdog.disk.target_paths",
+ "leo_watchdog.disk_target_paths",
+ [
+  {datatype, string},
+  {default, []}
+ ]}.
+
+{translation, "leo_watchdog.disk_target_paths",
+ fun(Conf) ->
+         %% retrieve pathes
+         Paths = cuttlefish_util:conf_get_value("obj_containers.path", Conf),
+         Paths_1 = case string:tokens(Paths, "[ , ]") of
+                       [] ->
+                           ["./avs"];
+                       Tokens_1 ->
+                           Tokens_1
+                   end,
+         lists:map(
+           fun(Path) ->
+                   {ok, Curr} = file:get_cwd(),
+                   Path_1 = case Path of
+                                "/"   ++ _Rest -> Path;
+                                "../" ++ _Rest -> Path;
+                                "./"  ++  Rest -> Curr ++ "/" ++ Rest;
+                                _              -> Curr ++ "/" ++ Path
+                            end,
+                   Path_2 = case (string:len(Path_1) == string:rstr(Path_1, "/")) of
+                                true  -> Path_1;
+                                false -> Path_1 ++ "/"
+                            end,
+                   Path_2
+           end, Paths_1)
+ end}.
+
+
 %% @doc Threshold disk use% - default:85%
 {mapping,
  "watchdog.disk.threshold_disk_use",
- "leo_storage.wd_threshold_disk_use",
+ "leo_watchdog.disk_threshold_use",
  [
   {datatype, integer},
   {default, 85}
@@ -320,16 +403,196 @@
 %% @doc Threshold disk util% - default:100%
 {mapping,
  "watchdog.disk.threshold_disk_util",
- "leo_storage.wd_threshold_disk_util",
+ "leo_watchdog.disk_threshold_util",
+ [
+  {datatype, integer},
+  {default, 100}
+ ]}.
+
+%% @doc Threshold disk read kb/sec
+%%      default:131072(KB) - 256MB
+{mapping,
+ "watchdog.disk.threshold_disk_rkb",
+ "leo_watchdog.disk_threshold_rkb",
+ [
+  {datatype, integer},
+  {default, 262144}
+ ]}.
+
+%% @doc Threshold disk write kb/sec
+%%      default:262144(KB) - 256MB
+{mapping,
+ "watchdog.disk.threshold_disk_wkb",
+ "leo_watchdog.disk_threshold_wkb",
+ [
+  {datatype, integer},
+  {default, 262144}
+ ]}.
+
+
+%% @doc Threshold disk write kb/sec
+%%      default:262144(KB) - 256MB
+{mapping,
+ "watchdog.disk.target_devices",
+ "leo_watchdog.disk_target_devices",
+ [
+  {datatype, string},
+  {default, []}
+ ]}.
+
+{translation, "leo_watchdog.disk_target_devices",
+ fun(Conf) ->
+         Managers = cuttlefish_util:conf_get_value("watchdog.disk.target_devices", Conf),
+         case string:tokens(Managers, "[ , ]") of
+             [] ->
+                 [];
+             Tokens ->
+                 Tokens
+         end
+ end}.
+
+
+%% --------------------------------------------------------------------
+%% STORAGE - Autonomic operation
+%% --------------------------------------------------------------------
+%% @doc [compaction] enabled compaction? - default:false
+{mapping,
+ "autonomic_op.compaction.is_enabled",
+ "leo_storage.auto_compaction_enabled",
+ [
+  {datatype, atom},
+  {default, false}
+ ]}.
+
+%% @doc [compaction] number of parallel procs - default:1
+{mapping,
+ "autonomic_op.compaction.parallel_procs",
+ "leo_storage.auto_compaction_parallel_procs",
+ [
+  {datatype, integer},
+  {default, 1}
+ ]}.
+
+%% @doc [compaction] warning ratio of active size - default:70%
+{mapping,
+ "autonomic_op.compaction.warn_active_size_ratio",
+ "leo_storage.warn_active_size_ratio",
+ [
+  {datatype, integer},
+  {default, 70}
+ ]}.
+
+%% @doc [compaction] threshold ratio of active size - default:60%
+{mapping,
+ "autonomic_op.compaction.threshold_active_size_ratio",
+ "leo_storage.threshold_active_size_ratio",
+ [
+  {datatype, integer},
+  {default, 60}
+ ]}.
+
+
+%% --------------------------------------------------------------------
+%% STORAGE - Data Compaction
+%% --------------------------------------------------------------------
+%% @doc Limit of a number of procs to execute data-compaction in parallel
+{mapping,
+ "compaction.limit_num_of_compaction_procs",
+ "leo_object_storage.limit_num_of_compaction_procs",
+ [
+  {datatype, integer},
+  {default, 4}
+ ]}.
+
+%% @doc Minimum waiting time/batch-proc (msec)
+{mapping,
+ "compaction.min_waiting_time",
+ "leo_object_storage.min_compaction_waiting_time",
+ [
+  {datatype, integer},
+  {default, 100}
+ ]}.
+
+%% @doc Regular waiting time/batch-proc (msec)
+{mapping,
+ "compaction.regular_waiting_time",
+ "leo_object_storage.regular_compaction_waiting_time",
+ [
+  {datatype, integer},
+  {default, 300}
+ ]}.
+
+%% @doc Maximum waiting time/batch-proc (msec)
+{mapping,
+ "compaction.max_waiting_time",
+ "leo_object_storage.max_compaction_waiting_time",
+ [
+  {datatype, integer},
+  {default, 1000}
+ ]}.
+
+%% @doc Step of compaction-proc waiting time(msec)
+{mapping,
+ "compaction.step_waiting_time",
+ "leo_object_storage.step_compaction_waiting_time",
  [
   {datatype, integer},
   {default, 100}
  ]}.
 
 
+%% @doc Minimum compaction batch processes
+{mapping,
+ "compaction.min_batch_procs",
+ "leo_object_storage.min_batch_procs",
+ [
+  {datatype, integer},
+  {default, 1000}
+ ]}.
+
+%% @doc Regular compaction batch processes
+{mapping,
+ "compaction.regular_batch_procs",
+ "leo_object_storage.regular_batch_procs",
+ [
+  {datatype, integer},
+  {default, 10000}
+ ]}.
+
+%% @doc Maximum compaction batch processes
+{mapping,
+ "compaction.max_batch_procs",
+ "leo_object_storage.max_batch_procs",
+ [
+  {datatype, integer},
+  {default, 100000}
+ ]}.
+
+%% @doc Step compaction batch processes
+{mapping,
+ "compaction.step_batch_procs",
+ "leo_object_storage.step_batch_procs",
+ [
+  {datatype, integer},
+  {default, 1000}
+ ]}.
+
+
 %% --------------------------------------------------------------------
 %% STORAGE - MQ
 %% --------------------------------------------------------------------
+%% Leo' MQ
+%% @doc leo-mq.backend_db
+%% @deprecated (v1.2.2-)
+{mapping,
+ "mq.backend_db",
+ "leo_storage.mq_backend_db",
+ [
+  {datatype, atom},
+  {default, 'bitcask'}
+ ]}.
+
+
 %% @doc A number of mq-server's processes
 {mapping,
  "mq.num_of_mq_procs",
@@ -339,186 +602,92 @@
   {default, 8}
  ]}.
 
-%% @doc MQ recover per_object
+
 %%
-{mapping,
- "mq.recover_per_object.num_of_batch_process",
- "leo_storage.cns_num_of_batch_process_per_object",
- [
-  {datatype, integer},
-  {default, 1}
- ]}.
-
-{mapping,
- "mq.recover_per_object.interval_min",
- "leo_storage.cns_interval_per_object_min",
- [
-  {datatype, integer},
-  {default, 1}
- ]}.
-
-{mapping,
- "mq.recover_per_object.interval_max",
- "leo_storage.cns_interval_per_object_max",
- [
-  {datatype, integer},
-  {default, 1}
- ]}.
-
-
-%% @doc MQ synchronize objects by vnode-id
+%% [Number of batch processes of message]
 %%
+%% @doc Minimum number of mq-server's processes
+%%      default: 100
 {mapping,
- "mq.sync_by_vnode_id.num_of_batch_process",
- "leo_storage.cns_num_of_batch_process_sync_by_vnode_id",
+ "mq.num_of_batch_process_min",
+ "leo_storage.mq_num_of_batch_process_min",
  [
   {datatype, integer},
-  {default, 1}
+  {default, 100}
  ]}.
 
+%% @doc Maximum number of mq-server's processes
+%%      default: 10000
 {mapping,
- "mq.sync_by_vnode_id.interval_min",
- "leo_storage.cns_interval_sync_by_vnode_id_min",
+ "mq.num_of_batch_process_max",
+ "leo_storage.mq_num_of_batch_process_max",
  [
   {datatype, integer},
-  {default, 8}
+  {default, 10000}
  ]}.
 
+%% @doc Regular number of mq-server's processes
+%%      default: 1000
 {mapping,
- "mq.sync_by_vnode_id.interval_max",
- "leo_storage.cns_interval_sync_by_vnode_id_max",
+ "mq.num_of_batch_process_regular",
+ "leo_storage.mq_num_of_batch_process_reg",
  [
   {datatype, integer},
-  {default, 32}
+  {default, 5000}
  ]}.
 
-
-%% @doc MQ rebalance objects
+%% @doc Step number of mq-server's processes
+%%      default: 1000
 {mapping,
- "mq.rebalance.num_of_batch_process",
- "leo_storage.cns_num_of_batch_process_rebalance",
+ "mq.num_of_batch_process_step",
+ "leo_storage.mq_num_of_batch_process_step",
  [
   {datatype, integer},
-  {default, 1}
- ]}.
-
-{mapping,
- "mq.rebalance.interval_min",
- "leo_storage.cns_interval_rebalance_min",
- [
-  {datatype, integer},
-  {default, 1}
- ]}.
-
-{mapping,
- "mq.rebalance.interval_max",
- "leo_storage.cns_interval_rebalance_max",
- [
-  {datatype, integer},
-  {default, 1}
+  {default, 1000}
  ]}.
 
 
-%% @doc MQ delete objects
+%%
+%% [Interval between batch-procs (msec)]
+%%
+%% @doc Minimum value of interval between batch proccesses
+%%      default: 10
 {mapping,
- "mq.delete_object.num_of_batch_process",
- "leo_storage.cns_num_of_batch_process_async_deletion",
+ "mq.interval_beween_batch_procs_min",
+ "leo_storage.mq_interval_between_batch_procs_min",
  [
   {datatype, integer},
-  {default, 1}
+  {default, 10}
  ]}.
 
+%% @doc Maximum value of interval between batch proccesses
+%%      default: 1000
 {mapping,
- "mq.delete_object.interval_min",
- "leo_storage.cns_interval_async_deletion_min",
+ "mq.interval_beween_batch_procs_max",
+ "leo_storage.mq_interval_between_batch_procs_max",
  [
   {datatype, integer},
-  {default, 1}
+  {default, 1000}
  ]}.
 
+%% @doc Regular value of interval between batch proccesses
+%%      default: 1000
 {mapping,
- "mq.delete_object.interval_max",
- "leo_storage.cns_interval_async_deletion_max",
+ "mq.interval_beween_batch_procs_regular",
+ "leo_storage.mq_interval_between_batch_procs_reg",
  [
   {datatype, integer},
-  {default, 1}
+  {default, 100}
  ]}.
 
-
-%% @doc MQ recover a node's object
+%% @doc Step value of interval between batch proccesses
+%%      default: 1000
 {mapping,
- "mq.recovery_node.num_of_batch_process",
- "leo_storage.cns_num_of_batch_process_recovery_node",
+ "mq.interval_beween_batch_procs_step",
+ "leo_storage.mq_interval_between_batch_procs_step",
  [
   {datatype, integer},
-  {default, 1}
- ]}.
-
-{mapping,
- "mq.recovery_node.interval_min",
- "leo_storage.cns_interval_recovery_node_min",
- [
-  {datatype, integer},
-  {default, 1}
- ]}.
-
-{mapping,
- "mq.recovery_node.interval_max",
- "leo_storage.cns_interval_recovery_node_max",
- [
-  {datatype, integer},
-  {default, 1}
- ]}.
-
-
-%% @doc MQ sync obj with dc
-{mapping,
- "mq.sync_obj_with_dc.num_of_batch_process",
- "leo_storage.cns_num_of_batch_process_sync_obj_with_dc",
- [
-  {datatype, integer},
-  {default, 1}
- ]}.
-
-{mapping,
- "mq.sync_obj_with_dc.interval_min",
- "leo_storage.cns_interval_sync_obj_with_dc_min",
- [
-  {datatype, integer},
-  {default, 8}
- ]}.
-
-{mapping,
- "mq.sync_obj_with_dc.interval_max",
- "leo_storage.cns_interval_sync_obj_with_dc_max",
- [
-  {datatype, integer},
-  {default, 32}
- ]}.
-
-%% @doc MQ compare metadata with dc
-{mapping,
- "mq.comp_meta_with_dc.num_of_batch_process",
- "leo_storage.cns_num_of_batch_process_comp_meta_with_dc",
- [
-  {datatype, integer},
-  {default, 1}
- ]}.
-
-{mapping,
- "mq.comp_meta_with_dc.interval_min",
- "leo_storage.cns_interval_comp_meta_with_dc_min",
- [
-  {datatype, integer},
-  {default, 8}
- ]}.
-
-{mapping,
- "mq.comp_meta_with_dc.interval_max",
- "leo_storage.cns_interval_comp_meta_with_dc_max",
- [
-  {datatype, integer},
-  {default, 32}
+  {default, 100}
  ]}.
 
 
@@ -533,7 +702,6 @@
   {datatype, string},
   {default, ""}
  ]}.
-
 
 %% @doc Size of stacked objects (bytes)
 {mapping,
@@ -680,35 +848,6 @@
 %%======================================================================
 %% Other libs
 %%======================================================================
-%% Leo' MQ
-%% @doc leo-mq.backend_db
-{mapping,
- "leo_mq.backend_db",
- "leo_mq.backend_db",
- [
-  {datatype, atom},
-  {default, 'bitcask'}
- ]}.
-
-%% Leo' Object-Storage
-%% @doc leo-object-storage.metadata_storage
-{mapping,
- "leo_object_storage.metadata_storage",
- "leo_object_storage.metadata_storage",
- [
-  {datatype, atom},
-  {default, 'leveldb'}
- ]}.
-
-%% @doc leo-object-storage.is_strict_check
-{mapping,
- "leo_object_storage.is_strict_check",
- "leo_object_storage.is_strict_check",
- [
-  {datatype, {enum, [true, false]}},
-  {default, false}
- ]}.
-
 %% Leo' Ordning-Reda
 %% @doc leo-ordning-reda.send_after_interval
 {mapping,
@@ -1033,6 +1172,14 @@
 %%  "vm_args.-hidden",
 %%  [
 %%   {default, ""}
+%%  ]}.
+
+%% @doc Enable/Disable eager check I/O (Erlang 17.4/erts-6.3-, ref:OTP-12117)
+%% {mapping,
+%%  "erlang.secio",
+%%  "vm_args.+secio",
+%%  [
+%%   {default, false}
 %%  ]}.
 
 %% @doc Raise the default erlang process limit

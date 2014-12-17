@@ -37,7 +37,7 @@
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
--export([start/2, start/3,
+-export([start/1, start/2,
          publish/2, publish/3, publish/4, publish/5]).
 -export([init/0, handle_call/1, handle_call/3]).
 
@@ -56,17 +56,15 @@
 %%--------------------------------------------------------------------
 %% @doc create queues and launch mq-servers.
 %%
--spec(start(RootPath, Intervals) ->
-             ok | {error, any()} when RootPath::binary(),
-                                      Intervals::list(tuple())).
-start(RootPath, Intervals) ->
-    start(leo_storage_sup, Intervals, RootPath).
+-spec(start(RootPath) ->
+             ok | {error, any()} when RootPath::binary()).
+start(RootPath) ->
+    start(leo_storage_sup, RootPath).
 
--spec(start(RefSup, Intervals, RootPath) ->
+-spec(start(RefSup, RootPath) ->
              ok | {error, any()} when RefSup::pid(),
-                                      Intervals::[tuple()],
                                       RootPath::binary()).
-start(RefSup, Intervals, RootPath) ->
+start(RefSup, RootPath) ->
     %% launch mq-sup under storage-sup
     RefMqSup =
         case whereis(leo_mq_sup) of
@@ -89,119 +87,35 @@ start(RefSup, Intervals, RootPath) ->
 
     ?TBL_REBALANCE_COUNTER = ets:new(?TBL_REBALANCE_COUNTER,
                                      [named_table, public, {read_concurrency, true}]),
-    start_1([{?QUEUE_ID_PER_OBJECT, ?MSG_PATH_PER_OBJECT,
-              get_queue(?PROP_MQ_PER_OBJ_1, Intervals),
-              get_queue(?PROP_MQ_PER_OBJ_2, Intervals),
-              get_queue(?PROP_MQ_PER_OBJ_3, Intervals)
-             },
-             {?QUEUE_ID_SYNC_BY_VNODE_ID, ?MSG_PATH_SYNC_VNODE_ID,
-              get_queue(?PROP_MQ_SYNC_VN_1, Intervals),
-              get_queue(?PROP_MQ_SYNC_VN_2, Intervals),
-              get_queue(?PROP_MQ_SYNC_VN_3, Intervals)
-             },
-             {?QUEUE_ID_REBALANCE, ?MSG_PATH_REBALANCE,
-              get_queue(?PROP_MQ_REBALANCE_1, Intervals),
-              get_queue(?PROP_MQ_REBALANCE_2, Intervals),
-              get_queue(?PROP_MQ_REBALANCE_3, Intervals)
-             },
-             {?QUEUE_ID_ASYNC_DELETION, ?MSG_PATH_ASYNC_DELETION,
-              get_queue(?PROP_MQ_DELETE_1, Intervals),
-              get_queue(?PROP_MQ_DELETE_2, Intervals),
-              get_queue(?PROP_MQ_DELETE_3, Intervals)
-             },
-             {?QUEUE_ID_RECOVERY_NODE, ?MSG_PATH_RECOVERY_NODE,
-              get_queue(?PROP_MQ_RECOVERY_1, Intervals),
-              get_queue(?PROP_MQ_RECOVERY_2, Intervals),
-              get_queue(?PROP_MQ_RECOVERY_3, Intervals)
-             },
-             {?QUEUE_ID_SYNC_OBJ_WITH_DC, ?MSG_PATH_SYNC_OBJ_WITH_DC,
-              get_queue(?PROP_MQ_SYNC_DC_1, Intervals),
-              get_queue(?PROP_MQ_SYNC_DC_2, Intervals),
-              get_queue(?PROP_MQ_SYNC_DC_3, Intervals)
-             },
-             {?QUEUE_ID_COMP_META_WITH_DC, ?MSG_PATH_COMP_META_WITH_DC,
-              get_queue(?PROP_MQ_COMP_DC_1, Intervals),
-              get_queue(?PROP_MQ_COMP_DC_2, Intervals),
-              get_queue(?PROP_MQ_COMP_DC_3, Intervals)
-             },
-             {?QUEUE_ID_DEL_DIR, ?MSG_PATH_DEL_DIR,
-              get_queue(?PROP_MQ_DEL_DIR_1, Intervals),
-              get_queue(?PROP_MQ_DEL_DIR_2, Intervals),
-              get_queue(?PROP_MQ_DEL_DIR_3, Intervals)
-             }
+    start_1([{?QUEUE_ID_PER_OBJECT,        ?MSG_PATH_PER_OBJECT},
+             {?QUEUE_ID_SYNC_BY_VNODE_ID,  ?MSG_PATH_SYNC_VNODE_ID},
+             {?QUEUE_ID_REBALANCE,         ?MSG_PATH_REBALANCE},
+             {?QUEUE_ID_ASYNC_DELETION,    ?MSG_PATH_ASYNC_DELETION},
+             {?QUEUE_ID_RECOVERY_NODE,     ?MSG_PATH_RECOVERY_NODE},
+             {?QUEUE_ID_SYNC_OBJ_WITH_DC,  ?MSG_PATH_SYNC_OBJ_WITH_DC},
+             {?QUEUE_ID_COMP_META_WITH_DC, ?MSG_PATH_COMP_META_WITH_DC},
+             {?QUEUE_ID_DEL_DIR, ?MSG_PATH_DEL_DIR}
             ], RefMqSup, RootPath_1).
 
 %% @private
 start_1([],_,_) ->
     ok;
-start_1([{Id, Path, NumOfBatchProcs, MaxInterval, MinInterval}|Rest], Sup, Root) ->
-    leo_mq_api:new(Sup, Id, [{?MQ_PROP_MOD,          ?MODULE},
-                             {?MQ_PROP_FUN,          ?MQ_SUBSCRIBE_FUN},
-                             {?MQ_PROP_ROOT_PATH,    Root ++ Path},
-                             {?MQ_PROP_DB_PROCS,     ?env_num_of_mq_procs()},
-                             {?MQ_PROP_NUM_OF_BATCH_PROC, NumOfBatchProcs},
-                             {?MQ_PROP_MAX_INTERVAL, MaxInterval},
-                             {?MQ_PROP_MIN_INTERVAL, MinInterval}
+start_1([{Id, Path}|Rest], Sup, Root) ->
+    leo_mq_api:new(Sup, Id, [{?MQ_PROP_MOD, ?MODULE},
+                             {?MQ_PROP_FUN, ?MQ_SUBSCRIBE_FUN},
+                             {?MQ_PROP_ROOT_PATH, Root ++ Path},
+                             {?MQ_PROP_DB_NAME,   ?env_mq_backend_db()},
+                             {?MQ_PROP_DB_PROCS,  ?env_num_of_mq_procs()},
+                             {?MQ_PROP_BATCH_MSGS_MIN,  ?env_mq_num_of_batch_process_min()},
+                             {?MQ_PROP_BATCH_MSGS_MAX,  ?env_mq_num_of_batch_process_max()},
+                             {?MQ_PROP_BATCH_MSGS_REG,  ?env_mq_num_of_batch_process_reg()},
+                             {?MQ_PROP_BATCH_MSGS_STEP, ?env_mq_num_of_batch_process_step()},
+                             {?MQ_PROP_INTERVAL_MIN,  ?env_mq_interval_between_batch_procs_min()},
+                             {?MQ_PROP_INTERVAL_MAX,  ?env_mq_interval_between_batch_procs_max()},
+                             {?MQ_PROP_INTERVAL_REG,  ?env_mq_interval_between_batch_procs_reg()},
+                             {?MQ_PROP_INTERVAL_STEP, ?env_mq_interval_between_batch_procs_step()}
                             ]),
     start_1(Rest, Sup, Root).
-
-
-%% @private
-get_queue(?PROP_MQ_PER_OBJ_1 = Id, Intervals) ->
-    leo_misc:get_value(Id, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC);
-get_queue(?PROP_MQ_PER_OBJ_2 = Id, Intervals) ->
-    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MAX);
-get_queue(?PROP_MQ_PER_OBJ_3 = Id, Intervals) ->
-    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MIN);
-
-get_queue(?PROP_MQ_SYNC_VN_1 = Id, Intervals) ->
-    leo_misc:get_value(Id, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC);
-get_queue(?PROP_MQ_SYNC_VN_2 = Id, Intervals) ->
-    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MAX);
-get_queue(?PROP_MQ_SYNC_VN_3 = Id, Intervals) ->
-    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MIN);
-
-get_queue(?PROP_MQ_REBALANCE_1 = Id, Intervals) ->
-    leo_misc:get_value(Id, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC);
-get_queue(?PROP_MQ_REBALANCE_2 = Id, Intervals) ->
-    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MAX);
-get_queue(?PROP_MQ_REBALANCE_3 = Id, Intervals) ->
-    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MIN);
-
-get_queue(?PROP_MQ_DELETE_1 = Id, Intervals) ->
-    leo_misc:get_value(Id, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC);
-get_queue(?PROP_MQ_DELETE_2 = Id, Intervals) ->
-    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MAX);
-get_queue(?PROP_MQ_DELETE_3 = Id, Intervals) ->
-    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MIN);
-
-get_queue(?PROP_MQ_RECOVERY_1 = Id, Intervals) ->
-    leo_misc:get_value(Id, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC);
-get_queue(?PROP_MQ_RECOVERY_2 = Id, Intervals) ->
-    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MAX);
-get_queue(?PROP_MQ_RECOVERY_3 = Id, Intervals) ->
-    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MIN);
-
-get_queue(?PROP_MQ_SYNC_DC_1 = Id, Intervals) ->
-    leo_misc:get_value(Id, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC);
-get_queue(?PROP_MQ_SYNC_DC_2 = Id, Intervals) ->
-    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MAX);
-get_queue(?PROP_MQ_SYNC_DC_3 = Id, Intervals) ->
-    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MIN);
-
-get_queue(?PROP_MQ_COMP_DC_1 = Id, Intervals) ->
-    leo_misc:get_value(Id, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC);
-get_queue(?PROP_MQ_COMP_DC_2 = Id, Intervals) ->
-    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MAX);
-get_queue(?PROP_MQ_COMP_DC_3 = Id, Intervals) ->
-    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MIN);
-
-get_queue(?PROP_MQ_DEL_DIR_1 = Id, Intervals) ->
-    leo_misc:get_value(Id, Intervals, ?DEF_MQ_NUM_OF_BATCH_PROC);
-get_queue(?PROP_MQ_DEL_DIR_2 = Id, Intervals) ->
-    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MAX);
-get_queue(?PROP_MQ_DEL_DIR_3 = Id, Intervals) ->
-    leo_misc:get_value(Id, Intervals, ?DEF_MQ_INTERVAL_MIN).
 
 
 %% @doc Input a message into the queue.

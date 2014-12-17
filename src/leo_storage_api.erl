@@ -75,45 +75,8 @@ register_in_monitor(RequestedTimes) ->
              ok | {error, any()} when Pid::pid(),
                                       RequestedTimes::first|again).
 register_in_monitor(Pid, RequestedTimes) ->
-    Fun = fun(Node0, Res) ->
-                  Node1 = case is_atom(Node0) of
-                              true  -> Node0;
-                              false -> list_to_atom(Node0)
-                          end,
-                  case leo_misc:node_existence(Node1) of
-                      true ->
-                          GroupL1 = ?env_grp_level_1(),
-                          GroupL2 = ?env_grp_level_2(),
-                          NumOfNodes = ?env_num_of_vnodes(),
-                          RPCPort = ?env_rpc_port(),
-
-                          case rpc:call(Node1, leo_manager_api, register,
-                                        [RequestedTimes, Pid, erlang:node(), ?PERSISTENT_NODE,
-                                         GroupL1, GroupL2, NumOfNodes, RPCPort],
-                                        ?DEF_REQ_TIMEOUT) of
-                              {ok, SystemConf} ->
-                                  case leo_cluster_tbl_conf:update(SystemConf) of
-                                      ok ->
-                                          Options = lists:zip(
-                                                      record_info(
-                                                        fields, ?SYSTEM_CONF),
-                                                      tl(tuple_to_list(SystemConf))),
-                                          ok = leo_redundant_manager_api:set_options(Options),
-                                          true;
-                                      _ ->
-                                          false
-                                  end;
-                              Error ->
-                                  ?error("register_in_monitor/1",
-                                         "manager:~w, cause:~p", [Node1, Error]),
-                                  Res
-                          end;
-                      false ->
-                          Res
-                  end
-          end,
-
-    case lists:foldl(Fun, false, ?env_manager_nodes(leo_storage)) of
+    case register_in_monitor_1(?env_manager_nodes(leo_storage),
+                               Pid, RequestedTimes) of
         true ->
             ok;
         false ->
@@ -121,6 +84,54 @@ register_in_monitor(Pid, RequestedTimes) ->
                               [Pid, RequestedTimes]),
             ok
     end.
+
+%% private
+register_in_monitor_1([],_Pid,_RequestedTimes) ->
+    false;
+register_in_monitor_1([Node|Rest], Pid, RequestedTimes) ->
+    Node_1 = case is_atom(Node) of
+                true  -> Node;
+                false -> list_to_atom(Node)
+            end,
+
+    Ret = case leo_misc:node_existence(Node_1) of
+              true ->
+                  GroupL_1   = ?env_grp_level_1(),
+                  GroupL_2   = ?env_grp_level_2(),
+                  NumOfNodes = ?env_num_of_vnodes(),
+                  RPCPort    = ?env_rpc_port(),
+
+                  case rpc:call(Node_1, leo_manager_api, register,
+                                [RequestedTimes, Pid, erlang:node(), ?PERSISTENT_NODE,
+                                 GroupL_1, GroupL_2, NumOfNodes, RPCPort], ?DEF_REQ_TIMEOUT) of
+                      {ok, SystemConf} ->
+                          case leo_cluster_tbl_conf:update(SystemConf) of
+                              ok ->
+                                  Options = lists:zip(
+                                              record_info(
+                                                fields, ?SYSTEM_CONF),
+                                              tl(tuple_to_list(SystemConf))),
+                                  ok = leo_redundant_manager_api:set_options(Options),
+                                  true;
+                              _ ->
+                                  false
+                          end;
+                      Error ->
+                          ?error("register_in_monitor/1",
+                                 "manager:~w, cause:~p", [Node_1, Error]),
+                          false
+                  end;
+              false ->
+                  false
+          end,
+
+    case Ret of
+        false ->
+            register_in_monitor_1(Rest, Pid, RequestedTimes);
+        _ ->
+            Ret
+    end.
+
 
 %% @doc get routing_table's checksum.
 %%
@@ -362,15 +373,18 @@ get_node_status() ->
                   ],
 
     NumOfQueue1 = case catch leo_mq_api:status(?QUEUE_ID_PER_OBJECT) of
-                      {ok, {Res1, _}} -> Res1;
+                      {ok, Res_1} ->
+                          leo_misc:get_value(?MQ_CNS_PROP_NUM_OF_MSGS, Res_1, 0);
                       _ -> 0
                   end,
     NumOfQueue2 = case catch leo_mq_api:status(?QUEUE_ID_SYNC_BY_VNODE_ID) of
-                      {ok, {Res2, _}} -> Res2;
+                      {ok, Res_2} ->
+                          leo_misc:get_value(?MQ_CNS_PROP_NUM_OF_MSGS, Res_2, 0);
                       _ -> 0
                   end,
     NumOfQueue3 = case catch leo_mq_api:status(?QUEUE_ID_REBALANCE) of
-                      {ok, {Res3, _}} -> Res3;
+                      {ok, Res_3} ->
+                          leo_misc:get_value(?MQ_CNS_PROP_NUM_OF_MSGS, Res_3, 0);
                       _ -> 0
                   end,
 
@@ -399,23 +413,53 @@ get_node_status() ->
           {avs,           ?env_storage_device()},
           {ring_checksum, RingHashes},
           {watchdog,
-           [{cpu_enabled,    ?env_wd_cpu_enabled(leo_storage)},
-            {io_enabled,     ?env_wd_io_enabled(leo_storage)},
-            {disk_enabled,   ?env_wd_disk_enabled(leo_storage)},
-            {rex_interval,   ?env_wd_rex_interval(leo_storage)},
-            {cpu_interval,   ?env_wd_cpu_interval(leo_storage)},
-            {io_interval,    ?env_wd_io_interval(leo_storage)},
-            {disk_interval,  ?env_wd_disk_interval(leo_storage)},
-            {rex_threshold_mem_capacity, ?env_wd_threshold_mem_capacity(leo_storage)},
-            {cpu_threshold_cpu_load_avg, ?env_wd_threshold_cpu_load_avg(leo_storage)},
-            {cpu_threshold_cpu_util,     ?env_wd_threshold_cpu_util(leo_storage)},
-            {io_threshold_input_per_sec,  ?env_wd_threshold_input_per_sec(leo_storage)},
-            {io_threshold_output_per_sec, ?env_wd_threshold_output_per_sec(leo_storage)},
-            {disk_threshold_disk_use,     ?env_wd_threshold_disk_use(leo_storage)},
-            {disk_threshold_disk_util,    ?env_wd_threshold_disk_util(leo_storage)}
+           [{cpu_enabled,    ?env_wd_cpu_enabled()},
+            {io_enabled,     ?env_wd_io_enabled()},
+            {disk_enabled,   ?env_wd_disk_enabled()},
+            {rex_interval,   ?env_wd_rex_interval()},
+            {cpu_interval,   ?env_wd_cpu_interval()},
+            {io_interval,    ?env_wd_io_interval()},
+            {disk_interval,  ?env_wd_disk_interval()},
+            {rex_threshold_mem_capacity, ?env_wd_threshold_mem_capacity()},
+            {cpu_threshold_cpu_load_avg, ?env_wd_threshold_cpu_load_avg()},
+            {cpu_threshold_cpu_util,     ?env_wd_threshold_cpu_util()},
+            {io_threshold_input_per_sec,  ?env_wd_threshold_input_per_sec()},
+            {io_threshold_output_per_sec, ?env_wd_threshold_output_per_sec()},
+            {disk_threshold_use,     ?env_wd_threshold_disk_use()},
+            {disk_threshold_util,    ?env_wd_threshold_disk_util()},
+            {disk_threshold_rkb,     ?env_wd_threshold_disk_rkb()},
+            {disk_threshold_wkb,     ?env_wd_threshold_disk_wkb()},
+            {disk_target_devices,         ?env_wd_disk_target_devices()},
+            {disk_target_paths,           ?env_wd_disk_target_paths()}
            ]
           },
-          {statistics,    Statistics}
+          %% mq-related
+          {mq_num_of_procs, ?env_num_of_mq_procs()},
+          {mq_num_of_batch_process_step, ?env_mq_num_of_batch_process_step()},
+          {mq_num_of_batch_process_reg,  ?env_mq_num_of_batch_process_reg()},
+          {mq_num_of_batch_process_max,  ?env_mq_num_of_batch_process_max()},
+          {mq_num_of_batch_process_min,  ?env_mq_num_of_batch_process_min()},
+          {mq_interval_between_batch_procs_step, ?env_mq_interval_between_batch_procs_step()},
+          {mq_interval_between_batch_procs_reg,  ?env_mq_interval_between_batch_procs_reg()},
+          {mq_interval_between_batch_procs_max,  ?env_mq_interval_between_batch_procs_max()},
+          {mq_interval_between_batch_procs_min,  ?env_mq_interval_between_batch_procs_min()},
+          %% auto-compaction-related
+          {auto_compaction_enabled, ?env_auto_compaction_enabled()},
+          {auto_compaction_warn_active_size_ratio,      ?env_warn_active_size_ratio()},
+          {auto_compaction_threshold_active_size_ratio, ?env_threshold_active_size_ratio()},
+          {auto_compaction_parallel_procs,              ?env_auto_compaction_parallel_procs()},
+          %% compaction-related
+          {limit_num_of_compaction_procs, ?env_limit_num_of_compaction_procs()},
+          {compaction_num_of_batch_procs_min,            ?env_compaction_num_of_batch_procs_min()},
+          {compaction_num_of_batch_procs_max,            ?env_compaction_num_of_batch_procs_max()},
+          {compaction_num_of_batch_procs_reg,            ?env_compaction_num_of_batch_procs_reg()},
+          {compaction_num_of_batch_procs_step,           ?env_compaction_num_of_batch_procs_step()},
+          {compaction_interval_between_batch_procs_min,  ?env_compaction_interval_between_batch_procs_min()},
+          {compaction_interval_between_batch_procs_max,  ?env_compaction_interval_between_batch_procs_max()},
+          {compaction_interval_between_batch_procs_reg,  ?env_compaction_interval_between_batch_procs_reg()},
+          {compaction_interval_between_batch_procs_step, ?env_compaction_interval_between_batch_procs_step()},
+          %% others
+          {statistics, Statistics}
          ]}.
 
 

@@ -39,6 +39,9 @@
 
 %% Application and Supervisor callbacks
 -export([start/2, prep_stop/1, stop/1]).
+-export([start_mnesia/0,
+         start_statistics/0
+        ]).
 
 %%----------------------------------------------------------------------
 %% Application behaviour callbacks
@@ -57,6 +60,42 @@ prep_stop(_State) ->
     ok.
 
 stop(_State) ->
+    ok.
+
+
+%% @doc Start mnesia and create tables
+start_mnesia() ->
+    try
+        %% Create cluster-related tables
+        application:ensure_started(mnesia),
+        leo_cluster_tbl_conf:create_table(ram_copies, [node()]),
+        leo_cluster_tbl_conf:create_table(ram_copies, [node()]),
+        leo_mdcr_tbl_cluster_info:create_table(ram_copies, [node()]),
+        leo_mdcr_tbl_cluster_stat:create_table(ram_copies, [node()]),
+        leo_mdcr_tbl_cluster_mgr:create_table(ram_copies, [node()]),
+        leo_mdcr_tbl_cluster_member:create_table(ram_copies, [node()])
+    catch
+        _:_Cause ->
+            timer:apply_after(timer:seconds(1), ?MODULE, start_mnesia, [])
+    end,
+    ok.
+
+%% @doc Start statistics
+start_statistics() ->
+    try
+        %% Launch metric-servers
+        application:ensure_started(mnesia),
+        application:ensure_started(snmp),
+
+        leo_statistics_api:start_link(leo_storage),
+        leo_statistics_api:create_tables(ram_copies, [node()]),
+        leo_metrics_vm:start_link(?SNMP_SYNC_INTERVAL_10S),
+        leo_metrics_req:start_link(?SNMP_SYNC_INTERVAL_60S),
+        leo_storage_statistics:start_link(?SNMP_SYNC_INTERVAL_60S)
+    catch
+        _:_Cause ->
+            timer:apply_after(timer:seconds(1), ?MODULE, start_statistics, [])
+    end,
     ok.
 
 
@@ -86,89 +125,37 @@ after_proc({ok, Pid}) ->
     QueueDir = ?env_queue_dir(leo_storage),
     Managers = ?env_manager_nodes(leo_storage),
     ok = launch_redundant_manager(Pid, Managers, QueueDir),
-
-    Intervals = ?env_mq_consumption_intervals(),
-    ok = leo_storage_mq:start(Pid, Intervals, QueueDir),
+    ok = leo_storage_mq:start(Pid, QueueDir),
 
     %% After processing
     ensure_started(rex, rpc, start_link, worker, 2000),
     ok = leo_storage_api:register_in_monitor(first),
 
-    %% Launch metric-servers
-    ok = leo_statistics_api:start_link(leo_storage),
-    ok = leo_statistics_api:create_tables(ram_copies, [node()]),
-    ok = leo_metrics_vm:start_link(?SNMP_SYNC_INTERVAL_10S),
-    ok = leo_metrics_req:start_link(?SNMP_SYNC_INTERVAL_60S),
-    ok = leo_storage_statistics:start_link(?SNMP_SYNC_INTERVAL_60S),
-
-    %% Create cluster-related tables
-    ok = leo_cluster_tbl_conf:create_table(ram_copies, [node()]),
-    ok = leo_mdcr_tbl_cluster_info:create_table(ram_copies, [node()]),
-    ok = leo_mdcr_tbl_cluster_stat:create_table(ram_copies, [node()]),
-    ok = leo_mdcr_tbl_cluster_mgr:create_table(ram_copies, [node()]),
-    ok = leo_mdcr_tbl_cluster_member:create_table(ram_copies, [node()]),
-
     %% Launch leo-rpc
     ok = leo_rpc:start(),
 
-    %% Launch leo-watchdog
-    %% Watchdog for rex's binary usage
-    MaxMemCapacity = ?env_wd_threshold_mem_capacity(leo_storage),
-    IntervalRex = ?env_wd_rex_interval(leo_storage),
-    leo_watchdog_sup:start_child(
-      rex, [MaxMemCapacity], IntervalRex),
-
-    %% Wachdog for CPU
-    case ?env_wd_cpu_enabled(leo_storage) of
+    %% Watchdog for Storage in order to operate 'auto-compaction' automatically
+    case ?env_auto_compaction_enabled() of
         true ->
-            MaxCPULoadAvg = ?env_wd_threshold_cpu_load_avg(leo_storage),
-            MaxCPUUtil    = ?env_wd_threshold_cpu_util(leo_storage),
-            IntervalCpu   = ?env_wd_cpu_interval(leo_storage),
-            leo_watchdog_sup:start_child(
-              cpu, [MaxCPULoadAvg, MaxCPUUtil], IntervalCpu);
+            {ok, _} = supervisor:start_child(
+                        leo_watchdog_sup, {leo_storage_watchdog,
+                                           {leo_storage_watchdog, start_link,
+                                            [?env_warn_active_size_ratio(),
+                                             ?env_threshold_active_size_ratio(),
+                                             ?env_storage_watchdog_interval()
+                                            ]},
+                                           permanent,
+                                           2000,
+                                           worker,
+                                           [leo_storage_watchdog]}),
+            ok = leo_storage_watchdog_sub:start();
         false ->
             void
     end,
 
-    %% Wachdog for IO
-    case ?env_wd_io_enabled(leo_storage) of
-        true ->
-            MaxInput    = ?env_wd_threshold_input_per_sec(leo_storage),
-            MaxOutput   = ?env_wd_threshold_output_per_sec(leo_storage),
-            IntervalIo  = ?env_wd_io_interval(leo_storage),
-            leo_watchdog_sup:start_child(
-              io, [MaxInput, MaxOutput], IntervalIo);
-        false ->
-            void
-    end,
-
-    %% Wachdog for Disk
-    case ?env_wd_disk_enabled(leo_storage) of
-        true ->
-            TargetPaths = lists:map(
-                            fun(Item) ->
-                                    {ok, Curr} = file:get_cwd(),
-                                    Path = leo_misc:get_value(path, Item),
-                                    Path1 = case Path of
-                                                "/"   ++ _Rest -> Path;
-                                                "../" ++ _Rest -> Path;
-                                                "./"  ++  Rest -> Curr ++ "/" ++ Rest;
-                                                _              -> Curr ++ "/" ++ Path
-                                            end,
-                                    Path2 = case (string:len(Path1) == string:rstr(Path1, "/")) of
-                                                true  -> Path1;
-                                                false -> Path1 ++ "/"
-                                            end,
-                                    Path2
-                            end, ?env_storage_device()),
-            MaxDiskUse   = ?env_wd_threshold_disk_use(leo_storage),
-            MaxDiskUtil  = ?env_wd_threshold_disk_util(leo_storage),
-            IntervalDisk = ?env_wd_disk_interval(leo_storage),
-            leo_watchdog_sup:start_child(
-              disk, [TargetPaths, MaxDiskUse, MaxDiskUtil], IntervalDisk);
-        false ->
-            void
-    end,
+    %% Launch statistics/mnesia-related processes
+    timer:apply_after(timer:seconds(3), ?MODULE, start_mnesia, []),
+    timer:apply_after(timer:seconds(3), ?MODULE, start_statistics, []),
     {ok, Pid};
 
 after_proc(Error) ->
