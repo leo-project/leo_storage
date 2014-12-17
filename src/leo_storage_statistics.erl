@@ -30,6 +30,7 @@
 -behaviour(leo_statistics_behaviour).
 
 -include("leo_storage.hrl").
+-include_lib("leo_mq/include/leo_mq.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
 -include_lib("leo_statistics/include/leo_statistics.hrl").
 -include_lib("eunit/include/eunit.hrl").
@@ -65,15 +66,18 @@ start_link(Window) ->
 handle_notify() ->
     %% set number of queues
     Num_1 = case catch leo_mq_api:status(?QUEUE_ID_PER_OBJECT) of
-                {ok, {Res1, _}} -> Res1;
+                {ok, Res_1} ->
+                    leo_misc:get_value(?MQ_CNS_PROP_NUM_OF_MSGS, Res_1, 0);
                 _ -> 0
             end,
     Num_2 = case catch leo_mq_api:status(?QUEUE_ID_SYNC_BY_VNODE_ID) of
-                {ok, {Res2, _}} -> Res2;
+                {ok, Res_2} ->
+                    leo_misc:get_value(?MQ_CNS_PROP_NUM_OF_MSGS, Res_2, 0);
                 _ -> 0
             end,
     Num_3 = case catch leo_mq_api:status(?QUEUE_ID_REBALANCE) of
-                {ok, {Res3, _}} -> Res3;
+                {ok, Res_3} ->
+                    leo_misc:get_value(?MQ_CNS_PROP_NUM_OF_MSGS, Res_3, 0);
                 _ -> 0
             end,
 

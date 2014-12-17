@@ -373,15 +373,18 @@ get_node_status() ->
                   ],
 
     NumOfQueue1 = case catch leo_mq_api:status(?QUEUE_ID_PER_OBJECT) of
-                      {ok, {Res1, _}} -> Res1;
+                      {ok, Res_1} ->
+                          leo_misc:get_value(?MQ_CNS_PROP_NUM_OF_MSGS, Res_1, 0);
                       _ -> 0
                   end,
     NumOfQueue2 = case catch leo_mq_api:status(?QUEUE_ID_SYNC_BY_VNODE_ID) of
-                      {ok, {Res2, _}} -> Res2;
+                      {ok, Res_2} ->
+                          leo_misc:get_value(?MQ_CNS_PROP_NUM_OF_MSGS, Res_2, 0);
                       _ -> 0
                   end,
     NumOfQueue3 = case catch leo_mq_api:status(?QUEUE_ID_REBALANCE) of
-                      {ok, {Res3, _}} -> Res3;
+                      {ok, Res_3} ->
+                          leo_misc:get_value(?MQ_CNS_PROP_NUM_OF_MSGS, Res_3, 0);
                       _ -> 0
                   end,
 
