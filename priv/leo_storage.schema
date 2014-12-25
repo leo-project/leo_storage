@@ -1090,7 +1090,7 @@
  ]}.
 
 {mapping,
- "erlang.asyc_threads",
+ "erlang.async_threads",
  "vm_args.+A",
  [
   {default, "32"}
