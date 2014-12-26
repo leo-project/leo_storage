@@ -404,7 +404,7 @@
 -endif.
 
 -define(WD_ITEM_ACTIVE_SIZE_RATIO, 'active_size_ratio').
--define(WD_EXCLUDE_ITEMS, ['leo_storage_watchdog']).
+-define(WD_EXCLUDE_ITEMS, ['leo_storage_watchdog', 'leo_watchdog_cluster']).
 -define(DEF_MAX_COMPACTION_PROCS, 1).
 
 -define(env_warn_active_size_ratio(),

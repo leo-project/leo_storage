@@ -35,7 +35,9 @@
 
 %% API
 -export([start_link/3,
-         stop/0]).
+         stop/0,
+         state/0
+        ]).
 
 %% Callback
 -export([init/1,
@@ -73,6 +75,13 @@ start_link(WarnActiveSizeRatio, ThresholdActiveSizeRatio, Interval) ->
              ok).
 stop() ->
     leo_watchdog:stop(?MODULE).
+
+
+%% @doc Retrieve state of the watchdog
+-spec(state() ->
+             not_found).
+state() ->
+    not_found.
 
 
 %%--------------------------------------------------------------------
