@@ -451,6 +451,41 @@
          end
  end}.
 
+%%
+%%  Watchdog.Cluster
+%%
+%% @doc Cluster - Is enabled
+{mapping,
+ "watchdog.cluster.is_enabled",
+ "leo_watchdog.cluster_enabled",
+ [
+  {datatype, atom},
+  {default, false}
+ ]}.
+
+%% @doc Check inteval (sec) - defalut:10sec
+{mapping,
+ "watchdog.cluster.interval",
+ "leo_watchdog.cluster_interval",
+ [
+  {datatype, integer},
+  {default, 10}
+ ]}.
+
+%% @doc Check function of cluster stats
+{mapping,
+ "watchdog.cluster.check_state_of_members_mfa",
+ "leo_watchdog.cluster_check_state_of_members_mfa",
+ [
+  {datatype, string},
+  {default, []}
+ ]}.
+
+{translation, "leo_watchdog.cluster_check_state_of_members_mfa",
+ fun(_Conf) ->
+         {leo_storage_cluster_monitor, check_cluster_state, []}
+ end}.
+
 
 %% --------------------------------------------------------------------
 %% STORAGE - Autonomic operation
