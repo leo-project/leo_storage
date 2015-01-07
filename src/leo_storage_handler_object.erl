@@ -281,7 +281,7 @@ put_fun(Ref, AddrId, Key, Object) ->
                 {ok, ETag} ->
                     {ok, Ref, {etag, ETag}};
                 {error, ?ERROR_LOCKED_CONTAINER} ->
-                    {error, unavailable};
+                    {error, Ref, unavailable};
                 {error, Cause} ->
                     {error, Ref, Cause}
             end;
