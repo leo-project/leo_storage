@@ -49,6 +49,8 @@
 -define(LEVEL_MID,      50).
 -define(LEVEL_HIGH,     75).
 -define(LEVEL_FULL ,   100).
+-define(REQ_TIMEOUT, timer:seconds(10)).
+
 
 %%--------------------------------------------------------------------
 %% API
@@ -138,16 +140,16 @@ check_cluster_state_1([Node|Rest], Pid, Ref) ->
 %%      - Judge level of node-status
 %% @private
 check_cluster_state_2(Node, Pid, Ref) ->
-    Level = case rpc:call(Node, ?MODULE, get_node_stats, []) of
+    Level = case rpc:call(Node, ?MODULE, get_node_stats, [], ?REQ_TIMEOUT) of
                 {ok, #state{compaction = CompactionState,
                             mq   = MQState,
                             cpu  = CPUState,
                             disk = DiskState}} ->
-                    Level_1 = level_compaction(CompactionState),
-                    Level_2 = level_mq(MQState),
+                    Level_1 = level_mq(MQState),
+                    Level_2 = level_compaction(CompactionState),
                     Level_3 = level_cpu(CPUState),
                     Level_4 = level_disk(DiskState),
-                    (Level_2 + erlang:round((Level_1 + Level_3 + Level_4) / 3));
+                    (Level_1 + erlang:round((Level_2 + Level_3 + Level_4) / 3));
                 _ ->
                     0
             end,
