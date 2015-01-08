@@ -249,11 +249,8 @@ init() ->
 
 %% @doc Subscribe a message from the queue.
 %%
--spec(handle_call({publish | consume, any() | queue_id() , any() | binary()}) ->
+-spec(handle_call({consume, any() | queue_id() , any() | binary()}) ->
              ok | {error, any()}).
-handle_call({publish, _Id, _Reply}) ->
-    ok;
-
 handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->

@@ -450,7 +450,15 @@ delete_objects_under_dir([Node|Rest], Ref, Keys) ->
             ok;
         _Other ->
             %% enqueu a fail message into the mq
-            ok = leo_storage_mq:publish(?QUEUE_TYPE_DEL_DIR, Node, Keys)
+            QId = ?QUEUE_TYPE_DEL_DIR,
+            case leo_storage_mq:publish(QId, Node, Keys) of
+                ok ->
+                    void;
+                {error, Cause} ->
+                    ?warn("delete_objects_under_dir/3",
+                          "qid:~p, node:~p, keys:~p, cause:~p",
+                          [QId, Node, Keys, Cause])
+            end
     end,
     delete_objects_under_dir(Rest, Ref, Keys).
 
@@ -713,8 +721,15 @@ prefix_search_and_remove_objects(ParentDir) ->
 
                   case (Pos_1 == 0) of
                       true when Metadata#?METADATA.del == ?DEL_FALSE ->
-                          leo_storage_mq:publish(
-                            ?QUEUE_TYPE_ASYNC_DELETION, AddrId, Key);
+                          QId = ?QUEUE_TYPE_ASYNC_DELETION,
+                          case leo_storage_mq:publish(QId, AddrId, Key) of
+                              ok ->
+                                  void;
+                              {error, Cause} ->
+                                  ?warn("prefix_search_and_remove_objects/1",
+                                        "qid:~p, addr-id:~p, key:~p, cause:~p",
+                                        [QId, AddrId, Key, Cause])
+                          end;
                       _ ->
                           Acc
                   end,

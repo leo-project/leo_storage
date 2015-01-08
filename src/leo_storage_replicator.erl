@@ -154,7 +154,7 @@ loop(N, W, ResL, Ref, From, #state{method = Method,
                 end,
             loop(N-1, W_1, ResL_1, Ref, From, State_1);
         {Ref, {error, {Node, Cause}}} ->
-            ok = enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
+            _ = enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
             State_1 = State#state{errors = [{Node, Cause}|E]},
             loop(N-1, W, ResL, Ref, From, State_1)
     after
@@ -201,4 +201,11 @@ replicate_fun(Ref, #req_params{pid     = Pid,
                      AddrId::non_neg_integer(),
                      Key::binary()).
 enqueue(?ERR_TYPE_REPLICATE_DATA = Type,  AddrId, Key) ->
-    leo_storage_mq:publish(?QUEUE_TYPE_PER_OBJECT, AddrId, Key, Type).
+    QId = ?QUEUE_TYPE_PER_OBJECT,
+    case leo_storage_mq:publish(QId, AddrId, Key, Type) of
+        ok ->
+            ok;
+        {error, Cause} ->
+            ?warn("enqueue/1", "qid:~p, addr-id:~p, key:~p, type:~p, cause:~p",
+                  [QId, AddrId, Key, Type, Cause])
+    end.

@@ -466,7 +466,7 @@ get_node_status() ->
 %% @doc Do rebalance which means "Objects are copied to the specified node".
 %% @param RebalanceInfo: [{VNodeId, DestNode}]
 -spec(rebalance(RebalanceList) ->
-             ok when RebalanceList::[tuple()]).
+             ok | {error, any()} when RebalanceList::[tuple()]).
 rebalance(RebalanceList) ->
     catch leo_redundant_manager_api:force_sync_workers(),
     rebalance_1(RebalanceList).
@@ -494,8 +494,15 @@ rebalance(RebalanceList, MembersCur, MembersPrev) ->
 rebalance_1([]) ->
     ok;
 rebalance_1([{VNodeId, Node}|T]) ->
-    _ = leo_storage_mq:publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, VNodeId, Node),
-    rebalance_1(T).
+    QId = ?QUEUE_TYPE_SYNC_BY_VNODE_ID,
+    case leo_storage_mq:publish(QId, VNodeId, Node) of
+        ok ->
+            rebalance_1(T);
+        {error, Cause} ->
+            ?warn("rebalance_1/1", "qid:~p, vnodeid:~p, node:~p, cause:~p",
+                  [QId, VNodeId, Node, Cause]),
+            {error, Cause}
+    end.
 
 
 %% @doc Get the disk usage(Total, Free) on leo_storage in KByte

@@ -115,9 +115,14 @@ handle_fail(_, []) ->
     ok;
 handle_fail(Node, [{AddrId, Key}|Rest]) ->
     ?warn("handle_fail/2","node:~w, addr-id:~w, key:~s", [Node, AddrId, Key]),
-
-    ok = leo_storage_mq:publish(
-           ?QUEUE_TYPE_PER_OBJECT, AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
+    QId = ?QUEUE_TYPE_PER_OBJECT,
+    case leo_storage_mq:publish(QId, AddrId, Key, ?ERR_TYPE_REPLICATE_DATA) of
+        ok ->
+            void;
+        {error, Cause} ->
+            ?warn("handle_fail/2",
+                  "qid:~p, addr-id:~p, key:~p, cause:~p", [QId, AddrId, Key, Cause])
+    end,
     handle_fail(Node, Rest).
 
 
