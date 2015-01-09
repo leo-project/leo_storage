@@ -522,6 +522,6 @@ enqueue_fail_replication([{AddrId, Key}|Rest], ClusterId) ->
         {error, Cause} ->
             ?warn("enqueue_fail_replication/2",
                   "qid:~p, cluster-id:~p, addr-id:~p, key:~p, cause:~p",
-                  [ClusterId, AddrId, Key, Cause])
+                  [QId, ClusterId, AddrId, Key, Cause])
     end,
     enqueue_fail_replication(Rest, ClusterId).
