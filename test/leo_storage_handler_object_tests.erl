@@ -689,6 +689,9 @@ prefix_search_and_remove_objects_(_) ->
                             term_to_binary(#?METADATA{}), [#?METADATA{key=?TEST_KEY_0}])
                 end),
 
+    meck:new(leo_mq_api, [non_strict]),
+    meck:expect(leo_mq_api, publish, fun(_,_,_) -> ok end),
+
     Res = leo_storage_handler_object:prefix_search_and_remove_objects(?TEST_BUCKET),
     ?assertEqual(true, is_list(Res)),
     ok.
