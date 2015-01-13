@@ -278,8 +278,10 @@ put_fun(Ref, AddrId, Key, Object) ->
         not_found ->
             %% Put the object to the local object-storage
             case leo_object_storage_api:put({AddrId, Key}, Object) of
+                %% for delete-operation
                 ok ->
                     {ok, Ref, {etag, 0}};
+                %% for put-operation
                 {ok, ETag} ->
                     {ok, Ref, {etag, ETag}};
                 {error, ?ERROR_LOCKED_CONTAINER} ->
@@ -341,7 +343,10 @@ delete({Object, Ref}) ->
                 #?METADATA{del = ?DEL_TRUE} ->
                     {ok, Ref};
                 #?METADATA{del = ?DEL_FALSE} ->
-                    case leo_object_storage_api:delete({AddrId, Key}, Object) of
+                    case leo_object_storage_api:delete(
+                           {AddrId, Key}, Object#?OBJECT{data  = <<>>,
+                                                         dsize = 0,
+                                                         del   = ?DEL_TRUE}) of
                         ok ->
                             {ok, Ref};
                         {error, Why} ->
@@ -362,12 +367,12 @@ delete(Object, ReqId) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
     case replicate_fun(?REP_LOCAL, ?CMD_DELETE,
                        Object#?OBJECT.addr_id,
-                       Object#?OBJECT{method   = ?CMD_DELETE,
-                                      data     = <<>>,
-                                      dsize    = 0,
-                                      clock    = leo_date:clock(),
-                                      req_id   = ReqId,
-                                      del      = ?DEL_TRUE}) of
+                       Object#?OBJECT{method = ?CMD_DELETE,
+                                      data   = <<>>,
+                                      dsize  = 0,
+                                      clock  = leo_date:clock(),
+                                      req_id = ReqId,
+                                      del    = ?DEL_TRUE}) of
         ok ->
             ok = delete_objects_under_dir(Object),
             ok;
@@ -388,13 +393,13 @@ delete(Object, ReqId) ->
 -spec(delete_objects_under_dir(Object) ->
              ok when Object::#?OBJECT{}).
 delete_objects_under_dir(Object) ->
-    Key = Object#?OBJECT.key,
+    Key   = Object#?OBJECT.key,
     KSize = byte_size(Key),
 
     case catch binary:part(Key, (KSize - 1), 1) of
         {'EXIT',_} ->
             void;
-         Bin ->
+        Bin ->
             Targets = case Bin == ?BIN_SLASH of
                           true ->
                               [ Bin,
@@ -605,7 +610,9 @@ replicate(DestNodes, AddrId, Key) ->
                     leo_sync_local_cluster:stack(
                       DestNodes, AddrId, Key, Metadata, <<>>),
                     Object_1 = leo_object_storage_transformer:metadata_to_object(Metadata),
-                    Object_2 = Object_1#?OBJECT{data = <<>>},
+                    Object_2 = Object_1#?OBJECT{data  = <<>>,
+                                                dsize = 0,
+                                                del   = ?DEL_TRUE},
                     leo_sync_remote_cluster:defer_stack(Object_2);
                 _ ->
                     {error, invalid_data_type}
@@ -930,10 +937,10 @@ replicate_fun(?REP_REMOTE, Method, Object) ->
               ?CMD_DELETE -> ?MODULE:delete({Object, Ref})
           end,
     case Ret of
-        %% Put
+        %% for put-operation
         {ok, Ref, Checksum} ->
             {ok, Checksum};
-        %% Delete
+        %% for delete-operation
         {ok, Ref} ->
             ok;
         {error, Ref, not_found = Cause} ->
