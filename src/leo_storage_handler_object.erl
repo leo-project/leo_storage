@@ -255,7 +255,6 @@ put(Ref, From, Object, ReqId) ->
     case replicate_fun(?REP_REMOTE, ?CMD_PUT, Object) of
         {ok, ETag} ->
             erlang:send(From, {Ref, {ok, ETag}});
-
         %% not found an object (during rebalance and delete-operation)
         {error, not_found} when ReqId == 0 ->
             erlang:send(From, {Ref, {ok, 0}});
@@ -942,7 +941,7 @@ replicate_fun(?REP_REMOTE, Method, Object) ->
             {ok, Checksum};
         %% for delete-operation
         {ok, Ref} ->
-            ok;
+            {ok, 0};
         {error, Ref, not_found = Cause} ->
             {error, Cause};
         {error, Ref, unavailable = Cause} ->

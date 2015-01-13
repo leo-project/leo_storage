@@ -318,7 +318,7 @@ handle_call({consume, ?QUEUE_ID_ASYNC_DELETION, MessageBin}) ->
             {error, Cause};
         #async_deletion_message{addr_id  = AddrId,
                                 key      = Key} ->
-            case leo_storage_handler_object:delete(
+            case catch leo_storage_handler_object:delete(
                    #?OBJECT{addr_id   = AddrId,
                             key       = Key,
                             clock     = leo_date:clock(),
@@ -327,7 +327,7 @@ handle_call({consume, ?QUEUE_ID_ASYNC_DELETION, MessageBin}) ->
                            }, 0) of
                 ok ->
                     ok;
-                {error, _Cause} ->
+                {_,_Cause} ->
                     publish(?QUEUE_TYPE_ASYNC_DELETION, AddrId, Key)
             end;
         _ ->

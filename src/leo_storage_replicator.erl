@@ -153,8 +153,20 @@ loop(N, W, ResL, Ref, From, #state{method = Method,
                         {W - 1, State}
                 end,
             loop(N-1, W_1, ResL_1, Ref, From, State_1);
+        {Ref, {error, {_Node, not_found}}} when Method == 'delete'->
+            {W_1, State_1} =
+                case ((W - 1) < 1) of
+                    true when IsReply == false ->
+                        erlang:send(From, {Ref, {ok, Method, 0}}),
+                        {0, State#state{is_reply = true}};
+                    true ->
+                        {0, State};
+                    false ->
+                        {W - 1, State}
+                end,
+            loop(N-1, W_1, [0|ResL], Ref, From, State_1);
         {Ref, {error, {Node, Cause}}} ->
-            _ = enqueue(?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
+            _ = enqueue( Method, ?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
             State_1 = State#state{errors = [{Node, Cause}|E]},
             loop(N-1, W, ResL, Ref, From, State_1)
     after
@@ -196,11 +208,12 @@ replicate_fun(Ref, #req_params{pid     = Pid,
 
 %% @doc Input a message into the queue.
 %%
--spec(enqueue(Type, AddrId, Key) ->
-             ok when Type::error_msg_type(),
+-spec(enqueue(Method, Type, AddrId, Key) ->
+             ok when Method::type_of_method(),
+                     Type::error_msg_type(),
                      AddrId::non_neg_integer(),
                      Key::binary()).
-enqueue(?ERR_TYPE_REPLICATE_DATA = Type,  AddrId, Key) ->
+enqueue('put', ?ERR_TYPE_REPLICATE_DATA = Type,  AddrId, Key) ->
     QId = ?QUEUE_TYPE_PER_OBJECT,
     case leo_storage_mq:publish(QId, AddrId, Key, Type) of
         ok ->
@@ -208,4 +221,13 @@ enqueue(?ERR_TYPE_REPLICATE_DATA = Type,  AddrId, Key) ->
         {error, Cause} ->
             ?warn("enqueue/1", "qid:~p, addr-id:~p, key:~p, type:~p, cause:~p",
                   [QId, AddrId, Key, Type, Cause])
+    end;
+enqueue('delete', _Type,  AddrId, Key) ->
+    QId = ?QUEUE_TYPE_ASYNC_DELETION,
+    case leo_storage_mq:publish(QId, AddrId, Key) of
+        ok ->
+            ok;
+        {error, Cause} ->
+            ?warn("enqueue/1", "qid:~p, addr-id:~p, key:~p, cause:~p",
+                  [QId, AddrId, Key, Cause])
     end.
