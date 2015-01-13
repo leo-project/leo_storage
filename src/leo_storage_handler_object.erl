@@ -278,6 +278,8 @@ put_fun(Ref, AddrId, Key, Object) ->
         not_found ->
             %% Put the object to the local object-storage
             case leo_object_storage_api:put({AddrId, Key}, Object) of
+                ok ->
+                    {ok, Ref, {etag, 0}};
                 {ok, ETag} ->
                     {ok, Ref, {etag, ETag}};
                 {error, ?ERROR_LOCKED_CONTAINER} ->
@@ -307,7 +309,9 @@ delete_chunked_objects(CIndex, ParentKey) ->
     case delete(#?OBJECT{addr_id  = AddrId,
                          key      = Key,
                          cindex   = CIndex,
-                         clock    = leo_date:clock()}, 0) of
+                         clock    = leo_date:clock(),
+                         del       = ?DEL_TRUE
+                        }, 0) of
         ok ->
             delete_chunked_objects(CIndex - 1, ParentKey);
         {error, Cause} ->
@@ -932,8 +936,10 @@ replicate_fun(?REP_REMOTE, Method, Object) ->
         %% Delete
         {ok, Ref} ->
             ok;
-        {error, Ref, not_found} ->
-            {error, not_found};
+        {error, Ref, not_found = Cause} ->
+            {error, Cause};
+        {error, Ref, unavailable = Cause} ->
+            {error, Cause};
         {error, Ref, Cause} ->
             ?warn("replicate_fun/3", "cause:~p", [Cause]),
             {error, Cause}
