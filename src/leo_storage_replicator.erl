@@ -170,6 +170,8 @@ loop(N, W, ResL, Ref, From, #state{method = Method,
                 end,
             loop(N-1, W_1, [0|ResL], Ref, From, State_1);
         {Ref, {error, {Node, Cause}}} ->
+            ?warn("loop/6", "method:~w, node:~w, key:~p, cause:~p",
+                  [Method, Node, Key, Cause]),
             _ = enqueue( Method, ?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
             State_1 = State#state{errors = [{Node, Cause}|E]},
             loop(N-1, W, ResL, Ref, From, State_1)

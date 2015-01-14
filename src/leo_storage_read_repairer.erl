@@ -104,12 +104,16 @@ loop(R, Ref, From, NumOfNodes, {ReqId, Key, E} = Args, Callback) ->
         {Ref, ok} ->
             loop(R-1, Ref, From, NumOfNodes, Args, Callback);
         {Ref, {error, {Node, Cause}}} ->
+            ?warn("loop/6", "node:~w, key:~p, cause:~p", [Node, Key, Cause]),
             loop(R,   Ref, From, NumOfNodes, {ReqId, Key, [{Node, Cause}|E]}, Callback)
     after
         ?DEF_REQ_TIMEOUT ->
             case (R >= 0) of
                 true ->
-                    Callback({error, timeout});
+                    Cause = timeout,
+                    ?warn("loop/6", "key:~p, cause:~p",
+                          [Key, Cause]),
+                    Callback({error, Cause});
                 false ->
                     void
             end
