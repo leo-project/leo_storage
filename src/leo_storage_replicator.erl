@@ -86,8 +86,8 @@ replicate(Method, Quorum, Nodes, Object, Callback) ->
                                                 is_reply     = false
                                                })
                  end),
-
     ok = replicate_1(Nodes, Ref, Pid, AddrId, Key, Object, ReqId),
+
     receive
         {Ref, Reply} ->
             Callback(Reply)
@@ -97,7 +97,7 @@ replicate(Method, Quorum, Nodes, Object, Callback) ->
             ?warn("replicate/5",
                   "method:~w, key:~p, cause:~p",
                   [Method, Key, Cause]),
-            Callback({error, Cause})
+            Callback({error, [Cause]})
     end.
 
 %% @private
@@ -142,6 +142,7 @@ loop(N, W, ResL, Ref, From, #state{method = Method,
                                    addr_id = AddrId,
                                    key = Key,
                                    errors = E,
+                                   callback = Callback,
                                    is_reply = IsReply} = State) ->
     receive
         {Ref, {ok, Checksum}} ->
@@ -170,9 +171,7 @@ loop(N, W, ResL, Ref, From, #state{method = Method,
                 end,
             loop(N-1, W_1, [0|ResL], Ref, From, State_1);
         {Ref, {error, {Node, Cause}}} ->
-            ?warn("loop/6", "method:~w, node:~w, key:~p, cause:~p",
-                  [Method, Node, Key, Cause]),
-            _ = enqueue( Method, ?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
+            enqueue(Method, ?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
             State_1 = State#state{errors = [{Node, Cause}|E]},
             loop(N-1, W, ResL, Ref, From, State_1)
     after
@@ -180,10 +179,10 @@ loop(N, W, ResL, Ref, From, #state{method = Method,
             case (W >= 0) of
                 true ->
                     Cause = timeout,
-                   ?warn("loop/6",
-                         "method:~w, key:~p, cause:~p",
-                         [Method, Key, Cause]),
-                    erlang:send(From, {Ref, {error, Cause}});
+                    ?warn("loop/6",
+                          "method:~w, key:~p, cause:~p",
+                          [Method, Key, Cause]),
+                    Callback({error, [Cause]});
                 false ->
                     void
             end

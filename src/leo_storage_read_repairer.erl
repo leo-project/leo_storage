@@ -104,7 +104,6 @@ loop(R, Ref, From, NumOfNodes, {ReqId, Key, E} = Args, Callback) ->
         {Ref, ok} ->
             loop(R-1, Ref, From, NumOfNodes, Args, Callback);
         {Ref, {error, {Node, Cause}}} ->
-            ?warn("loop/6", "node:~w, key:~p, cause:~p", [Node, Key, Cause]),
             loop(R,   Ref, From, NumOfNodes, {ReqId, Key, [{Node, Cause}|E]}, Callback)
     after
         ?DEF_REQ_TIMEOUT ->
@@ -113,7 +112,7 @@ loop(R, Ref, From, NumOfNodes, {ReqId, Key, E} = Args, Callback) ->
                     Cause = timeout,
                     ?warn("loop/6", "key:~p, cause:~p",
                           [Key, Cause]),
-                    Callback({error, Cause});
+                    Callback({error, [Cause]});
                 false ->
                     void
             end
@@ -167,8 +166,7 @@ compare(Ref, Pid, RPCKey, Node, #state{metadata = #?METADATA{addr_id = AddrId,
                                       Key::binary()).
 enqueue(AddrId, Key) ->
     QId = ?QUEUE_TYPE_PER_OBJECT,
-    case leo_storage_mq:publish(
-           QId, AddrId, Key, ?ERR_TYPE_RECOVER_DATA) of
+    case leo_storage_mq:publish(QId, AddrId, Key, ?ERR_TYPE_RECOVER_DATA) of
         ok ->
             void;
         {error, Cause} ->

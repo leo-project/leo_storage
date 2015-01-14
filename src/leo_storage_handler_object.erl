@@ -271,16 +271,29 @@ put(Ref, From, Object, ReqId) ->
                                               AddrId::integer(),
                                               Key::binary(),
                                               Object::#?OBJECT{}).
+put_fun(Ref, AddrId, Key, #?OBJECT{del = ?DEL_TRUE} = Object) ->
+    %% Check state of the node
+    case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
+        not_found ->
+            %% Set deletion-flag to the object
+            case leo_object_storage_api:delete({AddrId, Key}, Object) of
+                ok ->
+                    {ok, Ref, {etag, 0}};
+                {error, ?ERROR_LOCKED_CONTAINER} ->
+                    {error, Ref, unavailable};
+                {error, Cause} ->
+                    {error, Ref, Cause}
+            end;
+        {ok, ErrorItems} ->
+            ?debug("put_fun/4", "error-items:~p", [ErrorItems]),
+            {error, Ref, unavailable}
+    end;
 put_fun(Ref, AddrId, Key, Object) ->
     %% Check state of the node
     case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
         not_found ->
             %% Put the object to the local object-storage
             case leo_object_storage_api:put({AddrId, Key}, Object) of
-                %% for delete-operation
-                ok ->
-                    {ok, Ref, {etag, 0}};
-                %% for put-operation
                 {ok, ETag} ->
                     {ok, Ref, {etag, ETag}};
                 {error, ?ERROR_LOCKED_CONTAINER} ->
@@ -588,10 +601,9 @@ replicate(Object) ->
                                  AddrId::integer(),
                                  Key::binary()).
 replicate(DestNodes, AddrId, Key) ->
-    Ref = make_ref(),
-
     case leo_object_storage_api:head({AddrId, Key}) of
         {ok, MetaBin} ->
+            Ref = make_ref(),
             case binary_to_term(MetaBin) of
                 #?METADATA{del = ?DEL_FALSE} = Metadata ->
                     case ?MODULE:get({Ref, Key}) of
@@ -606,10 +618,10 @@ replicate(DestNodes, AddrId, Key) ->
                             {error, Cause}
                     end;
                 #?METADATA{del = ?DEL_TRUE} = Metadata ->
-                    leo_sync_local_cluster:stack(
-                      DestNodes, AddrId, Key, Metadata, <<>>),
+                    EmptyBin = <<>>,
+                    leo_sync_local_cluster:stack(DestNodes, AddrId, Key, Metadata, EmptyBin),
                     Object_1 = leo_object_storage_transformer:metadata_to_object(Metadata),
-                    Object_2 = Object_1#?OBJECT{data  = <<>>,
+                    Object_2 = Object_1#?OBJECT{data  = EmptyBin,
                                                 dsize = 0,
                                                 del   = ?DEL_TRUE},
                     leo_sync_remote_cluster:defer_stack(Object_2);
@@ -910,7 +922,6 @@ replicate_fun(?REP_LOCAL, Method, AddrId, Object) ->
                                    w         = WriteQuorum,
                                    d         = DeleteQuorum,
                                    ring_hash = RingHash}} ->
-
                     Quorum = case Method of
                                  ?CMD_PUT    -> WriteQuorum;
                                  ?CMD_DELETE -> DeleteQuorum
@@ -972,8 +983,10 @@ replicate_callback(Object) ->
             ok = leo_sync_remote_cluster:defer_stack(Object),
             ok;
        ({error, Cause}) ->
-            case lists:keyfind(not_found, 2, Cause) of
+            case catch lists:keyfind(not_found, 2, Cause) of
                 false ->
+                    {error, ?ERROR_REPLICATE_FAILURE};
+                {'EXIT',_} ->
                     {error, ?ERROR_REPLICATE_FAILURE};
                 _ ->
                     {error, not_found}
