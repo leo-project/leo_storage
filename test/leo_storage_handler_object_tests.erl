@@ -501,7 +501,7 @@ delete_({Node0, Node1}) ->
     meck:new(leo_storage_replicator, [non_strict]),
     meck:expect(leo_storage_replicator, replicate,
                 fun(_Method,_Quorum,_Redundancies,_ObjectPool,_Callback) ->
-                        ok
+                        {ok, 0}
                 end),
 
     meck:new(leo_object_storage_api, [non_strict]),

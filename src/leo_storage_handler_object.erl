@@ -385,7 +385,7 @@ delete(Object, ReqId) ->
                                       clock  = leo_date:clock(),
                                       req_id = ReqId,
                                       del    = ?DEL_TRUE}) of
-        ok ->
+        {ok,_} ->
             ok = delete_objects_under_dir(Object),
             ok;
         {error, not_found = Cause} ->
@@ -583,7 +583,6 @@ replicate(Object) ->
                            true  -> NumOfReplicas - 1;
                            false -> Quorum_1
                        end,
-
             leo_storage_replicator:replicate(
               Method, Quorum_2, Redundancies_1,
               Object, replicate_callback());
@@ -978,15 +977,12 @@ replicate_callback(Object) ->
             {ok, Checksum};
        ({ok,?CMD_DELETE,_Checksum}) ->
             ok = leo_sync_remote_cluster:defer_stack(Object),
-            ok;
-       ({ok,_,_Checksum}) ->
-            ok = leo_sync_remote_cluster:defer_stack(Object),
-            ok;
-       ({error, Cause}) ->
-            case catch lists:keyfind(not_found, 2, Cause) of
-                false ->
-                    {error, ?ERROR_REPLICATE_FAILURE};
+            {ok, 0};
+       ({error, Errors}) ->
+            case catch lists:keyfind(not_found, 2, Errors) of
                 {'EXIT',_} ->
+                    {error, ?ERROR_REPLICATE_FAILURE};
+                false ->
                     {error, ?ERROR_REPLICATE_FAILURE};
                 _ ->
                     {error, not_found}

@@ -77,7 +77,7 @@ check_cluster_state() ->
                           end, [], Members),
             case Members_1 of
                 [] ->
-                    {error, not_found};
+                    {ok, 0};
                 _ ->
                     Ref  = make_ref(),
                     From = self(),
