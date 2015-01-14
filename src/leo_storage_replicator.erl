@@ -93,7 +93,11 @@ replicate(Method, Quorum, Nodes, Object, Callback) ->
             Callback(Reply)
     after
         (?DEF_REQ_TIMEOUT + timer:seconds(1)) ->
-            Callback({error, timeout})
+            Cause = timeout,
+            ?warn("replicate/5",
+                  "method:~w, key:~p, cause:~p",
+                  [Method, Key, Cause]),
+            Callback({error, Cause})
     end.
 
 %% @private
@@ -173,7 +177,11 @@ loop(N, W, ResL, Ref, From, #state{method = Method,
         ?DEF_REQ_TIMEOUT ->
             case (W >= 0) of
                 true ->
-                    erlang:send(From, {Ref, {error, timeout}});
+                    Cause = timeout,
+                   ?warn("loop/6",
+                         "method:~w, key:~p, cause:~p",
+                         [Method, Key, Cause]),
+                    erlang:send(From, {Ref, {error, Cause}});
                 false ->
                     void
             end
