@@ -107,7 +107,7 @@ loop(R, Ref, From, NumOfNodes, {ReqId, Key, E} = Args, Callback) ->
             loop(R,   Ref, From, NumOfNodes, {ReqId, Key, [{Node, Cause}|E]}, Callback)
     after
         ?DEF_REQ_TIMEOUT ->
-            case (R >= 0) of
+            case (R > 0) of
                 true ->
                     Cause = timeout,
                     ?warn("loop/6", "key:~p, cause:~p",
