@@ -176,7 +176,7 @@ loop(N, W, ResL, Ref, From, #state{method = Method,
             loop(N-1, W, ResL, Ref, From, State_1)
     after
         ?DEF_REQ_TIMEOUT ->
-            case (W >= 0) of
+            case (W > 0) of
                 true ->
                     %% for recovering message of the repair-obj's MQ
                     enqueue(Method, ?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
