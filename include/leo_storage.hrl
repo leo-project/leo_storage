@@ -91,6 +91,7 @@
 -define(ERROR_COULD_NOT_CONNECT,        "Could not connect").
 -define(ERROR_COULD_MATCH,              "Could not match").
 -define(ERROR_COULD_SEND_OBJ,           "Could not send an object to a remote cluster").
+-define(ERROR_NOT_SATISFY_QUORUM,       "Could not satisfy the quorum of the consistency level").
 
 
 %% @doc request parameter for READ
