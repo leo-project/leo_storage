@@ -199,7 +199,7 @@ get_b0_({Node0, Node1}) ->
     ok = rpc:call(Node1, meck, expect, [leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end]),
 
     Res = leo_storage_handler_object:get(0, ?TEST_KEY_0, 0),
-    ?assertEqual({error, ?ERROR_NOT_SATISFY_QUORUM}, Res),
+    ?assertEqual({error, not_found}, Res),
     ok.
 
 

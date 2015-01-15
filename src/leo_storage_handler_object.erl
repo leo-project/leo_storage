@@ -798,8 +798,8 @@ find_uploaded_objects_by_key(OriginalKey) ->
 read_and_repair(_ReadParameter, []) ->
     {error, ?ERROR_NOT_SATISFY_QUORUM};
 read_and_repair(#read_parameter{quorum = Q} = ReadParams, Redundancies) ->
-    AvailableNodes = [Node || #redundant_node{node = Node,
-                                              available = true} <- Redundancies],
+    AvailableNodes = [RedundantNode ||
+                         #redundant_node{available = true} = RedundantNode <- Redundancies],
     case (Q =< erlang:length(AvailableNodes)) of
         true ->
             read_and_repair_1(ReadParams, AvailableNodes);
@@ -819,14 +819,16 @@ read_and_repair_1(#read_parameter{addr_id   = AddrId,
                                   key       = Key,
                                   etag      = 0,
                                   start_pos = StartPos,
-                                  end_pos   = EndPos} = ReadParameter, [Node|T]) when Node == erlang:node() ->
+                                  end_pos   = EndPos} = ReadParameter,
+                  [#redundant_node{node = Node}|T]) when Node == erlang:node() ->
     read_and_repair_2(
       get_fun(AddrId, Key, StartPos, EndPos), ReadParameter, T);
 read_and_repair_1(#read_parameter{addr_id   = AddrId,
                                   key       = Key,
                                   etag      = ETag,
                                   start_pos = StartPos,
-                                  end_pos   = EndPos} = ReadParameter, [Node|T]) when Node == erlang:node() ->
+                                  end_pos   = EndPos} = ReadParameter,
+                  [#redundant_node{node = Node}|T]) when Node == erlang:node() ->
     %% Retrieve an head of object,
     %%     then compare it with requested 'Etag'
     Ret = case leo_object_storage_api:head({AddrId, Key}) of
@@ -851,7 +853,8 @@ read_and_repair_1(#read_parameter{addr_id   = AddrId,
             read_and_repair_2(
               get_fun(AddrId, Key, StartPos, EndPos), ReadParameter, T)
     end;
-read_and_repair_1(ReadParameter, [Node|_] = Redundancies) ->
+read_and_repair_1(ReadParameter,
+                  [#redundant_node{node = Node}|_] = Redundancies) ->
     RPCKey = rpc:async_call(Node, ?MODULE, get, [ReadParameter, Redundancies]),
     Reply  = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
                  {value, {ok, Meta, Bin}} ->
