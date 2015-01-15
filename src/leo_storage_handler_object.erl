@@ -583,8 +583,13 @@ replicate(Object) ->
                            true  -> NumOfReplicas - 1;
                            false -> Quorum_1
                        end,
-            leo_storage_replicator:replicate(Method, Quorum_2, Redundancies_1,
-                                             Object, replicate_callback());
+            case get_active_redundancies(Quorum_2, Redundancies_1) of
+                {ok, Redundancies_2} ->
+                    leo_storage_replicator:replicate(Method, Quorum_2, Redundancies_2,
+                                                     Object, replicate_callback());
+                {error, Reason} ->
+                    {error, Reason}
+            end;
         {error, Cause} ->
             {error, Cause}
     end.
@@ -788,6 +793,25 @@ find_uploaded_objects_by_key(OriginalKey) ->
 %%--------------------------------------------------------------------
 %% INNNER FUNCTIONS
 %%--------------------------------------------------------------------
+%% @doc Retrieve active redundancies
+%% @private
+-spec(get_active_redundancies(Quorum, Redundancies) ->
+             {ok, [#redundant_node{}]} |
+             {error, any()} when Quorum::non_neg_integer(),
+                                 Redundancies::[#redundant_node{}]).
+get_active_redundancies(_, []) ->
+    {error, ?ERROR_NOT_SATISFY_QUORUM};
+get_active_redundancies(Quorum, Redundancies) ->
+    AvailableNodes = [RedundantNode ||
+                         #redundant_node{available = true} = RedundantNode <- Redundancies],
+    case (Quorum =< erlang:length(AvailableNodes)) of
+        true ->
+            {ok, AvailableNodes};
+        false ->
+            {error, ?ERROR_NOT_SATISFY_QUORUM}
+    end.
+
+
 %% @doc read reapir - compare with remote-node's meta-data.
 %% @private
 -spec(read_and_repair(ReadParams, Redundancies) ->
@@ -795,16 +819,12 @@ find_uploaded_objects_by_key(OriginalKey) ->
              {ok, match} |
              {error, any()} when ReadParams::#read_parameter{},
                                  Redundancies::[#redundant_node{}]).
-read_and_repair(_ReadParameter, []) ->
-    {error, ?ERROR_NOT_SATISFY_QUORUM};
 read_and_repair(#read_parameter{quorum = Q} = ReadParams, Redundancies) ->
-    AvailableNodes = [RedundantNode ||
-                         #redundant_node{available = true} = RedundantNode <- Redundancies],
-    case (Q =< erlang:length(AvailableNodes)) of
-        true ->
+    case get_active_redundancies(Q, Redundancies) of
+        {ok, AvailableNodes} ->
             read_and_repair_1(ReadParams, AvailableNodes);
-        false ->
-            {error, ?ERROR_NOT_SATISFY_QUORUM}
+        Error ->
+            Error
     end.
 
 %% @private
@@ -927,14 +947,15 @@ replicate_fun(?REP_LOCAL, Method, AddrId, Object) ->
                                    w         = WriteQuorum,
                                    d         = DeleteQuorum,
                                    ring_hash = RingHash}} ->
-                    Quorum = case Method of
-                                 ?CMD_PUT    -> WriteQuorum;
-                                 ?CMD_DELETE -> DeleteQuorum
-                             end,
-
-                    leo_storage_replicator:replicate(
-                      Method, Quorum, Redundancies, Object#?OBJECT{ring_hash = RingHash},
-                      replicate_callback(Object));
+                    Quorum = ?quorum(Method, WriteQuorum, DeleteQuorum),
+                    case get_active_redundancies(Quorum, Redundancies) of
+                        {ok, Redundancies_1} ->
+                            leo_storage_replicator:replicate(
+                              Method, Quorum, Redundancies_1, Object#?OBJECT{ring_hash = RingHash},
+                              replicate_callback(Object));
+                        {error, Reason} ->
+                            {error, Reason}
+                    end;
                 {error,_Cause} ->
                     {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
             end;
