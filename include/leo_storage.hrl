@@ -89,7 +89,7 @@
 -define(ERROR_REPLICATE_FAILURE,        "Replicate failure").
 -define(ERROR_COULD_NOT_GET_REDUNDANCY, "Could not get redundancy").
 -define(ERROR_COULD_NOT_CONNECT,        "Could not connect").
--define(ERROR_COULD_MATCH,              "Could not match").
+-define(ERROR_COULD_NOT_MATCH,          "Could not match").
 -define(ERROR_COULD_SEND_OBJ,           "Could not send an object to a remote cluster").
 -define(ERROR_NOT_SATISFY_QUORUM,       "Could not satisfy the quorum of the consistency level").
 

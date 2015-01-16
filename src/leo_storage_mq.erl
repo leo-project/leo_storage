@@ -278,7 +278,7 @@ handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
                     {error, Cause}
             end;
         _ ->
-            {error, ?ERROR_COULD_MATCH}
+            {error, ?ERROR_COULD_NOT_MATCH}
     end;
 
 handle_call({consume, ?QUEUE_ID_SYNC_BY_VNODE_ID, MessageBin}) ->
@@ -295,7 +295,7 @@ handle_call({consume, ?QUEUE_ID_SYNC_BY_VNODE_ID, MessageBin}) ->
             ok = sync_vnodes(Node, CurRingHash, Res),
             notify_rebalance_message_to_manager(ToVNodeId);
         _ ->
-            {error, ?ERROR_COULD_MATCH}
+            {error, ?ERROR_COULD_NOT_MATCH}
     end;
 
 handle_call({consume, ?QUEUE_ID_REBALANCE, MessageBin}) ->
@@ -307,7 +307,7 @@ handle_call({consume, ?QUEUE_ID_REBALANCE, MessageBin}) ->
         #rebalance_message{} = Msg ->
             rebalance_1(Msg);
         _ ->
-            {error, ?ERROR_COULD_MATCH}
+            {error, ?ERROR_COULD_NOT_MATCH}
     end;
 
 handle_call({consume, ?QUEUE_ID_ASYNC_DELETION, MessageBin}) ->
@@ -331,7 +331,7 @@ handle_call({consume, ?QUEUE_ID_ASYNC_DELETION, MessageBin}) ->
                     publish(?QUEUE_TYPE_ASYNC_DELETION, AddrId, Key)
             end;
         _ ->
-            {error, ?ERROR_COULD_MATCH}
+            {error, ?ERROR_COULD_NOT_MATCH}
     end;
 
 handle_call({consume, ?QUEUE_ID_RECOVERY_NODE, MessageBin}) ->
@@ -343,7 +343,7 @@ handle_call({consume, ?QUEUE_ID_RECOVERY_NODE, MessageBin}) ->
         #recovery_node_message{node = Node} ->
             recover_node(Node);
         _ ->
-            {error, ?ERROR_COULD_MATCH}
+            {error, ?ERROR_COULD_NOT_MATCH}
     end;
 
 handle_call({consume, ?QUEUE_ID_SYNC_OBJ_WITH_DC, MessageBin}) ->
@@ -355,7 +355,7 @@ handle_call({consume, ?QUEUE_ID_SYNC_OBJ_WITH_DC, MessageBin}) ->
         #inconsistent_data_with_dc{} = Msg ->
             fix_consistency_between_clusters(Msg);
         _ ->
-            {error, ?ERROR_COULD_MATCH}
+            {error, ?ERROR_COULD_NOT_MATCH}
     end;
 
 handle_call({consume, ?QUEUE_ID_COMP_META_WITH_DC, MessageBin}) ->
@@ -377,7 +377,7 @@ handle_call({consume, ?QUEUE_ID_COMP_META_WITH_DC, MessageBin}) ->
                     ok
             end;
         _ ->
-            {error, ?ERROR_COULD_MATCH}
+            {error, ?ERROR_COULD_NOT_MATCH}
     end;
 
 handle_call({consume, ?QUEUE_ID_DEL_DIR, MessageBin}) ->

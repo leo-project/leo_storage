@@ -93,6 +93,9 @@ replicate(Method, Quorum, Nodes, Object, Callback) ->
             Callback(Reply)
     after
         (?DEF_REQ_TIMEOUT + timer:seconds(1)) ->
+            %% for recovering message of the repair-obj's MQ
+            enqueue(Method, ?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
+            %% reply error
             Cause = timeout,
             ?warn("replicate/5",
                   "method:~w, key:~p, cause:~p",
