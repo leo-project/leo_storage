@@ -251,8 +251,16 @@ put(Object, ReqId) ->
                                  Object::#?OBJECT{},
                                  ReqId::integer()).
 put(Ref, From, Object, ReqId) ->
-    ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
-    case replicate_fun(?REP_REMOTE, ?CMD_PUT, Object) of
+    Method = case Object#?OBJECT.del of
+                 ?DEL_TRUE ->
+                     ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
+                     ?CMD_DELETE;
+                 ?DEL_FALSE ->
+                     ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
+                     ?CMD_PUT
+             end,
+
+    case replicate_fun(?REP_REMOTE, Method, Object) of
         {ok, ETag} ->
             erlang:send(From, {Ref, {ok, ETag}});
         %% not found an object (during rebalance and delete-operation)
@@ -376,6 +384,9 @@ delete({Object, Ref}) ->
              ok | {error, any()} when Object::#?OBJECT{},
                                       ReqId::integer()|reference()).
 delete(Object, ReqId) ->
+    %% @DEBUG
+    ?info("delete/3", "key:~p, del~p", [Object#?OBJECT.key, Object#?OBJECT.del]),
+
     ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
     case replicate_fun(?REP_LOCAL, ?CMD_DELETE,
                        Object#?OBJECT.addr_id,
@@ -967,6 +978,9 @@ replicate_fun(?REP_LOCAL, Method, AddrId, Object) ->
 %% @doc obj-replication request from remote node.
 %%
 replicate_fun(?REP_REMOTE, Method, Object) ->
+    %% @DEBUG
+    ?info("replicate_fun/3", "method:~p, key:~p, del:~p",
+          [Method, Object#?OBJECT.key, Object#?OBJECT.del]),
     Ref = make_ref(),
     Ret = case Method of
               ?CMD_PUT    -> ?MODULE:put({Object, Ref});
