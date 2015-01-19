@@ -511,7 +511,7 @@
 %% @doc [compaction] number of parallel procs - default:300
 {mapping,
  "autonomic_op.compaction.interval",
- "leo_storage.auto_compaction_interval"
+ "leo_storage.auto_compaction_interval",
  [
   {datatype, integer},
   {default, 300}
