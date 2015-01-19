@@ -116,13 +116,14 @@ handle_call(Id, #state{warn_active_size_ratio = WarningThreshold,
 
     Ratio = case (TotalSize > 0) of
                 true ->
-                    round(ActiveSize / TotalSize * 100);
+                    leo_math:ceiling(ActiveSize / TotalSize * 100);
                 false ->
                     0
             end,
 
-    case (Ratio > 0 andalso
-          Ratio =< WarningThreshold) of
+
+    case ((Ratio > 0.00 orelse (ActiveSize == 0 andalso TotalSize > 0))
+          andalso Ratio =< WarningThreshold) of
         true when Ratio =< AlartThreshold ->
             %% raise error
             elarm:raise(Id, ?WD_ITEM_ACTIVE_SIZE_RATIO,

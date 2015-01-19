@@ -407,6 +407,7 @@
 -define(WD_ITEM_ACTIVE_SIZE_RATIO, 'active_size_ratio').
 -define(WD_EXCLUDE_ITEMS, ['leo_storage_watchdog', 'leo_watchdog_cluster']).
 -define(DEF_MAX_COMPACTION_PROCS, 1).
+-define(DEF_AUTOCOMPACTION_INTERVAL, 300). %% 5min/300sec
 
 -define(env_warn_active_size_ratio(),
         case application:get_env(leo_storage, warn_active_size_ratio) of
@@ -448,4 +449,12 @@
                 EnvAutoCompactionParallelProcs;
             _ ->
                 ?DEF_MAX_COMPACTION_PROCS
+        end).
+
+-define(env_auto_compaction_interval(),
+        case application:get_env(leo_storage, auto_compaction_interval) of
+            {ok, EnvAutoCompactionInterval} ->
+                EnvAutoCompactionInterval;
+            _ ->
+                ?DEF_AUTOCOMPACTION_INTERVAL
         end).

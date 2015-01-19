@@ -105,9 +105,15 @@ handle_notify(?WD_SUB_ID_2, #watchdog_alarm{state = #watchdog_state{
     case (Level >= ?WD_LEVEL_ERROR) of
         true ->
             timer:sleep(?DEF_WAIT_TIME),
+            ThisTime = leo_date:now(),
+            AutoCompactionInterval = ?env_auto_compaction_interval(),
+
             case leo_compact_fsm_controller:state() of
                 {ok, #compaction_stats{status = ?ST_IDLING,
-                                       pending_targets = PendingTargets}} when PendingTargets /= [] ->
+                                       pending_targets = PendingTargets,
+                                       latest_exec_datetime = LastExecDataTime
+                                      }} when PendingTargets /= [] andalso
+                                              (ThisTime - LastExecDataTime) >= AutoCompactionInterval ->
                     ProcsOfParallelProcessing = ?env_auto_compaction_parallel_procs(),
 
                     case leo_object_storage_api:compact_data(
