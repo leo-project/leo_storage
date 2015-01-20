@@ -37,7 +37,7 @@
 
 -export([get/1, get/2, get/3, get/4, get/5,
          put/1, put/2, put/4,
-         delete/1, delete/2,
+         delete/1, delete/2, delete/3,
          delete_objects_under_dir/1,
          delete_objects_under_dir/2,
          delete_objects_under_dir/3,
@@ -384,9 +384,13 @@ delete({Object, Ref}) ->
              ok | {error, any()} when Object::#?OBJECT{},
                                       ReqId::integer()|reference()).
 delete(Object, ReqId) ->
-    %% @DEBUG
-    ?info("delete/3", "key:~p, del~p", [Object#?OBJECT.key, Object#?OBJECT.del]),
+    delete(Object, ReqId, true).
 
+-spec(delete(Object, ReqId, CheckUnderDir) ->
+             ok | {error, any()} when Object::#?OBJECT{},
+                                      ReqId::integer()|reference(),
+                                      CheckUnderDir::boolean()).
+delete(Object, ReqId, CheckUnderDir) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
     case replicate_fun(?REP_LOCAL, ?CMD_DELETE,
                        Object#?OBJECT.addr_id,
@@ -397,14 +401,19 @@ delete(Object, ReqId) ->
                                       req_id = ReqId,
                                       del    = ?DEL_TRUE}) of
         {ok,_} ->
-            ok = delete_objects_under_dir(Object),
-            ok;
+            delete_1(ok, Object, CheckUnderDir);
         {error, not_found = Cause} ->
-            ok = delete_objects_under_dir(Object),
-            {error, Cause};
+            delete_1({error, Cause}, Object, CheckUnderDir);
         {error, Cause} ->
             {error, Cause}
     end.
+
+%% @private
+delete_1(Ret,_Object, false) ->
+    Ret;
+delete_1(Ret, Object, true) ->
+    ok = delete_objects_under_dir(Object),
+    Ret.
 
 
 %% Deletion object related constants
