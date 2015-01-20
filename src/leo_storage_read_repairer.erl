@@ -107,9 +107,12 @@ loop(R, Ref, From, NumOfNodes, {ReqId, Key, E} = Args, Callback) ->
             loop(R,   Ref, From, NumOfNodes, {ReqId, Key, [{Node, Cause}|E]}, Callback)
     after
         ?DEF_REQ_TIMEOUT ->
-            case (R >= 0) of
+            case (R > 0) of
                 true ->
-                    Callback({error, timeout});
+                    Cause = timeout,
+                    ?warn("loop/6", "key:~p, cause:~p",
+                          [Key, Cause]),
+                    Callback({error, [Cause]});
                 false ->
                     void
             end
@@ -162,5 +165,11 @@ compare(Ref, Pid, RPCKey, Node, #state{metadata = #?METADATA{addr_id = AddrId,
              ok | {error, any()} when AddrId::non_neg_integer(),
                                       Key::binary()).
 enqueue(AddrId, Key) ->
-    leo_storage_mq:publish(
-      ?QUEUE_TYPE_PER_OBJECT, AddrId, Key, ?ERR_TYPE_RECOVER_DATA).
+    QId = ?QUEUE_TYPE_PER_OBJECT,
+    case leo_storage_mq:publish(QId, AddrId, Key, ?ERR_TYPE_RECOVER_DATA) of
+        ok ->
+            void;
+        {error, Cause} ->
+            ?warn("enqueue/1", "qid:~p, addr-id:~p, key:~p, cause:~p",
+                  [QId, AddrId, Key, Cause])
+    end.

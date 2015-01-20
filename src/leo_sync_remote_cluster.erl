@@ -70,7 +70,8 @@ stop(Id) ->
 %%
 -spec(defer_stack(Object) ->
              ok | {error, any()} when Object::null|#?OBJECT{}).
-defer_stack(#?OBJECT{} = Object) ->
+defer_stack(#?OBJECT{addr_id = AddrId,
+                     key = Key} = Object) ->
     spawn(fun() ->
                   %% Check whether stack an object or not
                   case leo_mdcr_tbl_cluster_stat:find_by_state(?STATE_RUNNING) of
@@ -80,10 +81,16 @@ defer_stack(#?OBJECT{} = Object) ->
                               {error, Cause}->
                                   ?warn("defer_stack/1", "key:~s, cause:~p",
                                       [binary_to_list(Object#?OBJECT.key), Cause]),
-                                  ok = leo_storage_mq:publish(
-                                       ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
-                                       Object#?OBJECT.addr_id,
-                                       Object#?OBJECT.key)
+                                  QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
+                                  case leo_storage_mq:publish(
+                                         QId, AddrId, Key) of
+                                      ok ->
+                                          void;
+                                      {error, Cause} ->
+                                          ?warn("defer_stack/1",
+                                                "addr-id:~p, key:~p, cause:~p",
+                                                [AddrId, Key, Cause])
+                                  end
                           end;
                       not_found ->
                           void;
@@ -226,17 +233,39 @@ compare_metadata([#?METADATA{cluster_id = ClusterId,
                 true ->
                     void;
                 false ->
-                    leo_storage_mq:publish(
-                      ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key)
+                    QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
+                    case leo_storage_mq:publish(
+                           QId, ClusterId, AddrId, Key) of
+                        ok ->
+                            void;
+                        {error, Cause} ->
+                            ?warn("compare_metadata/1",
+                                  "qid:~p, cluster-id:~p, addr-id:~p, key:~p, cause:~p",
+                                  [QId, ClusterId, AddrId, Key, Cause])
+                    end
             end;
         not_found ->
-            leo_storage_mq:publish(
-              ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key, ?DEL_TRUE);
+            QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
+            case leo_storage_mq:publish(QId, ClusterId, AddrId, Key, ?DEL_TRUE) of
+                ok ->
+                    void;
+                {error, Cause} ->
+                    ?warn("compare_metadata/1",
+                          "qid:~p, cluster-id:~p, addr-id:~p, key:~p, cause:~p",
+                          [QId, ClusterId, AddrId, Key, Cause])
+            end;
         {_, Cause} ->
             ?warn("comapare_metadata/1",
                   "key:~s, cause:~p", [binary_to_list(Key), Cause]),
-            leo_storage_mq:publish(
-              ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key)
+            QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
+            case leo_storage_mq:publish(QId, ClusterId, AddrId, Key) of
+                ok ->
+                    void;
+                {error, Cause} ->
+                    ?warn("compare_metadata/1",
+                          "qid:~p, cluster-id;~p, addr-id:~p, key:~p, cause:~p",
+                          [QId, ClusterId, AddrId, Key, Cause])
+            end
     end,
     compare_metadata(Rest).
 
@@ -269,11 +298,25 @@ handle_fail(UId, [{AddrId, Key}|Rest] = _StackInfo) ->
     ?warn("handle_fail/2", "uid:~w, addr-id:~w, key:~p", [UId, AddrId, Key]),
     case get_cluster_id_from_uid(UId) of
         undefined ->
-            ok = leo_storage_mq:publish(
-                   ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, AddrId, Key);
+            QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
+            case leo_storage_mq:publish(QId, AddrId, Key) of
+                ok ->
+                    void;
+                {error, Cause} ->
+                    ?warn("handle_fail/2",
+                          "qid:~p, addr-id:~p, key:~p, cause:~p",
+                          [QId, AddrId, Key, Cause])
+            end;
         ClusterId ->
-            ok = leo_storage_mq:publish(
-                   ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key)
+            QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
+            case leo_storage_mq:publish(QId, ClusterId, AddrId, Key) of
+                ok ->
+                    void;
+                {error, Cause} ->
+                    ?warn("handle_fail/2",
+                          "qid:~p, cluster-id:~p, addr-id:~p, key:~p, cause:~p",
+                          [QId, ClusterId, AddrId, Key, Cause])
+            end
     end,
     handle_fail(UId, Rest).
 
@@ -472,6 +515,13 @@ send_1([#?CLUSTER_MEMBER{node = Node,
 enqueue_fail_replication([],_ClusterId) ->
     ok;
 enqueue_fail_replication([{AddrId, Key}|Rest], ClusterId) ->
-    ok = leo_storage_mq:publish(
-           ?QUEUE_TYPE_SYNC_OBJ_WITH_DC, ClusterId, AddrId, Key),
+    QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
+    case leo_storage_mq:publish(QId, ClusterId, AddrId, Key) of
+        ok ->
+            void;
+        {error, Cause} ->
+            ?warn("enqueue_fail_replication/2",
+                  "qid:~p, cluster-id:~p, addr-id:~p, key:~p, cause:~p",
+                  [QId, ClusterId, AddrId, Key, Cause])
+    end,
     enqueue_fail_replication(Rest, ClusterId).

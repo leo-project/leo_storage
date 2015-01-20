@@ -89,8 +89,9 @@
 -define(ERROR_REPLICATE_FAILURE,        "Replicate failure").
 -define(ERROR_COULD_NOT_GET_REDUNDANCY, "Could not get redundancy").
 -define(ERROR_COULD_NOT_CONNECT,        "Could not connect").
--define(ERROR_COULD_MATCH,              "Could not match").
+-define(ERROR_COULD_NOT_MATCH,          "Could not match").
 -define(ERROR_COULD_SEND_OBJ,           "Could not send an object to a remote cluster").
+-define(ERROR_NOT_SATISFY_QUORUM,       "Could not satisfy the quorum of the consistency level").
 
 
 %% @doc request parameter for READ
@@ -404,8 +405,9 @@
 -endif.
 
 -define(WD_ITEM_ACTIVE_SIZE_RATIO, 'active_size_ratio').
--define(WD_EXCLUDE_ITEMS, ['leo_storage_watchdog']).
+-define(WD_EXCLUDE_ITEMS, ['leo_storage_watchdog', 'leo_watchdog_cluster']).
 -define(DEF_MAX_COMPACTION_PROCS, 1).
+-define(DEF_AUTOCOMPACTION_INTERVAL, 300). %% 5min/300sec
 
 -define(env_warn_active_size_ratio(),
         case application:get_env(leo_storage, warn_active_size_ratio) of
@@ -447,4 +449,12 @@
                 EnvAutoCompactionParallelProcs;
             _ ->
                 ?DEF_MAX_COMPACTION_PROCS
+        end).
+
+-define(env_auto_compaction_interval(),
+        case application:get_env(leo_storage, auto_compaction_interval) of
+            {ok, EnvAutoCompactionInterval} ->
+                EnvAutoCompactionInterval;
+            _ ->
+                ?DEF_AUTOCOMPACTION_INTERVAL
         end).

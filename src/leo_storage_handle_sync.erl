@@ -106,16 +106,28 @@ send_addrid_and_key_to_remote_1([],_ClusterId,_ListAddrIdAndKey) ->
 send_addrid_and_key_to_remote_1([#mdc_replication_info{
                                     cluster_members = Members}|Rest],
                                 ClusterId, ListAddrIdAndKey) ->
-    {ok, RetL} = send_addrid_and_key_to_remote_2(
-                   Members, ClusterId, ListAddrIdAndKey, 0),
-    ok = leo_sync_remote_cluster:compare_metadata(RetL),
-    send_addrid_and_key_to_remote_1(Rest, ClusterId, ListAddrIdAndKey).
+    case send_addrid_and_key_to_remote_2(
+           Members, ClusterId, ListAddrIdAndKey, 0) of
+        {ok, RetL} ->
+            ok = leo_sync_remote_cluster:compare_metadata(RetL),
+            send_addrid_and_key_to_remote_1(Rest, ClusterId, ListAddrIdAndKey);
+        {error, Cause} ->
+            {error, Cause}
+    end.
 
 %% @private
 send_addrid_and_key_to_remote_2([], ClusterId, ListAddrIdAndKey,_RetryTimes) ->
-    ok = leo_storage_mq:publish(
-           ?QUEUE_TYPE_COMP_META_WITH_DC, ClusterId, ListAddrIdAndKey),
-    {ok, []};
+    QId = ?QUEUE_TYPE_COMP_META_WITH_DC,
+    case leo_storage_mq:publish(
+           QId, ClusterId, ListAddrIdAndKey) of
+        ok ->
+            {ok, []};
+        {error, Cause} ->
+            ?warn("send_addrid_and_key_to_remote/1",
+                  "qid:~p, cluster-id:~p, list-addrid_and_key:~p, cause:~p",
+                  [QId, ClusterId, ListAddrIdAndKey, Cause]),
+            {error, Cause}
+    end;
 send_addrid_and_key_to_remote_2([_|Rest], ClusterId, ListAddrIdAndKey, ?DEF_MAX_RETRY_TIMES) ->
     send_addrid_and_key_to_remote_2(Rest, ClusterId, ListAddrIdAndKey, 0);
 send_addrid_and_key_to_remote_2([#?CLUSTER_MEMBER{

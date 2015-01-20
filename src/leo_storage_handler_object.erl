@@ -37,7 +37,7 @@
 
 -export([get/1, get/2, get/3, get/4, get/5,
          put/1, put/2, put/4,
-         delete/1, delete/2,
+         delete/1, delete/2, delete/3,
          delete_objects_under_dir/1,
          delete_objects_under_dir/2,
          delete_objects_under_dir/3,
@@ -251,11 +251,18 @@ put(Object, ReqId) ->
                                  Object::#?OBJECT{},
                                  ReqId::integer()).
 put(Ref, From, Object, ReqId) ->
-    ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
-    case replicate_fun(?REP_REMOTE, ?CMD_PUT, Object) of
+    Method = case Object#?OBJECT.del of
+                 ?DEL_TRUE ->
+                     ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
+                     ?CMD_DELETE;
+                 ?DEL_FALSE ->
+                     ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
+                     ?CMD_PUT
+             end,
+
+    case replicate_fun(?REP_REMOTE, Method, Object) of
         {ok, ETag} ->
             erlang:send(From, {Ref, {ok, ETag}});
-
         %% not found an object (during rebalance and delete-operation)
         {error, not_found} when ReqId == 0 ->
             erlang:send(From, {Ref, {ok, 0}});
@@ -272,6 +279,23 @@ put(Ref, From, Object, ReqId) ->
                                               AddrId::integer(),
                                               Key::binary(),
                                               Object::#?OBJECT{}).
+put_fun(Ref, AddrId, Key, #?OBJECT{del = ?DEL_TRUE} = Object) ->
+    %% Check state of the node
+    case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
+        not_found ->
+            %% Set deletion-flag to the object
+            case leo_object_storage_api:delete({AddrId, Key}, Object) of
+                ok ->
+                    {ok, Ref, {etag, 0}};
+                {error, ?ERROR_LOCKED_CONTAINER} ->
+                    {error, Ref, unavailable};
+                {error, Cause} ->
+                    {error, Ref, Cause}
+            end;
+        {ok, ErrorItems} ->
+            ?debug("put_fun/4", "error-items:~p", [ErrorItems]),
+            {error, Ref, unavailable}
+    end;
 put_fun(Ref, AddrId, Key, Object) ->
     %% Check state of the node
     case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
@@ -281,7 +305,7 @@ put_fun(Ref, AddrId, Key, Object) ->
                 {ok, ETag} ->
                     {ok, Ref, {etag, ETag}};
                 {error, ?ERROR_LOCKED_CONTAINER} ->
-                    {error, unavailable};
+                    {error, Ref, unavailable};
                 {error, Cause} ->
                     {error, Ref, Cause}
             end;
@@ -307,7 +331,9 @@ delete_chunked_objects(CIndex, ParentKey) ->
     case delete(#?OBJECT{addr_id  = AddrId,
                          key      = Key,
                          cindex   = CIndex,
-                         clock    = leo_date:clock()}, 0) of
+                         clock    = leo_date:clock(),
+                         del       = ?DEL_TRUE
+                        }, 0) of
         ok ->
             delete_chunked_objects(CIndex - 1, ParentKey);
         {error, Cause} ->
@@ -337,7 +363,10 @@ delete({Object, Ref}) ->
                 #?METADATA{del = ?DEL_TRUE} ->
                     {ok, Ref};
                 #?METADATA{del = ?DEL_FALSE} ->
-                    case leo_object_storage_api:delete({AddrId, Key}, Object) of
+                    case leo_object_storage_api:delete(
+                           {AddrId, Key}, Object#?OBJECT{data  = <<>>,
+                                                         dsize = 0,
+                                                         del   = ?DEL_TRUE}) of
                         ok ->
                             {ok, Ref};
                         {error, Why} ->
@@ -355,24 +384,36 @@ delete({Object, Ref}) ->
              ok | {error, any()} when Object::#?OBJECT{},
                                       ReqId::integer()|reference()).
 delete(Object, ReqId) ->
+    delete(Object, ReqId, true).
+
+-spec(delete(Object, ReqId, CheckUnderDir) ->
+             ok | {error, any()} when Object::#?OBJECT{},
+                                      ReqId::integer()|reference(),
+                                      CheckUnderDir::boolean()).
+delete(Object, ReqId, CheckUnderDir) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
     case replicate_fun(?REP_LOCAL, ?CMD_DELETE,
                        Object#?OBJECT.addr_id,
-                       Object#?OBJECT{method   = ?CMD_DELETE,
-                                      data     = <<>>,
-                                      dsize    = 0,
-                                      clock    = leo_date:clock(),
-                                      req_id   = ReqId,
-                                      del      = ?DEL_TRUE}) of
-        ok ->
-            ok = delete_objects_under_dir(Object),
-            ok;
+                       Object#?OBJECT{method = ?CMD_DELETE,
+                                      data   = <<>>,
+                                      dsize  = 0,
+                                      clock  = leo_date:clock(),
+                                      req_id = ReqId,
+                                      del    = ?DEL_TRUE}) of
+        {ok,_} ->
+            delete_1(ok, Object, CheckUnderDir);
         {error, not_found = Cause} ->
-            ok = delete_objects_under_dir(Object),
-            {error, Cause};
+            delete_1({error, Cause}, Object, CheckUnderDir);
         {error, Cause} ->
             {error, Cause}
     end.
+
+%% @private
+delete_1(Ret,_Object, false) ->
+    Ret;
+delete_1(Ret, Object, true) ->
+    ok = delete_objects_under_dir(Object),
+    Ret.
 
 
 %% Deletion object related constants
@@ -384,13 +425,13 @@ delete(Object, ReqId) ->
 -spec(delete_objects_under_dir(Object) ->
              ok when Object::#?OBJECT{}).
 delete_objects_under_dir(Object) ->
-    Key = Object#?OBJECT.key,
+    Key   = Object#?OBJECT.key,
     KSize = byte_size(Key),
 
     case catch binary:part(Key, (KSize - 1), 1) of
         {'EXIT',_} ->
             void;
-         Bin ->
+        Bin ->
             Targets = case Bin == ?BIN_SLASH of
                           true ->
                               [ Bin,
@@ -450,7 +491,15 @@ delete_objects_under_dir([Node|Rest], Ref, Keys) ->
             ok;
         _Other ->
             %% enqueu a fail message into the mq
-            ok = leo_storage_mq:publish(?QUEUE_TYPE_DEL_DIR, Node, Keys)
+            QId = ?QUEUE_TYPE_DEL_DIR,
+            case leo_storage_mq:publish(QId, Node, Keys) of
+                ok ->
+                    void;
+                {error, Cause} ->
+                    ?warn("delete_objects_under_dir/3",
+                          "qid:~p, node:~p, keys:~p, cause:~p",
+                          [QId, Node, Keys, Cause])
+            end
     end,
     delete_objects_under_dir(Rest, Ref, Keys).
 
@@ -554,10 +603,13 @@ replicate(Object) ->
                            true  -> NumOfReplicas - 1;
                            false -> Quorum_1
                        end,
-
-            leo_storage_replicator:replicate(
-              Method, Quorum_2, Redundancies_1,
-              Object, replicate_callback());
+            case get_active_redundancies(Quorum_2, Redundancies_1) of
+                {ok, Redundancies_2} ->
+                    leo_storage_replicator:replicate(Method, Quorum_2, Redundancies_2,
+                                                     Object, replicate_callback());
+                {error, Reason} ->
+                    {error, Reason}
+            end;
         {error, Cause} ->
             {error, Cause}
     end.
@@ -572,10 +624,9 @@ replicate(Object) ->
                                  AddrId::integer(),
                                  Key::binary()).
 replicate(DestNodes, AddrId, Key) ->
-    Ref = make_ref(),
-
     case leo_object_storage_api:head({AddrId, Key}) of
         {ok, MetaBin} ->
+            Ref = make_ref(),
             case binary_to_term(MetaBin) of
                 #?METADATA{del = ?DEL_FALSE} = Metadata ->
                     case ?MODULE:get({Ref, Key}) of
@@ -590,10 +641,12 @@ replicate(DestNodes, AddrId, Key) ->
                             {error, Cause}
                     end;
                 #?METADATA{del = ?DEL_TRUE} = Metadata ->
-                    leo_sync_local_cluster:stack(
-                      DestNodes, AddrId, Key, Metadata, <<>>),
+                    EmptyBin = <<>>,
+                    leo_sync_local_cluster:stack(DestNodes, AddrId, Key, Metadata, EmptyBin),
                     Object_1 = leo_object_storage_transformer:metadata_to_object(Metadata),
-                    Object_2 = Object_1#?OBJECT{data = <<>>},
+                    Object_2 = Object_1#?OBJECT{data  = EmptyBin,
+                                                dsize = 0,
+                                                del   = ?DEL_TRUE},
                     leo_sync_remote_cluster:defer_stack(Object_2);
                 _ ->
                     {error, invalid_data_type}
@@ -713,8 +766,15 @@ prefix_search_and_remove_objects(ParentDir) ->
 
                   case (Pos_1 == 0) of
                       true when Metadata#?METADATA.del == ?DEL_FALSE ->
-                          leo_storage_mq:publish(
-                            ?QUEUE_TYPE_ASYNC_DELETION, AddrId, Key);
+                          QId = ?QUEUE_TYPE_ASYNC_DELETION,
+                          case leo_storage_mq:publish(QId, AddrId, Key) of
+                              ok ->
+                                  void;
+                              {error, Cause} ->
+                                  ?warn("prefix_search_and_remove_objects/1",
+                                        "qid:~p, addr-id:~p, key:~p, cause:~p",
+                                        [QId, AddrId, Key, Cause])
+                          end;
                       _ ->
                           Acc
                   end,
@@ -753,37 +813,64 @@ find_uploaded_objects_by_key(OriginalKey) ->
 %%--------------------------------------------------------------------
 %% INNNER FUNCTIONS
 %%--------------------------------------------------------------------
+%% @doc Retrieve active redundancies
+%% @private
+-spec(get_active_redundancies(Quorum, Redundancies) ->
+             {ok, [#redundant_node{}]} |
+             {error, any()} when Quorum::non_neg_integer(),
+                                 Redundancies::[#redundant_node{}]).
+get_active_redundancies(_, []) ->
+    {error, ?ERROR_NOT_SATISFY_QUORUM};
+get_active_redundancies(Quorum, Redundancies) ->
+    AvailableNodes = [RedundantNode ||
+                         #redundant_node{available = true} = RedundantNode <- Redundancies],
+    case (Quorum =< erlang:length(AvailableNodes)) of
+        true ->
+            {ok, AvailableNodes};
+        false ->
+            {error, ?ERROR_NOT_SATISFY_QUORUM}
+    end.
+
+
 %% @doc read reapir - compare with remote-node's meta-data.
-%%
+%% @private
 -spec(read_and_repair(ReadParams, Redundancies) ->
              {ok, #?METADATA{}, binary()} |
              {ok, match} |
              {error, any()} when ReadParams::#read_parameter{},
                                  Redundancies::[#redundant_node{}]).
-read_and_repair(_, []) ->
+read_and_repair(#read_parameter{quorum = Q} = ReadParams, Redundancies) ->
+    case get_active_redundancies(Q, Redundancies) of
+        {ok, AvailableNodes} ->
+            read_and_repair_1(ReadParams, AvailableNodes);
+        Error ->
+            Error
+    end.
+
+%% @private
+-spec(read_and_repair_1(ReadParams, Redundancies) ->
+             {ok, #?METADATA{}, binary()} |
+             {ok, match} |
+             {error, any()} when ReadParams::#read_parameter{},
+                                 Redundancies::[atom()]).
+read_and_repair_1(_, []) ->
     {error, not_found};
-
-read_and_repair(#read_parameter{addr_id   = AddrId,
-                                key       = Key,
-                                etag      = 0,
-                                start_pos = StartPos,
-                                end_pos   = EndPos} = ReadParameter,
-                [#redundant_node{node = Node,
-                                 available = true}|T]
-               ) when Node == erlang:node() ->
-    read_and_repair_1(
+read_and_repair_1(#read_parameter{addr_id   = AddrId,
+                                  key       = Key,
+                                  etag      = 0,
+                                  start_pos = StartPos,
+                                  end_pos   = EndPos} = ReadParameter,
+                  [#redundant_node{node = Node}|T]) when Node == erlang:node() ->
+    read_and_repair_2(
       get_fun(AddrId, Key, StartPos, EndPos), ReadParameter, T);
-
-%% Retrieve an head of object,
-%%     then compare it with requested 'Etag'
-read_and_repair(#read_parameter{addr_id   = AddrId,
-                                key       = Key,
-                                etag      = ETag,
-                                start_pos = StartPos,
-                                end_pos   = EndPos} = ReadParameter,
-                [#redundant_node{node = Node,
-                                 available = true}|T]
-               ) when Node == erlang:node() ->
+read_and_repair_1(#read_parameter{addr_id   = AddrId,
+                                  key       = Key,
+                                  etag      = ETag,
+                                  start_pos = StartPos,
+                                  end_pos   = EndPos} = ReadParameter,
+                  [#redundant_node{node = Node}|T]) when Node == erlang:node() ->
+    %% Retrieve an head of object,
+    %%     then compare it with requested 'Etag'
     Ret = case leo_object_storage_api:head({AddrId, Key}) of
               {ok, MetaBin} ->
                   Metadata = binary_to_term(MetaBin),
@@ -803,12 +890,11 @@ read_and_repair(#read_parameter{addr_id   = AddrId,
         {ok, match} = Reply ->
             Reply;
         _ ->
-            read_and_repair_1(
+            read_and_repair_2(
               get_fun(AddrId, Key, StartPos, EndPos), ReadParameter, T)
     end;
-
-read_and_repair(ReadParameter, [#redundant_node{node = Node,
-                                                available = true}|_] = Redundancies) ->
+read_and_repair_1(ReadParameter,
+                  [#redundant_node{node = Node}|_] = Redundancies) ->
     RPCKey = rpc:async_call(Node, ?MODULE, get, [ReadParameter, Redundancies]),
     Reply  = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
                  {value, {ok, Meta, Bin}} ->
@@ -822,19 +908,15 @@ read_and_repair(ReadParameter, [#redundant_node{node = Node,
                  timeout = Cause ->
                      {error, Cause}
              end,
-    read_and_repair_1(Reply, ReadParameter, []);
-
-read_and_repair(ReadParameter, [_|T]) ->
-    read_and_repair(ReadParameter, T).
-
+    read_and_repair_2(Reply, ReadParameter, []).
 
 %% @private
-read_and_repair_1({ok, Metadata, #?OBJECT{data = Bin}},
+read_and_repair_2({ok, Metadata, #?OBJECT{data = Bin}},
                   #read_parameter{}, []) ->
     {ok, Metadata, Bin};
-read_and_repair_1({ok, match} = Reply, #read_parameter{}, []) ->
+read_and_repair_2({ok, match} = Reply, #read_parameter{}, []) ->
     Reply;
-read_and_repair_1({ok, Metadata, #?OBJECT{data = Bin}},
+read_and_repair_2({ok, Metadata, #?OBJECT{data = Bin}},
                   #read_parameter{quorum = Quorum} = ReadParameter, Redundancies) ->
     Fun = fun(ok) ->
                   {ok, Metadata, Bin};
@@ -844,16 +926,16 @@ read_and_repair_1({ok, Metadata, #?OBJECT{data = Bin}},
     ReadParameter_1 = ReadParameter#read_parameter{quorum = Quorum - 1},
     leo_storage_read_repairer:repair(ReadParameter_1, Redundancies, Metadata, Fun);
 
-read_and_repair_1({error, not_found = Cause}, #read_parameter{key = _K}, []) ->
+read_and_repair_2({error, not_found = Cause}, #read_parameter{key = _K}, []) ->
     {error, Cause};
-read_and_repair_1({error, timeout = Cause}, #read_parameter{key = _K}, _Redundancies) ->
-    ?output_warn("read_and_repair_1/3", _K, Cause),
+read_and_repair_2({error, timeout = Cause}, #read_parameter{key = _K}, _Redundancies) ->
+    ?output_warn("read_and_repair_2/3", _K, Cause),
     {error, Cause};
-read_and_repair_1({error, Cause}, #read_parameter{key = _K}, []) ->
-    ?output_warn("read_and_repair_1/3", _K, Cause),
+read_and_repair_2({error, Cause}, #read_parameter{key = _K}, []) ->
+    ?output_warn("read_and_repair_2/3", _K, Cause),
     {error, Cause};
 
-read_and_repair_1({error, Reason},
+read_and_repair_2({error, Reason},
                   #read_parameter{key = _K,
                                   quorum = ReadQuorum} = ReadParameter, Redundancies) ->
     NumOfNodes = erlang:length([N || #redundant_node{node = N,
@@ -865,10 +947,10 @@ read_and_repair_1({error, Reason},
         false when Reason == not_found ->
             {error, not_found};
         false ->
-            ?output_warn("read_and_repair_1/3", _K, Reason),
+            ?output_warn("read_and_repair_2/3", _K, Reason),
             {error, ?ERROR_COULD_NOT_GET_DATA}
     end;
-read_and_repair_1(_,_,_) ->
+read_and_repair_2(_,_,_) ->
     {error, invalid_request}.
 
 
@@ -885,15 +967,15 @@ replicate_fun(?REP_LOCAL, Method, AddrId, Object) ->
                                    w         = WriteQuorum,
                                    d         = DeleteQuorum,
                                    ring_hash = RingHash}} ->
-
-                    Quorum = case Method of
-                                 ?CMD_PUT    -> WriteQuorum;
-                                 ?CMD_DELETE -> DeleteQuorum
-                             end,
-
-                    leo_storage_replicator:replicate(
-                      Method, Quorum, Redundancies, Object#?OBJECT{ring_hash = RingHash},
-                      replicate_callback(Object));
+                    Quorum = ?quorum(Method, WriteQuorum, DeleteQuorum),
+                    case get_active_redundancies(Quorum, Redundancies) of
+                        {ok, Redundancies_1} ->
+                            leo_storage_replicator:replicate(
+                              Method, Quorum, Redundancies_1, Object#?OBJECT{ring_hash = RingHash},
+                              replicate_callback(Object));
+                        {error, Reason} ->
+                            {error, Reason}
+                    end;
                 {error,_Cause} ->
                     {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
             end;
@@ -905,20 +987,25 @@ replicate_fun(?REP_LOCAL, Method, AddrId, Object) ->
 %% @doc obj-replication request from remote node.
 %%
 replicate_fun(?REP_REMOTE, Method, Object) ->
+    %% @DEBUG
+    ?info("replicate_fun/3", "method:~p, key:~p, del:~p",
+          [Method, Object#?OBJECT.key, Object#?OBJECT.del]),
     Ref = make_ref(),
     Ret = case Method of
               ?CMD_PUT    -> ?MODULE:put({Object, Ref});
               ?CMD_DELETE -> ?MODULE:delete({Object, Ref})
           end,
     case Ret of
-        %% Put
+        %% for put-operation
         {ok, Ref, Checksum} ->
             {ok, Checksum};
-        %% Delete
+        %% for delete-operation
         {ok, Ref} ->
-            ok;
-        {error, Ref, not_found} ->
-            {error, not_found};
+            {ok, 0};
+        {error, Ref, not_found = Cause} ->
+            {error, Cause};
+        {error, Ref, unavailable = Cause} ->
+            {error, Cause};
         {error, Ref, Cause} ->
             ?warn("replicate_fun/3", "cause:~p", [Cause]),
             {error, Cause}
@@ -940,12 +1027,11 @@ replicate_callback(Object) ->
             {ok, Checksum};
        ({ok,?CMD_DELETE,_Checksum}) ->
             ok = leo_sync_remote_cluster:defer_stack(Object),
-            ok;
-       ({ok,_,_Checksum}) ->
-            ok = leo_sync_remote_cluster:defer_stack(Object),
-            ok;
-       ({error, Cause}) ->
-            case lists:keyfind(not_found, 2, Cause) of
+            {ok, 0};
+       ({error, Errors}) ->
+            case catch lists:keyfind(not_found, 2, Errors) of
+                {'EXIT',_} ->
+                    {error, ?ERROR_REPLICATE_FAILURE};
                 false ->
                     {error, ?ERROR_REPLICATE_FAILURE};
                 _ ->

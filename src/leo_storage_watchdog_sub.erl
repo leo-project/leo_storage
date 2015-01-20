@@ -56,7 +56,9 @@ start() ->
     ok = leo_watchdog_sup:start_subscriber(?WD_SUB_ID_1, [?WD_ITEM_CPU_UTIL,
                                                           ?WD_ITEM_LOAD_AVG,
                                                           ?WD_ITEM_DISK_UTIL,
-                                                          ?WD_ITEM_DISK_IO], ?MODULE),
+                                                          ?WD_ITEM_DISK_IO,
+                                                          ?WD_ITEM_CLUSTER
+                                                         ], ?MODULE),
     ok = leo_watchdog_sup:start_subscriber(?WD_SUB_ID_2, [?WD_ITEM_ACTIVE_SIZE_RATIO], ?MODULE),
     ok.
 
@@ -69,38 +71,49 @@ start() ->
                                           Alarm::term(),
                                           Unixtime::non_neg_integer()).
 handle_notify(?WD_SUB_ID_1,_Alarm,_Unixtime) ->
-    %% Increase waiting time of data-compaction/batch-proc
-    leo_compact_fsm_controller:incr_interval(),
-    %% Decrease the number of batch-procs
-    leo_compact_fsm_controller:decr_batch_of_msgs(),
-    %% Increase interval of mq-compsumption
-    leo_mq_api:incr_interval(?QUEUE_ID_PER_OBJECT),
-    leo_mq_api:incr_interval(?QUEUE_ID_SYNC_BY_VNODE_ID),
-    leo_mq_api:incr_interval(?QUEUE_ID_REBALANCE),
-    leo_mq_api:incr_interval(?QUEUE_ID_ASYNC_DELETION),
-    leo_mq_api:incr_interval(?QUEUE_ID_RECOVERY_NODE),
-    leo_mq_api:incr_interval(?QUEUE_ID_SYNC_OBJ_WITH_DC),
-    leo_mq_api:incr_interval(?QUEUE_ID_COMP_META_WITH_DC),
-    leo_mq_api:incr_interval(?QUEUE_ID_DEL_DIR),
-    %% Decrease a batch of messages
-    leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_PER_OBJECT),
-    leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_SYNC_BY_VNODE_ID),
-    leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_REBALANCE),
-    leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_ASYNC_DELETION),
-    leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_RECOVERY_NODE),
-    leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_SYNC_OBJ_WITH_DC),
-    leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_COMP_META_WITH_DC),
-    leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_DEL_DIR),
-    ok;
+    case is_active_watchdog() of
+        true ->
+            %% Increase waiting time of data-compaction/batch-proc
+            leo_compact_fsm_controller:incr_interval(),
+            %% Decrease the number of batch-procs
+            leo_compact_fsm_controller:decr_batch_of_msgs(),
+            %% Increase interval of mq-compsumption
+            leo_mq_api:incr_interval(?QUEUE_ID_PER_OBJECT),
+            leo_mq_api:incr_interval(?QUEUE_ID_SYNC_BY_VNODE_ID),
+            leo_mq_api:incr_interval(?QUEUE_ID_REBALANCE),
+            leo_mq_api:incr_interval(?QUEUE_ID_ASYNC_DELETION),
+            leo_mq_api:incr_interval(?QUEUE_ID_RECOVERY_NODE),
+            leo_mq_api:incr_interval(?QUEUE_ID_SYNC_OBJ_WITH_DC),
+            leo_mq_api:incr_interval(?QUEUE_ID_COMP_META_WITH_DC),
+            leo_mq_api:incr_interval(?QUEUE_ID_DEL_DIR),
+            %% Decrease a batch of messages
+            leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_PER_OBJECT),
+            leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_SYNC_BY_VNODE_ID),
+            leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_REBALANCE),
+            leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_ASYNC_DELETION),
+            leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_RECOVERY_NODE),
+            leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_SYNC_OBJ_WITH_DC),
+            leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_COMP_META_WITH_DC),
+            leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_DEL_DIR),
+            ok;
+        false ->
+            ok
+    end;
 handle_notify(?WD_SUB_ID_2, #watchdog_alarm{state = #watchdog_state{
                                                        level = Level,
                                                        props = Props}},_Unixtime) ->
     case (Level >= ?WD_LEVEL_ERROR) of
         true ->
             timer:sleep(?DEF_WAIT_TIME),
+            ThisTime = leo_date:now(),
+            AutoCompactionInterval = ?env_auto_compaction_interval(),
+
             case leo_compact_fsm_controller:state() of
                 {ok, #compaction_stats{status = ?ST_IDLING,
-                                       pending_targets = PendingTargets}} when PendingTargets /= [] ->
+                                       pending_targets = PendingTargets,
+                                       latest_exec_datetime = LastExecDataTime
+                                      }} when PendingTargets /= [] andalso
+                                              (ThisTime - LastExecDataTime) >= AutoCompactionInterval ->
                     ProcsOfParallelProcessing = ?env_auto_compaction_parallel_procs(),
 
                     case leo_object_storage_api:compact_data(
@@ -127,29 +140,34 @@ handle_notify(?WD_SUB_ID_2, #watchdog_alarm{state = #watchdog_state{
                                       SafeTimes::non_neg_integer(),
                                       Unixtime::non_neg_integer()).
 handle_notify(?WD_SUB_ID_1,_State,_SafeTimes,_Unixtime) ->
-    %% Decrease waiting time of data-compaction/batch-proc
-    leo_compact_fsm_controller:decr_interval(),
-    %% Increase the number of batch-procs
-    leo_compact_fsm_controller:incr_batch_of_msgs(),
-    %% Decrease waiting time of mq-compsumption
-    leo_mq_api:decr_interval(?QUEUE_ID_PER_OBJECT),
-    leo_mq_api:decr_interval(?QUEUE_ID_SYNC_BY_VNODE_ID),
-    leo_mq_api:decr_interval(?QUEUE_ID_REBALANCE),
-    leo_mq_api:decr_interval(?QUEUE_ID_ASYNC_DELETION),
-    leo_mq_api:decr_interval(?QUEUE_ID_RECOVERY_NODE),
-    leo_mq_api:decr_interval(?QUEUE_ID_SYNC_OBJ_WITH_DC),
-    leo_mq_api:decr_interval(?QUEUE_ID_COMP_META_WITH_DC),
-    leo_mq_api:decr_interval(?QUEUE_ID_DEL_DIR),
-    %% Increase a batch of messages
-    leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_PER_OBJECT),
-    leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_SYNC_BY_VNODE_ID),
-    leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_REBALANCE),
-    leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_ASYNC_DELETION),
-    leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_RECOVERY_NODE),
-    leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_SYNC_OBJ_WITH_DC),
-    leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_COMP_META_WITH_DC),
-    leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_DEL_DIR),
-    ok;
+    case is_active_watchdog() of
+        true ->
+            %% Decrease waiting time of data-compaction/batch-proc
+            leo_compact_fsm_controller:decr_interval(),
+            %% Increase the number of batch-procs
+            leo_compact_fsm_controller:incr_batch_of_msgs(),
+            %% Decrease waiting time of mq-compsumption
+            leo_mq_api:decr_interval(?QUEUE_ID_PER_OBJECT),
+            leo_mq_api:decr_interval(?QUEUE_ID_SYNC_BY_VNODE_ID),
+            leo_mq_api:decr_interval(?QUEUE_ID_REBALANCE),
+            leo_mq_api:decr_interval(?QUEUE_ID_ASYNC_DELETION),
+            leo_mq_api:decr_interval(?QUEUE_ID_RECOVERY_NODE),
+            leo_mq_api:decr_interval(?QUEUE_ID_SYNC_OBJ_WITH_DC),
+            leo_mq_api:decr_interval(?QUEUE_ID_COMP_META_WITH_DC),
+            leo_mq_api:decr_interval(?QUEUE_ID_DEL_DIR),
+            %% Increase a batch of messages
+            leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_PER_OBJECT),
+            leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_SYNC_BY_VNODE_ID),
+            leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_REBALANCE),
+            leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_ASYNC_DELETION),
+            leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_RECOVERY_NODE),
+            leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_SYNC_OBJ_WITH_DC),
+            leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_COMP_META_WITH_DC),
+            leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_DEL_DIR),
+            ok;
+        false ->
+            ok
+    end;
 handle_notify(?WD_SUB_ID_2,_State,_SafeTimes,_Unixtime) ->
     ok.
 
@@ -157,3 +175,7 @@ handle_notify(?WD_SUB_ID_2,_State,_SafeTimes,_Unixtime) ->
 %%--------------------------------------------------------------------
 %% Internal Function
 %%--------------------------------------------------------------------
+is_active_watchdog() ->
+     false == (?env_wd_cpu_enabled()  == false andalso
+               ?env_wd_disk_enabled() == false).
+

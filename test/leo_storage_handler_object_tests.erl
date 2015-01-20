@@ -199,7 +199,7 @@ get_b0_({Node0, Node1}) ->
     ok = rpc:call(Node1, meck, expect, [leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end]),
 
     Res = leo_storage_handler_object:get(0, ?TEST_KEY_0, 0),
-    ?assertEqual({error,not_found}, Res),
+    ?assertEqual({error, not_found}, Res),
     ok.
 
 
@@ -501,7 +501,7 @@ delete_({Node0, Node1}) ->
     meck:new(leo_storage_replicator, [non_strict]),
     meck:expect(leo_storage_replicator, replicate,
                 fun(_Method,_Quorum,_Redundancies,_ObjectPool,_Callback) ->
-                        ok
+                        {ok, 0}
                 end),
 
     meck:new(leo_object_storage_api, [non_strict]),
@@ -688,6 +688,9 @@ prefix_search_and_remove_objects_(_) ->
                         Fun(<< "_", ?TEST_KEY_1/binary >>,
                             term_to_binary(#?METADATA{}), [#?METADATA{key=?TEST_KEY_0}])
                 end),
+
+    meck:new(leo_mq_api, [non_strict]),
+    meck:expect(leo_mq_api, publish, fun(_,_,_) -> ok end),
 
     Res = leo_storage_handler_object:prefix_search_and_remove_objects(?TEST_BUCKET),
     ?assertEqual(true, is_list(Res)),

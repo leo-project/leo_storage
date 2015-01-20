@@ -423,6 +423,7 @@ get_node_status() ->
             {rex_threshold_mem_capacity, ?env_wd_threshold_mem_capacity()},
             {cpu_threshold_cpu_load_avg, ?env_wd_threshold_cpu_load_avg()},
             {cpu_threshold_cpu_util,     ?env_wd_threshold_cpu_util()},
+            {cpu_raised_error_times,     ?env_wd_cpu_raised_error_times()},
             {io_threshold_input_per_sec,  ?env_wd_threshold_input_per_sec()},
             {io_threshold_output_per_sec, ?env_wd_threshold_output_per_sec()},
             {disk_threshold_use,     ?env_wd_threshold_disk_use()},
@@ -430,7 +431,8 @@ get_node_status() ->
             {disk_threshold_rkb,     ?env_wd_threshold_disk_rkb()},
             {disk_threshold_wkb,     ?env_wd_threshold_disk_wkb()},
             {disk_target_devices,         ?env_wd_disk_target_devices()},
-            {disk_target_paths,           ?env_wd_disk_target_paths()}
+            {disk_target_paths,           ?env_wd_disk_target_paths()},
+            {disk_raised_error_times,     ?env_wd_disk_raised_error_times()}
            ]
           },
           %% mq-related
@@ -447,6 +449,7 @@ get_node_status() ->
           {auto_compaction_enabled, ?env_auto_compaction_enabled()},
           {auto_compaction_warn_active_size_ratio,      ?env_warn_active_size_ratio()},
           {auto_compaction_threshold_active_size_ratio, ?env_threshold_active_size_ratio()},
+          {auto_compaction_interval,                    ?env_auto_compaction_interval()},
           {auto_compaction_parallel_procs,              ?env_auto_compaction_parallel_procs()},
           %% compaction-related
           {limit_num_of_compaction_procs, ?env_limit_num_of_compaction_procs()},
@@ -466,7 +469,7 @@ get_node_status() ->
 %% @doc Do rebalance which means "Objects are copied to the specified node".
 %% @param RebalanceInfo: [{VNodeId, DestNode}]
 -spec(rebalance(RebalanceList) ->
-             ok when RebalanceList::[tuple()]).
+             ok | {error, any()} when RebalanceList::[tuple()]).
 rebalance(RebalanceList) ->
     catch leo_redundant_manager_api:force_sync_workers(),
     rebalance_1(RebalanceList).
@@ -494,8 +497,15 @@ rebalance(RebalanceList, MembersCur, MembersPrev) ->
 rebalance_1([]) ->
     ok;
 rebalance_1([{VNodeId, Node}|T]) ->
-    _ = leo_storage_mq:publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID, VNodeId, Node),
-    rebalance_1(T).
+    QId = ?QUEUE_TYPE_SYNC_BY_VNODE_ID,
+    case leo_storage_mq:publish(QId, VNodeId, Node) of
+        ok ->
+            rebalance_1(T);
+        {error, Cause} ->
+            ?warn("rebalance_1/1", "qid:~p, vnodeid:~p, node:~p, cause:~p",
+                  [QId, VNodeId, Node, Cause]),
+            {error, Cause}
+    end.
 
 
 %% @doc Get the disk usage(Total, Free) on leo_storage in KByte
