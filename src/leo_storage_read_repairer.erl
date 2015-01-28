@@ -70,7 +70,13 @@ repair(#read_parameter{quorum = ReadQuorum,
                                          can_read_repair = true}
                              <- Redundancies]),
     lists:foreach(
-      fun(#redundant_node{node = Node,
+      fun(#redundant_node{available = false}) ->
+              void;
+         (#redundant_node{can_read_repair = false}) ->
+              void;
+         (#redundant_node{node = Node}) when erlang:node() == Node ->
+              void;
+         (#redundant_node{node = Node,
                           available = true,
                           can_read_repair = true}) ->
               spawn(fun() ->
@@ -79,7 +85,7 @@ repair(#read_parameter{quorum = ReadQuorum,
                                        head, [AddrId, Key]),
                             compare(Ref, From, RPCKey, Node, Params)
                     end);
-         (#redundant_node{}) ->
+         (_) ->
               void
       end, Redundancies),
     loop(ReadQuorum, Ref, From, NumOfNodes, {ReqId, Key, []}, Callback).
