@@ -82,7 +82,7 @@ repair(#read_parameter{quorum = ReadQuorum,
               spawn(fun() ->
                             RPCKey = rpc:async_call(
                                        Node, leo_storage_handler_object,
-                                       head, [AddrId, Key]),
+                                       head, [AddrId, Key, false]),
                             compare(Ref, From, RPCKey, Node, Params)
                     end);
          (_) ->
