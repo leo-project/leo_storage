@@ -194,7 +194,13 @@ slice_and_replicate(Objects, Errors) ->
     %% store an object to object-storage
     case leo_storage_handler_object:head(Metadata#?METADATA.addr_id,
                                          Metadata#?METADATA.key, false) of
-        {ok, #?METADATA{clock = Clock}} when Clock >= Metadata#?METADATA.clock ->
+        {ok, #?METADATA{clock = Clock}} when Clock == Metadata#?METADATA.clock ->
+            slice_and_replicate(Rest_5, Errors);
+        {ok, #?METADATA{addr_id = AddrId,
+                        key = Key,
+                        clock = Clock}} when Clock > Metadata#?METADATA.clock ->
+            ok = leo_storage_mq:publish(?QUEUE_TYPE_PER_OBJECT,
+                                        AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
             slice_and_replicate(Rest_5, Errors);
         _ ->
             case leo_misc:get_env(leo_redundant_manager, ?PROP_RING_HASH) of

@@ -70,16 +70,22 @@ repair(#read_parameter{quorum = ReadQuorum,
                                          can_read_repair = true}
                              <- Redundancies]),
     lists:foreach(
-      fun(#redundant_node{node = Node,
+      fun(#redundant_node{available = false}) ->
+              void;
+         (#redundant_node{can_read_repair = false}) ->
+              void;
+         (#redundant_node{node = Node}) when erlang:node() == Node ->
+              void;
+         (#redundant_node{node = Node,
                           available = true,
                           can_read_repair = true}) ->
               spawn(fun() ->
                             RPCKey = rpc:async_call(
                                        Node, leo_storage_handler_object,
-                                       head, [AddrId, Key]),
+                                       head, [AddrId, Key, false]),
                             compare(Ref, From, RPCKey, Node, Params)
                     end);
-         (#redundant_node{}) ->
+         (_) ->
               void
       end, Redundancies),
     loop(ReadQuorum, Ref, From, NumOfNodes, {ReqId, Key, []}, Callback).
@@ -140,6 +146,8 @@ compare(Ref, Pid, RPCKey, Node, #state{metadata = #?METADATA{addr_id = AddrId,
                   {error, {Node, secondary_inconsistency}};
               {value, {ok, #?METADATA{clock = RemoteClock}}} when Clock  < RemoteClock ->
                   {error, {Node, primary_inconsistency}};
+              {value, not_found = Cause} ->
+                  {error, {Node, Cause}};
               {value, {error, Cause}} ->
                   {error, {Node, Cause}};
               {value, {badrpc, Cause}} ->

@@ -91,7 +91,11 @@ get({Ref, Key}) ->
              {ok, match} |
              {error, any()} when ReadParams::#read_parameter{},
                                  Redundancies::[#redundant_node{}]).
-get(#read_parameter{addr_id = AddrId} = ReadParameter, []) ->
+get(ReadParameter, Redundancies) when Redundancies /= [] ->
+    ok = leo_metrics_req:notify(?STAT_COUNT_GET),
+    read_and_repair(ReadParameter, Redundancies);
+
+get(#read_parameter{addr_id = AddrId} = ReadParameter,_Redundancies) ->
     case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
         {ok, #redundancies{nodes = Redundancies,
                            r = ReadQuorum}} ->
@@ -99,10 +103,7 @@ get(#read_parameter{addr_id = AddrId} = ReadParameter, []) ->
                 Redundancies);
         _Error ->
             {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
-    end;
-get(ReadParameter, Redundancies) ->
-    ok = leo_metrics_req:notify(?STAT_COUNT_GET),
-    read_and_repair(ReadParameter, Redundancies).
+    end.
 
 %% @doc Retrieve an object which is requested from gateway.
 %%
@@ -842,33 +843,33 @@ get_active_redundancies(Quorum, Redundancies) ->
 read_and_repair(#read_parameter{quorum = Q} = ReadParams, Redundancies) ->
     case get_active_redundancies(Q, Redundancies) of
         {ok, AvailableNodes} ->
-            read_and_repair_1(ReadParams, AvailableNodes);
+            read_and_repair_1(ReadParams, AvailableNodes, AvailableNodes);
         Error ->
             Error
     end.
 
 %% @private
--spec(read_and_repair_1(ReadParams, Redundancies) ->
+-spec(read_and_repair_1(ReadParams, Redundancies, Redundancies) ->
              {ok, #?METADATA{}, binary()} |
              {ok, match} |
              {error, any()} when ReadParams::#read_parameter{},
                                  Redundancies::[atom()]).
-read_and_repair_1(_, []) ->
+read_and_repair_1(_, [], _) ->
     {error, not_found};
 read_and_repair_1(#read_parameter{addr_id   = AddrId,
                                   key       = Key,
                                   etag      = 0,
                                   start_pos = StartPos,
                                   end_pos   = EndPos} = ReadParameter,
-                  [#redundant_node{node = Node}|T]) when Node == erlang:node() ->
+                  [#redundant_node{node = Node}|_], Redundancies) when Node == erlang:node() ->
     read_and_repair_2(
-      get_fun(AddrId, Key, StartPos, EndPos), ReadParameter, T);
+      get_fun(AddrId, Key, StartPos, EndPos), ReadParameter, Redundancies);
 read_and_repair_1(#read_parameter{addr_id   = AddrId,
                                   key       = Key,
                                   etag      = ETag,
                                   start_pos = StartPos,
                                   end_pos   = EndPos} = ReadParameter,
-                  [#redundant_node{node = Node}|T]) when Node == erlang:node() ->
+                  [#redundant_node{node = Node}|_], Redundancies) when Node == erlang:node() ->
     %% Retrieve an head of object,
     %%     then compare it with requested 'Etag'
     Ret = case leo_object_storage_api:head({AddrId, Key}) of
@@ -891,11 +892,12 @@ read_and_repair_1(#read_parameter{addr_id   = AddrId,
             Reply;
         _ ->
             read_and_repair_2(
-              get_fun(AddrId, Key, StartPos, EndPos), ReadParameter, T)
+              get_fun(AddrId, Key, StartPos, EndPos), ReadParameter, Redundancies)
     end;
+
 read_and_repair_1(ReadParameter,
-                  [#redundant_node{node = Node}|_] = Redundancies) ->
-    RPCKey = rpc:async_call(Node, ?MODULE, get, [ReadParameter, Redundancies]),
+                  [#redundant_node{node = Node}|_],_Redundancies) ->
+    RPCKey = rpc:async_call(Node, ?MODULE, get, [ReadParameter, []]),
     Reply  = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
                  {value, {ok, Meta, Bin}} ->
                      {ok, Meta, #?OBJECT{data = Bin}};
@@ -911,8 +913,7 @@ read_and_repair_1(ReadParameter,
     read_and_repair_2(Reply, ReadParameter, []).
 
 %% @private
-read_and_repair_2({ok, Metadata, #?OBJECT{data = Bin}},
-                  #read_parameter{}, []) ->
+read_and_repair_2({ok, Metadata, #?OBJECT{data = Bin}}, #read_parameter{}, []) ->
     {ok, Metadata, Bin};
 read_and_repair_2({ok, match} = Reply, #read_parameter{}, []) ->
     Reply;

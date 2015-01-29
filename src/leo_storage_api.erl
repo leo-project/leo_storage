@@ -181,16 +181,11 @@ start(MembersCur, MembersPrev, SystemConf) ->
         undefined -> ok;
         [] -> ok;
         _ ->
-            ok = leo_redundant_manager_api:set_options(
-                   [{cluster_id, SystemConf#?SYSTEM_CONF.cluster_id},
-                    {dc_id,      SystemConf#?SYSTEM_CONF.dc_id},
-                    {n, SystemConf#?SYSTEM_CONF.n},
-                    {r, SystemConf#?SYSTEM_CONF.r},
-                    {w, SystemConf#?SYSTEM_CONF.w},
-                    {d, SystemConf#?SYSTEM_CONF.d},
-                    {bit_of_ring, SystemConf#?SYSTEM_CONF.bit_of_ring},
-                    {num_of_dc_replicas,   SystemConf#?SYSTEM_CONF.num_of_dc_replicas},
-                    {num_of_rack_replicas, SystemConf#?SYSTEM_CONF.num_of_rack_replicas}])
+            Options = lists:zip(
+                        record_info(
+                          fields, ?SYSTEM_CONF),
+                        tl(tuple_to_list(SystemConf))),
+            ok = leo_redundant_manager_api:set_options(Options)
     end,
     start_1(MembersCur, MembersPrev).
 

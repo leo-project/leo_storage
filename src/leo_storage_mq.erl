@@ -271,8 +271,6 @@ handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
             case correct_redundancies(Key) of
                 ok ->
                     ok;
-                {error, not_found} ->
-                    ok;
                 {error, Cause} ->
                     publish(?QUEUE_TYPE_PER_OBJECT, AddrId, Key, ErrorType),
                     {error, Cause}
@@ -553,18 +551,22 @@ notify_message_to_manager([Manager|T], VNodeId, Node) ->
 -spec(correct_redundancies(binary()) ->
              ok | {error, any()}).
 correct_redundancies(Key) ->
-    {ok, #redundancies{nodes = Redundancies,
-                       id    = AddrId}} = leo_redundant_manager_api:get_redundancies_by_key(Key),
-    Redundancies_1 = get_redundancies_with_replicas(
-                       AddrId, Key, Redundancies),
-    correct_redundancies_1(Key, AddrId, Redundancies_1, [], []).
+    case leo_redundant_manager_api:get_redundancies_by_key(Key) of
+        {ok, #redundancies{nodes = Redundancies,
+                           id    = AddrId}} ->
+            Redundancies_1 = get_redundancies_with_replicas(
+                               AddrId, Key, Redundancies),
+            correct_redundancies_1(Key, AddrId, Redundancies_1, [], []);
+        _Error ->
+            {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
+    end.
 
 %% correct_redundancies_1/5 - next.
 %%
 -spec(correct_redundancies_1(binary(), integer(), list(), list(), list()) ->
              ok | {error, any()}).
 correct_redundancies_1(_Key,_AddrId, [], [], _ErrorNodes) ->
-    {error, not_found};
+    {error, not_solved};
 
 correct_redundancies_1(_Key,_AddrId, [], Metadatas, ErrorNodes) ->
     correct_redundancies_2(Metadatas, ErrorNodes);
@@ -584,6 +586,11 @@ correct_redundancies_1(Key, AddrId, [#redundant_node{node = Node}|T], Metadatas,
                 {value, {ok, Metadata}} ->
                     correct_redundancies_1(Key, AddrId, T,
                                            [{Node, Metadata}|Metadatas], ErrorNodes);
+                {value, not_found} ->
+                    correct_redundancies_1(Key, AddrId, T,
+                                           [{Node, #?METADATA{key = Key,
+                                                              addr_id = AddrId,
+                                                              del = ?DEL_TRUE}}|Metadatas], ErrorNodes);
                 _Error ->
                     correct_redundancies_1(Key, AddrId, T,
                                            Metadatas, [Node|ErrorNodes])
@@ -599,25 +606,22 @@ correct_redundancies_1(Key, AddrId, [#redundant_node{node = Node}|T], Metadatas,
 -spec(correct_redundancies_2(list(), list()) ->
              ok | {error, any()}).
 correct_redundancies_2(ListOfMetadata, ErrorNodes) ->
-    [{_, Metadata} = H|_] = lists:sort(
-                              fun({_, M1}, {_, M2}) ->
-                                      M1#?METADATA.clock >= M2#?METADATA.clock;
-                                 (_,_) ->
-                                      false
-                              end, ListOfMetadata),
+    [{_Node, Metadata} = H|_] =
+        lists:sort(fun({_, M1}, {_, M2}) ->
+                           M1#?METADATA.clock >= M2#?METADATA.clock;
+                      (_,_) ->
+                           false
+                   end, ListOfMetadata),
 
-    {_, CorrectNodes, InconsistentNodes} =
+    {_Dest, CorrectNodes, InconsistentNodes} =
         lists:foldl(
-          fun({Node, _},
-              {{DestNode, _Metadata} = Dest, C, R}) when Node =:= DestNode ->
+          fun({Node,_Metadata}, {{DestNode, _Metadata} = Dest, C, R}) when Node =:= DestNode ->
                   {Dest, [Node|C], R};
-             ({Node, #?METADATA{clock = Clock}},
-              {{DestNode, #?METADATA{clock = DestClock}} = Dest, C, R}) when Node  =/= DestNode,
-                                                                             Clock =:= DestClock ->
+             ({Node, #?METADATA{clock = Clock}}, {{DestNode, #?METADATA{clock = DestClock}} = Dest, C, R}) when Node  =/= DestNode,
+                                                                                                                Clock =:= DestClock ->
                   {Dest, [Node|C], R};
-             ({Node, #?METADATA{clock = Clock}},
-              {{DestNode, #?METADATA{clock = DestClock}} = Dest, C, R}) when Node  =/= DestNode,
-                                                                             Clock =/= DestClock ->
+             ({Node, #?METADATA{clock = Clock}}, {{DestNode, #?METADATA{clock = DestClock}} = Dest, C, R}) when Node  =/= DestNode,
+                                                                                                                Clock =/= DestClock ->
                   {Dest, C, [Node|R]}
           end, {H, [], []}, ListOfMetadata),
     correct_redundancies_3(ErrorNodes ++ InconsistentNodes, CorrectNodes, Metadata).
@@ -669,7 +673,9 @@ rebalance_1(#rebalance_message{node = Node,
                     Ret = delete_node_from_redundancies(Redundancies, Node, []),
                     rebalance_2(Ret, Msg);
                 _ ->
-                    ok
+                    ok = publish(?QUEUE_TYPE_PER_OBJECT,
+                                 AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
+                    {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
             end;
         _ ->
             ok = publish(?QUEUE_TYPE_PER_OBJECT,
@@ -696,6 +702,8 @@ rebalance_2({ok, Redundancies}, #rebalance_message{node = Node,
                     Error
             end;
         false ->
+            ok = publish(?QUEUE_TYPE_PER_OBJECT,
+                         AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
             ok
     end.
 

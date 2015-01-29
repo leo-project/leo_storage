@@ -216,6 +216,15 @@
 %%
 %%  Watchdog.REX
 %%
+%% @doc REX - Is enabled
+{mapping,
+ "watchdog.rex.is_enabled",
+ "leo_watchdog.rex_enabled",
+ [
+  {datatype, atom},
+  {default, false}
+ ]}.
+
 %% @doc Check inteval (sec) - defalut:5sec
 {mapping,
  "watchdog.rex.interval",
