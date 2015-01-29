@@ -673,7 +673,9 @@ rebalance_1(#rebalance_message{node = Node,
                     Ret = delete_node_from_redundancies(Redundancies, Node, []),
                     rebalance_2(Ret, Msg);
                 _ ->
-                    ok
+                    ok = publish(?QUEUE_TYPE_PER_OBJECT,
+                                 AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
+                    {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
             end;
         _ ->
             ok = publish(?QUEUE_TYPE_PER_OBJECT,
@@ -700,6 +702,8 @@ rebalance_2({ok, Redundancies}, #rebalance_message{node = Node,
                     Error
             end;
         false ->
+            ok = publish(?QUEUE_TYPE_PER_OBJECT,
+                         AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
             ok
     end.
 
