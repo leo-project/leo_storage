@@ -146,6 +146,8 @@ compare(Ref, Pid, RPCKey, Node, #state{metadata = #?METADATA{addr_id = AddrId,
                   {error, {Node, secondary_inconsistency}};
               {value, {ok, #?METADATA{clock = RemoteClock}}} when Clock  < RemoteClock ->
                   {error, {Node, primary_inconsistency}};
+              {value, not_found = Cause} ->
+                  {error, {Node, Cause}};
               {value, {error, Cause}} ->
                   {error, {Node, Cause}};
               {value, {badrpc, Cause}} ->
