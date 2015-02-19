@@ -422,7 +422,6 @@ delete_1(Ret, Object, true) ->
 -define(BIN_NL,    <<"\n">>).
 
 %% @doc Remove objects of the under directory
-%%
 -spec(delete_objects_under_dir(Object) ->
              ok when Object::#?OBJECT{}).
 delete_objects_under_dir(Object) ->
@@ -431,21 +430,10 @@ delete_objects_under_dir(Object) ->
 
     case catch binary:part(Key, (KSize - 1), 1) of
         {'EXIT',_} ->
-            void;
-        Bin ->
-            Targets = case Bin == ?BIN_SLASH of
-                          true ->
-                              [ Bin,
-                                undefined];
-                          false when Bin == ?BIN_NL ->
-                              [ undefined,
-                                << Key/binary, ?BIN_NL/binary >> ];
-                          false ->
-                              [ << Key/binary, ?BIN_SLASH/binary >>,
-                                << Key/binary, ?BIN_NL/binary >> ]
-                      end,
-
+            ok;
+        ?BIN_SLASH = Bin ->
             %% for remote storage nodes
+            Targets =  [ Bin, undefined ],
             Ref = make_ref(),
             case leo_redundant_manager_api:get_members_by_status(?STATE_RUNNING) of
                 {ok, RetL} ->
@@ -459,9 +447,11 @@ delete_objects_under_dir(Object) ->
                     void
             end,
             %% for local object storage
-            delete_objects_under_dir(Ref, Targets)
-    end,
-    ok.
+            delete_objects_under_dir(Ref, Targets),
+            ok;
+        _ ->
+            ok
+    end.
 
 
 %% @doc Remove objects of the under directory for remote-nodes
