@@ -65,16 +65,13 @@ repair(#read_parameter{quorum = ReadQuorum,
                     redundancies = Redundancies,
                     metadata     = Metadata,
                     req_id       = ReqId},
-    NumOfNodes = erlang:length(
-                   [N || #redundant_node{node = N,
-                                         can_read_repair = true}
-                             <- Redundancies]),
+    NumOfNodes = erlang:length([N || #redundant_node{node = N,
+                                                     can_read_repair = true}
+                                         <- Redundancies]),
     lists:foreach(
       fun(#redundant_node{available = false}) ->
               void;
          (#redundant_node{can_read_repair = false}) ->
-              void;
-         (#redundant_node{node = Node}) when erlang:node() == Node ->
               void;
          (#redundant_node{node = Node,
                           available = true,

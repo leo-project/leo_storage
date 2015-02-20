@@ -833,34 +833,45 @@ get_active_redundancies(Quorum, Redundancies) ->
 read_and_repair(#read_parameter{quorum = Q} = ReadParams, Redundancies) ->
     case get_active_redundancies(Q, Redundancies) of
         {ok, AvailableNodes} ->
-            read_and_repair_1(ReadParams, AvailableNodes, AvailableNodes);
+            read_and_repair_1(ReadParams, AvailableNodes, AvailableNodes, []);
         Error ->
             Error
     end.
 
 %% @private
--spec(read_and_repair_1(ReadParams, Redundancies, Redundancies) ->
+read_and_repair_1(_,[],_,[Error|_]) ->
+    {error, Error};
+read_and_repair_1(ReadParams, [Node|Rest], AvailableNodes, Errors) ->
+    case read_and_repair_2(ReadParams, Node, AvailableNodes) of
+        {error, Cause} ->
+            read_and_repair_1(ReadParams, Rest, AvailableNodes, [Cause|Errors]);
+        Ret ->
+            Ret
+    end.
+
+%% @private
+-spec(read_and_repair_2(ReadParams, Redundancies, Redundancies) ->
              {ok, #?METADATA{}, binary()} |
              {ok, match} |
              {error, any()} when ReadParams::#read_parameter{},
                                  Redundancies::[atom()]).
-read_and_repair_1(_, [], _) ->
+read_and_repair_2(_, [], _) ->
     {error, not_found};
-read_and_repair_1(#read_parameter{addr_id   = AddrId,
+read_and_repair_2(#read_parameter{addr_id   = AddrId,
                                   key       = Key,
                                   etag      = 0,
                                   start_pos = StartPos,
                                   end_pos   = EndPos} = ReadParameter,
-                  [#redundant_node{node = Node}|_], Redundancies) when Node == erlang:node() ->
-    read_and_repair_2(
+                  #redundant_node{node = Node}, Redundancies) when Node == erlang:node() ->
+    read_and_repair_3(
       get_fun(AddrId, Key, StartPos, EndPos), ReadParameter, Redundancies);
 
-read_and_repair_1(#read_parameter{addr_id   = AddrId,
+read_and_repair_2(#read_parameter{addr_id   = AddrId,
                                   key       = Key,
                                   etag      = ETag,
                                   start_pos = StartPos,
                                   end_pos   = EndPos} = ReadParameter,
-                  [#redundant_node{node = Node}|_], Redundancies) when Node == erlang:node() ->
+                  #redundant_node{node = Node}, Redundancies) when Node == erlang:node() ->
     %% Retrieve an head of object,
     %%     then compare it with requested 'Etag'
     HeadRet =
@@ -883,53 +894,55 @@ read_and_repair_1(#read_parameter{addr_id   = AddrId,
         {ok, match} = Reply ->
             Reply;
         _ ->
-            read_and_repair_2(
+            read_and_repair_3(
               get_fun(AddrId, Key, StartPos, EndPos), ReadParameter, Redundancies)
     end;
 
-read_and_repair_1(ReadParameter,
-                  [#redundant_node{node = Node}|_Rest],_Redundancies) ->
-    RPCKey = rpc:async_call(Node, ?MODULE, get, [ReadParameter, []]),
+read_and_repair_2(ReadParameter, #redundant_node{node = Node}, Redundancies) ->
+    Ref = make_ref(),
+    Key = ReadParameter#read_parameter.key,
+
+    RPCKey = rpc:async_call(Node, ?MODULE, get, [{Ref, Key}]),
     RetRPC = case catch rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
                  {'EXIT', Cause} ->
                      {error, Cause};
-                 {value, {ok, Meta, Bin}} ->
+                 {value, {ok, Ref, Meta, Bin}} ->
                      {ok, Meta, #?OBJECT{data = Bin}};
-                 {value, {ok, match} = Ret} ->
-                     Ret;
-                 {value, {error, Cause}} ->
+                 {value, {error, Ref, Cause}} ->
                      {error, Cause};
                  {value, {badrpc, Cause}} ->
                      {error, Cause};
+                 {value, _} ->
+                     {error, invalid_access};
                  timeout = Cause ->
                      {error, Cause}
              end,
-    read_and_repair_2(RetRPC, ReadParameter, []).
+    read_and_repair_3(RetRPC, ReadParameter, Redundancies).
 
 %% @private
-read_and_repair_2({ok, Metadata, #?OBJECT{data = Bin}}, #read_parameter{}, []) ->
+read_and_repair_3({ok, Metadata, #?OBJECT{data = Bin}}, #read_parameter{}, []) ->
     {ok, Metadata, Bin};
-read_and_repair_2({ok, match} = Reply, #read_parameter{},_Redundancies) ->
+read_and_repair_3({ok, match} = Reply, #read_parameter{},_Redundancies) ->
     Reply;
-read_and_repair_2({ok, Metadata, #?OBJECT{data = Bin}},
+read_and_repair_3({ok, Metadata, #?OBJECT{data = Bin}},
                   #read_parameter{quorum = Quorum} = ReadParameter, Redundancies) ->
     Fun = fun(ok) ->
                   {ok, Metadata, Bin};
              ({error,_Cause}) ->
                   {error, ?ERROR_RECOVER_FAILURE}
           end,
-    ReadParameter_1 = ReadParameter#read_parameter{quorum = Quorum - 1},
+    ReadParameter_1 = ReadParameter#read_parameter{quorum = Quorum},
     leo_storage_read_repairer:repair(ReadParameter_1, Redundancies, Metadata, Fun);
 
-read_and_repair_2({error, not_found = Cause}, #read_parameter{key = _K}, _Redundancies) ->
+read_and_repair_3({error, not_found = Cause}, #read_parameter{key = _K}, _Redundancies) ->
     {error, Cause};
-read_and_repair_2({error, timeout = Cause}, #read_parameter{key = _K}, _Redundancies) ->
-    ?output_warn("read_and_repair_2/3", _K, Cause),
+read_and_repair_3({error, timeout = Cause}, #read_parameter{key = _K}, _Redundancies) ->
+    ?output_warn("read_and_repair_3/3", _K, Cause),
     {error, Cause};
-read_and_repair_2({error, Cause}, #read_parameter{key = _K}, _Redundancies) ->
-    ?output_warn("read_and_repair_2/3", _K, Cause),
+read_and_repair_3({error, Cause}, #read_parameter{key = _K}, _Redundancies) ->
+    ?output_warn("read_and_repair_3/3", _K, Cause),
     {error, Cause};
-read_and_repair_2(_,_,_) ->
+read_and_repair_3(_,_,_) ->
     {error, invalid_request}.
 
 
