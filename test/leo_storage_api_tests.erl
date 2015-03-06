@@ -90,8 +90,8 @@ register_in_monitor_([_Node0, Node1]) ->
                                             _L1,_L2,_NumOfVNodes,_RPCPort) ->
                                                 ok
                                         end]),
-
-    true = register('leo_storage_sup', leo_hashtable:new()),
+    Pid = spawn(fun() -> void end),
+    true = register('leo_storage_sup', Pid),
     Res1 = leo_storage_api:register_in_monitor(first),
     ?assertEqual(ok, Res1),
 
@@ -100,7 +100,7 @@ register_in_monitor_([_Node0, Node1]) ->
     ok = rpc:call(Node1, meck, new,    [leo_manager_api, [no_link, non_strict]]),
 
     Res2 = leo_storage_api:register_in_monitor(first),
-    ?assertEqual(ok, Res2),
+    ?assertEqual({error, not_found}, Res2),
 
     meck:unload(),
     ok.
