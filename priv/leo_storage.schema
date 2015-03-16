@@ -3,7 +3,7 @@
 %%
 %% LeoFS
 %%
-%% Copyright (c) 2012-2013 Rakuten, Inc.
+%% Copyright (c) 2012-2015 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -363,7 +363,7 @@
  ]}.
 
 
-%% @doc
+%% @doc Monitoring target paths
 {mapping,
  "watchdog.disk.target_paths",
  "leo_watchdog.disk_target_paths",
@@ -439,8 +439,8 @@
  ]}.
 
 
-%% @doc Threshold disk write kb/sec
-%%      default:262144(KB) - 256MB
+%% @doc Monitoring target devices
+%%
 {mapping,
  "watchdog.disk.target_devices",
  "leo_watchdog.disk_target_devices",
