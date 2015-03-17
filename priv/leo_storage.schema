@@ -415,27 +415,27 @@
  "leo_watchdog.disk_threshold_util",
  [
   {datatype, integer},
-  {default, 100}
+  {default, 90}
  ]}.
 
 %% @doc Threshold disk read kb/sec
-%%      default:131072(KB) - 256MB
+%%      default:98304(KB) - 96MB
 {mapping,
  "watchdog.disk.threshold_disk_rkb",
  "leo_watchdog.disk_threshold_rkb",
  [
   {datatype, integer},
-  {default, 262144}
+  {default, 98304}
  ]}.
 
 %% @doc Threshold disk write kb/sec
-%%      default:262144(KB) - 256MB
+%%      default:98304(KB) - 96MB
 {mapping,
  "watchdog.disk.threshold_disk_wkb",
  "leo_watchdog.disk_threshold_wkb",
  [
   {datatype, integer},
-  {default, 262144}
+  {default, 98304}
  ]}.
 
 
