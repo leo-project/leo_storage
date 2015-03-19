@@ -979,9 +979,6 @@ replicate_fun(?REP_LOCAL, Method, AddrId, Object) ->
 %% @doc obj-replication request from remote node.
 %%
 replicate_fun(?REP_REMOTE, Method, Object) ->
-    %% @DEBUG
-    ?info("replicate_fun/3", "method:~p, key:~p, del:~p",
-          [Method, Object#?OBJECT.key, Object#?OBJECT.del]),
     Ref = make_ref(),
     Ret = case Method of
               ?CMD_PUT    -> ?MODULE:put({Object, Ref});
