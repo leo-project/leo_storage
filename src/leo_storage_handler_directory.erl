@@ -109,16 +109,24 @@ store(Ref, StackedBin) ->
     Ret = slice_and_store(StackedBin),
     {Ret, Ref}.
 
-
 %% @private
 slice_and_store(<<>>) ->
     ok;
 slice_and_store(StackedBin) ->
     case slice(StackedBin) of
-        {ok, {DirBin, Metadata, StackedBin_1}} ->
-            %% @TODO: store the record into the directory-db
+        {ok, {DirBin, #?METADATA{key = Key} = Metadata, StackedBin_1}} ->
             ?debugVal({DirBin, Metadata#?METADATA.key, byte_size(StackedBin_1)}),
 
+            KeyBin = term_to_binary({DirBin, Key}),
+            ValBin = term_to_binary(Metadata),
+            case leo_backend_db_api:put(?DIRECTORY_DATA_ID, KeyBin, ValBin) of
+                ok ->
+                    ok;
+                {error, Cause} ->
+                    %% @TODO: enqueue a message
+                    ?error("slice/1","cause:~p",[Cause]),
+                    ok
+            end,
             slice_and_store(StackedBin_1);
         _ ->
             {error, invalid_format}

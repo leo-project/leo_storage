@@ -58,16 +58,9 @@ handle_event({Verb, #?METADATA{key = Key} = Metadata}, State) when Verb == ?CMD_
             case [Node || #redundant_node{available = true,
                                           node = Node} <- RedundantNodes] of
                 [] ->
-                    enqueue(Dir, Metadata),
-                    ok;
-                [Primary|_] ->
-                    case leo_storage_handler_directory:append(
-                           Primary, Dir, Metadata) of
-                        ok ->
-                            ok;
-                        _ ->
-                            enqueue(Dir, Metadata)
-                    end
+                    enqueue(Dir, Metadata);
+                ActiveNodes ->
+                    append_metadata(ActiveNodes, Dir, Metadata)
             end;
         {error,_Cause} ->
             enqueue(Dir, Metadata)
@@ -103,6 +96,20 @@ get_dir(Key) ->
             {Len,_} = lists:last(RetL),
             binary:part(Key, 0, Len)
     end.
+
+
+%% @doc Append a metadata to the container
+%% @private
+append_metadata([],_,_) ->
+    ok;
+append_metadata([Node|Rest], Dir, Metadata) ->
+    case leo_storage_handler_directory:append(Node, Dir, Metadata) of
+        ok ->
+            ok;
+        _ ->
+            enqueue(Dir, Metadata)
+    end,
+    append_metadata(Rest, Dir, Metadata).
 
 
 %% @doc enqueue a message of a miss-replication into the queue
