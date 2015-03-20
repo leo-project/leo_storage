@@ -19,13 +19,13 @@
 %% under the License.
 %%
 %% ---------------------------------------------------------------------
-%% Leo Storage - Event Dispatcher
+%% Leo Storage - Event Notifier
 %%
-%% @doc LeoStorage's Evet Dispatcher
-%% @reference https://github.com/leo-project/leo_storage/blob/master/src/leo_storage_dispatcher.erl
+%% @doc LeoStorage's Evet Notifier
+%% @reference https://github.com/leo-project/leo_storage/blob/master/src/leo_storage_event_notifier.erl
 %% @end
 %%======================================================================
--module(leo_storage_dispatcher).
+-module(leo_storage_event_notifier).
 
 -author('Yosuke Hara').
 

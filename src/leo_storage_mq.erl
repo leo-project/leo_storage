@@ -50,6 +50,7 @@
 -define(MSG_PATH_SYNC_OBJ_WITH_DC,  "6").
 -define(MSG_PATH_COMP_META_WITH_DC, "7").
 -define(MSG_PATH_DEL_DIR,           "8").
+-define(MSG_PATH_ASYNC_METADATA,    "9").
 
 %%--------------------------------------------------------------------
 %% API
@@ -94,7 +95,8 @@ start(RefSup, RootPath) ->
              {?QUEUE_ID_RECOVERY_NODE,     ?MSG_PATH_RECOVERY_NODE},
              {?QUEUE_ID_SYNC_OBJ_WITH_DC,  ?MSG_PATH_SYNC_OBJ_WITH_DC},
              {?QUEUE_ID_COMP_META_WITH_DC, ?MSG_PATH_COMP_META_WITH_DC},
-             {?QUEUE_ID_DEL_DIR, ?MSG_PATH_DEL_DIR}
+             {?QUEUE_ID_DEL_DIR,           ?MSG_PATH_DEL_DIR},
+             {?QUEUE_ID_ASYNC_METADATA,    ?MSG_PATH_ASYNC_METADATA}
             ], RefMqSup, RootPath_1).
 
 %% @private
@@ -842,4 +844,6 @@ queue_id(?QUEUE_TYPE_SYNC_OBJ_WITH_DC) ->
 queue_id(?QUEUE_TYPE_COMP_META_WITH_DC) ->
     ?QUEUE_ID_COMP_META_WITH_DC;
 queue_id(?QUEUE_TYPE_DEL_DIR) ->
-    ?QUEUE_ID_DEL_DIR.
+    ?QUEUE_ID_DEL_DIR;
+queue_id(?QUEUE_TYPE_ASYNC_METADATA) ->
+    ?QUEUE_ID_ASYNC_METADATA.

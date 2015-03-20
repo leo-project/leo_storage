@@ -1012,10 +1012,10 @@ replicate_callback() ->
              function()).
 replicate_callback(Object) ->
     fun({ok, ?CMD_PUT = Verb, Checksum}) ->
-            leo_storage_dispatcher:operate(Verb, Object),
+            leo_storage_event_notifier:operate(Verb, Object),
             {ok, Checksum};
        ({ok,?CMD_DELETE = Verb,_Checksum}) ->
-            leo_storage_dispatcher:operate(Verb, Object),
+            leo_storage_event_notifier:operate(Verb, Object),
             {ok, 0};
        ({error, Errors}) ->
             case catch lists:keyfind(not_found, 2, Errors) of

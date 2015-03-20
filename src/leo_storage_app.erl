@@ -128,7 +128,10 @@ after_proc({ok, Pid}) ->
     ok = launch_redundant_manager(Pid, Managers, QueueDir),
     ok = leo_storage_mq:start(Pid, QueueDir),
 
-    %% @TODO - launch backeend-db for metadata-cluster
+    %% Launch directory-data's db
+    ok = leo_backend_db_sup:start_child(
+           'leo_backend_db_sup', ?DIRECTORY_DATA_ID,
+           ?DIRECTORY_DATA_PROCS, ?DIRECTORY_DATA_NAME, ?DIRECTORY_DATA_PATH),
 
     %% After processing
     ensure_started(rex, rpc, start_link, worker, 2000),
@@ -182,9 +185,9 @@ launch_logger() ->
 %% @doc Launch Storage's dispatcher
 %% @private
 launch_dispatcher() ->
-    ChildSpec = {leo_storage_dispatcher,
-                 {leo_storage_dispatcher, start_link, []},
-                 permanent, 2000, worker, [leo_storage_dispatcher]},
+    ChildSpec = {leo_storage_event_notifier,
+                 {leo_storage_event_notifier, start_link, []},
+                 permanent, 2000, worker, [leo_storage_event_notifier]},
     {ok, _} = supervisor:start_child(leo_storage_sup, ChildSpec),
     ok.
 

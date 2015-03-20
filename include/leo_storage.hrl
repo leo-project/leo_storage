@@ -61,6 +61,7 @@
 -define(QUEUE_ID_SYNC_OBJ_WITH_DC,  'leo_sync_obj_with_dc_queue').
 -define(QUEUE_ID_COMP_META_WITH_DC, 'leo_comp_meta_with_dc_queue').
 -define(QUEUE_ID_DEL_DIR,           'leo_delete_dir_queue').
+-define(QUEUE_ID_ASYNC_METADATA,    'leo_async_metadata_queue').
 
 -define(QUEUE_TYPE_PER_OBJECT,        'queue_type_per_object').
 -define(QUEUE_TYPE_SYNC_BY_VNODE_ID,  'queue_type_sync_by_vnode_id').
@@ -70,6 +71,7 @@
 -define(QUEUE_TYPE_SYNC_OBJ_WITH_DC,  'queue_type_sync_obj_with_dc').
 -define(QUEUE_TYPE_COMP_META_WITH_DC, 'queue_type_comp_meta_with_dc').
 -define(QUEUE_TYPE_DEL_DIR,           'queue_type_delete_dir').
+-define(QUEUE_TYPE_ASYNC_METADATA,    'queue_type_async_metadata').
 
 -define(ERR_TYPE_REPLICATE_DATA,      'error_msg_replicate_data').
 -define(ERR_TYPE_RECOVER_DATA,        'error_msg_recover_data').
@@ -204,6 +206,18 @@
             _ -> 8
         end).
 
+-define(env_queue_dir(),
+        case application:get_env(leo_storage, queue_dir) of
+            {ok, EnvQueueDir} -> EnvQueueDir;
+            _ -> "./work/queue"
+        end).
+
+-define(env_directory_data_dir(),
+        case application:get_env(leo_storage, directory_data_dir) of
+            {ok, EnvDirectoryDataDir} -> EnvDirectoryDataDir;
+            _ -> "./work/directory"
+        end).
+
 -define(env_mq_backend_db(),
         case application:get_env(leo_storage, mq_backend_db) of
             {ok, EnvMQBackendDB} ->
@@ -325,6 +339,11 @@
 -define(DEF_BIN_OBJ_SIZE,  32).     %% object-size
 -define(DEF_BIN_PADDING, <<0:64>>). %% footer
 
+-define(DIRECTORY_DATA_ID,   'leo_metadata_cluster_db').
+-define(DIRECTORY_DATA_PROCS, 8).
+-define(DIRECTORY_DATA_NAME, 'leveldb').
+-define(DIRECTORY_DATA_PATH, "./work/directory/").
+
 
 -ifdef(TEST).
 -define(env_mdcr_sync_proc_buf_size(), 1024).
@@ -370,7 +389,8 @@
                       ?QUEUE_TYPE_RECOVERY_NODE |
                       ?QUEUE_TYPE_SYNC_OBJ_WITH_DC |
                       ?QUEUE_TYPE_COMP_META_WITH_DC |
-                      ?QUEUE_TYPE_DEL_DIR
+                      ?QUEUE_TYPE_DEL_DIR |
+                      ?QUEUE_TYPE_ASYNC_METADATA
                       ).
 
 -type(queue_id()   :: ?QUEUE_ID_PER_OBJECT |
@@ -380,7 +400,8 @@
                       ?QUEUE_ID_RECOVERY_NODE |
                       ?QUEUE_ID_SYNC_OBJ_WITH_DC |
                       ?QUEUE_ID_COMP_META_WITH_DC |
-                      ?QUEUE_ID_DEL_DIR
+                      ?QUEUE_ID_DEL_DIR |
+                      ?QUEUE_ID_ASYNC_METADATA
                       ).
 
 -define(mq_id_and_alias, [{leo_delete_dir_queue,        "delete directories"},

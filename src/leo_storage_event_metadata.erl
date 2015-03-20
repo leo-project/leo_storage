@@ -61,7 +61,7 @@ handle_event({Verb, #?METADATA{key = Key} = Metadata}, State) when Verb == ?CMD_
                     enqueue(Dir, Metadata),
                     ok;
                 [Primary|_] ->
-                    case leo_storage_handler_metadata:stack(
+                    case leo_storage_handler_directory:append(
                            Primary, Dir, Metadata) of
                         ok ->
                             ok;
