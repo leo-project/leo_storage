@@ -2,7 +2,7 @@
 %%
 %% Leo Storage
 %%
-%% Copyright (c) 2012-2014 Rakuten, Inc.
+%% Copyright (c) 2012-2015 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -64,9 +64,9 @@ stop(Node) ->
              {error, any()} when DestNodes::[atom()],
                                  AddrId::integer(),
                                  Key::binary(),
-                                 Metadata::#metadata{},
+                                 Metadata::#?METADATA{},
                                  Object::#?OBJECT{}).
-stack(DestNodes, AddrId, Key, Metadata, Object) ->
+stack(DestNodes, AddrId, Key, Metadata, Object) ->    
     stack_fun(DestNodes, AddrId, Key, Metadata, Object, []).
 
 

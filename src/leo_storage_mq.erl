@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012-2014 Rakuten, Inc.
+%% Copyright (c) 2012-2015 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -369,7 +369,7 @@ handle_call({consume, ?QUEUE_ID_COMP_META_WITH_DC, MessageBin}) ->
             case leo_mdcr_tbl_cluster_stat:find_by_cluster_id(ClusterId) of
                 {ok, #?CLUSTER_STAT{state = ?STATE_RUNNING}} ->
                     %% re-compare metadatas
-                    leo_storage_handle_sync:send_addrid_and_key_to_remote(
+                    leo_storage_handler_sync:send_addrid_and_key_to_remote(
                       ClusterId, AddrAndKeyList);
                 _ ->
                     ok

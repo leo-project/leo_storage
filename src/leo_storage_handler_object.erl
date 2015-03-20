@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012-2014 Rakuten, Inc.
+%% Copyright (c) 2012-2015 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -1011,11 +1011,11 @@ replicate_callback() ->
 -spec(replicate_callback(#?OBJECT{}|null) ->
              function()).
 replicate_callback(Object) ->
-    fun({ok, ?CMD_PUT, Checksum}) ->
-            ok = leo_sync_remote_cluster:defer_stack(Object),
+    fun({ok, ?CMD_PUT = Verb, Checksum}) ->
+            leo_storage_dispatcher:operate(Verb, Object),
             {ok, Checksum};
-       ({ok,?CMD_DELETE,_Checksum}) ->
-            ok = leo_sync_remote_cluster:defer_stack(Object),
+       ({ok,?CMD_DELETE = Verb,_Checksum}) ->
+            leo_storage_dispatcher:operate(Verb, Object),
             {ok, 0};
        ({error, Errors}) ->
             case catch lists:keyfind(not_found, 2, Errors) of

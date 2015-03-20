@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012-2014 Rakuten, Inc.
+%% Copyright (c) 2012-2015 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -307,7 +307,9 @@
                                    _ -> _W
                                end).
 
-%% For Multi-DC Replication
+
+%% For the multi-DC Replication and synchronization of data
+%%
 -define(DEF_PREFIX_MDCR_SYNC_PROC_1, "leo_mdcr_sync_w1_").
 -define(DEF_PREFIX_MDCR_SYNC_PROC_2, "leo_mdcr_sync_w2_").
 -define(DEF_MDCR_SYNC_PROC_BUFSIZE, 1024 * 1024 * 32).  %% 32MB
@@ -319,8 +321,10 @@
 
 -define(DEF_BIN_CID_SIZE,  16).     %% clusterid-size
 -define(DEF_BIN_META_SIZE, 16).     %% metadata-size
+-define(DEF_BIN_DIR_SIZE,  16).     %% directory-name-size
 -define(DEF_BIN_OBJ_SIZE,  32).     %% object-size
 -define(DEF_BIN_PADDING, <<0:64>>). %% footer
+
 
 -ifdef(TEST).
 -define(env_mdcr_sync_proc_buf_size(), 1024).
@@ -389,7 +393,7 @@
                           {leo_per_object_queue,        "recover inconsistent objs"}]).
 
 
-%% Storage watchdog related
+%% For the watchdog
 %%
 %% @doc Threshold active size ratio:
 %%    * round(active-size/total-size)
@@ -433,7 +437,7 @@
                 ?DEF_STORAGE_WATHDOG_INTERVAL
         end).
 
-%% Storage autonomic-operation related
+%% For the autonomic-operation
 %%
 -define(env_auto_compaction_enabled(),
         case application:get_env(leo_storage, auto_compaction_enabled) of

@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012-2014 Rakuten, Inc.
+%% Copyright (c) 2012-2015 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -119,6 +119,7 @@ after_proc({ok, Pid}) ->
 
     %% Launch servers
     ok = launch_logger(),
+    ok = launch_dispatcher(),
     ok = launch_object_storage(Pid),
     ok = leo_ordning_reda_api:start(),
 
@@ -126,6 +127,8 @@ after_proc({ok, Pid}) ->
     Managers = ?env_manager_nodes(leo_storage),
     ok = launch_redundant_manager(Pid, Managers, QueueDir),
     ok = leo_storage_mq:start(Pid, QueueDir),
+
+    %% @TODO - launch backeend-db for metadata-cluster
 
     %% After processing
     ensure_started(rex, rpc, start_link, worker, 2000),
@@ -163,7 +166,7 @@ after_proc(Error) ->
 
 
 %% @doc Launch Logger
-%%
+%% @private
 launch_logger() ->
     DefLogDir = "./log/",
     LogDir    = case application:get_env(leo_storage, log_appender) of
@@ -176,8 +179,18 @@ launch_logger() ->
     leo_logger_client_message:new(LogDir, LogLevel, log_file_appender()).
 
 
+%% @doc Launch Storage's dispatcher
+%% @private
+launch_dispatcher() ->
+    ChildSpec = {leo_storage_dispatcher,
+                 {leo_storage_dispatcher, start_link, []},
+                 permanent, 2000, worker, [leo_storage_dispatcher]},
+    {ok, _} = supervisor:start_child(leo_storage_sup, ChildSpec),
+    ok.
+
+
 %% @doc Launch Object-Storage
-%%
+%% @private
 launch_object_storage(RefSup) ->
     ObjStoageInfo =
         case ?env_storage_device() of
