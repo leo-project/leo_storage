@@ -74,11 +74,11 @@ stop() ->
 
 %% @doc Stop this server
 %%
--spec(operate(Verb, Data) ->
-             ok | {error, any()} when Verb::request_verb(),
+-spec(operate(Method, Data) ->
+             ok | {error, any()} when Method::request_verb(),
                                       Data::#?OBJECT{}|#?METADATA{}).
-operate(Verb, Data) ->
-    gen_server:call(?MODULE, {operate, Verb, Data}, ?TIMEOUT).
+operate(Method, Data) ->
+    gen_server:call(?MODULE, {operate, Method, Data}, ?TIMEOUT).
 
 
 %%====================================================================
@@ -95,18 +95,18 @@ init([]) ->
 handle_call(stop, _From, State) ->
     {stop, shutdown, ok, State};
 
-handle_call({operate, Verb, #?METADATA{} = Metadata}, _From,
-            #state{event_pid = Pid} = State) when Verb == ?CMD_PUT;
-                                                  Verb == ?CMD_DELETE ->
-    ok = gen_event:notify(Pid, {Verb, Metadata}),
+handle_call({operate, Method, #?METADATA{} = Metadata}, _From,
+            #state{event_pid = Pid} = State) when Method == ?CMD_PUT;
+                                                  Method == ?CMD_DELETE ->
+    ok = gen_event:notify(Pid, {Method, Metadata}),
     {reply, ok, State};
 
-handle_call({operate, Verb, #?OBJECT{} = Object}, _From,
-            #state{event_pid = Pid} = State) when Verb == ?CMD_PUT;
-                                                  Verb == ?CMD_DELETE ->
+handle_call({operate, Method, #?OBJECT{} = Object}, _From,
+            #state{event_pid = Pid} = State) when Method == ?CMD_PUT;
+                                                  Method == ?CMD_DELETE ->
     Metadata = leo_object_storage_transformer:object_to_metadata(Object),
     ok = leo_sync_remote_cluster:defer_stack(Object),
-    ok = gen_event:notify(Pid, {Verb, Metadata}),
+    ok = gen_event:notify(Pid, {Method, Metadata}),
     {reply, ok, State};
 
 handle_call(_Msg, _From, State) ->

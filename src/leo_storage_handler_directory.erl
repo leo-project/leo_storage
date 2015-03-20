@@ -114,18 +114,37 @@ slice_and_store(<<>>) ->
     ok;
 slice_and_store(StackedBin) ->
     case slice(StackedBin) of
-        {ok, {DirBin, #?METADATA{key = Key} = Metadata, StackedBin_1}} ->
-            ?debugVal({DirBin, Metadata#?METADATA.key, byte_size(StackedBin_1)}),
-
+        {ok, {DirBin, #?METADATA{key = Key,
+                                 clock = Clock} = Metadata, StackedBin_1}} ->
             KeyBin = term_to_binary({DirBin, Key}),
             ValBin = term_to_binary(Metadata),
-            case leo_backend_db_api:put(?DIRECTORY_DATA_ID, KeyBin, ValBin) of
-                ok ->
-                    ok;
-                {error, Cause} ->
-                    %% @TODO: enqueue a message
-                    ?error("slice/1","cause:~p",[Cause]),
-                    ok
+            CanPutVal =
+                case leo_backend_db_api:get(?DIRECTORY_DATA_ID, KeyBin) of
+                    {ok, ValBin_1} ->
+                        case catch binary_to_term(ValBin_1) of
+                            #?METADATA{clock = Clock_1} when Clock > Clock_1 ->
+                                true;
+                            #?METADATA{} ->
+                                false;
+                            _ ->
+                                true
+                        end;
+                    _ ->
+                        true
+                end,
+
+            case CanPutVal of
+                true ->
+                    case leo_backend_db_api:put(?DIRECTORY_DATA_ID, KeyBin, ValBin) of
+                        ok ->
+                            ok;
+                        {error, Cause} ->
+                            %% @TODO: enqueue a message
+                            ?error("slice/1","cause:~p",[Cause]),
+                            ok
+                    end;
+                false ->
+                    void
             end,
             slice_and_store(StackedBin_1);
         _ ->
@@ -225,13 +244,10 @@ delete_objects_in_parent_dir(ParentDir) ->
 %% @doc Handle send object to a remote-node.
 %%
 handle_send({_,DestNode},_StackedInfo, CompressedObjs) ->
-    ?debugVal({DestNode, byte_size(CompressedObjs)}),
-
     Ref = make_ref(),
     RPCKey = rpc:async_call(DestNode, ?MODULE, store, [Ref, CompressedObjs]),
     case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
         {value, {ok, Ref}} ->
-            ?debugVal({ok, DestNode, Ref}),
             ok;
         _Other ->
             %% @TODO:enqueu a fail message into the mq

@@ -987,9 +987,11 @@ replicate_fun(?REP_REMOTE, Method, Object) ->
     case Ret of
         %% for put-operation
         {ok, Ref, Checksum} ->
+            ok = leo_storage_event_notifier:operate(Method, Object),
             {ok, Checksum};
         %% for delete-operation
         {ok, Ref} ->
+            ok = leo_storage_event_notifier:operate(Method, Object),
             {ok, 0};
         {error, Ref, not_found = Cause} ->
             {error, Cause};
@@ -1011,11 +1013,11 @@ replicate_callback() ->
 -spec(replicate_callback(#?OBJECT{}|null) ->
              function()).
 replicate_callback(Object) ->
-    fun({ok, ?CMD_PUT = Verb, Checksum}) ->
-            leo_storage_event_notifier:operate(Verb, Object),
+    fun({ok, ?CMD_PUT = Method, Checksum}) ->
+            leo_storage_event_notifier:operate(Method, Object),
             {ok, Checksum};
-       ({ok,?CMD_DELETE = Verb,_Checksum}) ->
-            leo_storage_event_notifier:operate(Verb, Object),
+       ({ok,?CMD_DELETE = Method,_Checksum}) ->
+            leo_storage_event_notifier:operate(Method, Object),
             {ok, 0};
        ({error, Errors}) ->
             case catch lists:keyfind(not_found, 2, Errors) of

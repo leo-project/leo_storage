@@ -49,8 +49,8 @@
 init([]) ->
     {ok, []}.
 
-handle_event({Verb, #?METADATA{key = Key} = Metadata}, State) when Verb == ?CMD_PUT;
-                                                                   Verb == ?CMD_DELETE ->
+handle_event({Method, #?METADATA{key = Key} = Metadata}, State) when Method == ?CMD_PUT;
+                                                                     Method == ?CMD_DELETE ->
     Dir = get_dir(Key),
     case leo_redundant_manager_api:get_redundancies_by_key(Dir) of
         {ok, #redundancies{nodes = RedundantNodes}} ->
