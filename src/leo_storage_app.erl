@@ -127,11 +127,10 @@ after_proc({ok, Pid}) ->
     Managers = ?env_manager_nodes(leo_storage),
     ok = launch_redundant_manager(Pid, Managers, QueueDir),
     ok = leo_storage_mq:start(Pid, QueueDir),
+    ok = leo_directory_mq:start(Pid, QueueDir),
 
-    %% %% Launch directory-data's db
-    %% ok = leo_backend_db_sup:start_child(
-    %%        'leo_backend_db_sup', ?DIRECTORY_DATA_ID,
-    %%        ?DIRECTORY_DATA_PROCS, ?DIRECTORY_DATA_NAME, ?DIRECTORY_DATA_PATH),
+    %% Launch directory-data's db
+    ok = leo_directory_sync:start(),
 
     %% After processing
     ensure_started(rex, rpc, start_link, worker, 2000),

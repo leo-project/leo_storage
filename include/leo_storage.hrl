@@ -223,7 +223,7 @@
             {ok, EnvMQBackendDB} ->
                 EnvMQBackendDB;
             _ ->
-                'leveldb'
+                'bitcask'
         end).
 
 -define(env_num_of_mq_procs(),
@@ -320,6 +320,38 @@
                                    ?CMD_DELETE -> _D;
                                    _ -> _W
                                end).
+
+
+%% For Directory
+-define(CONTAINER_BUF_SIZE, 1024 * 256). %% 256kb
+-define(CONTAINER_TIMEOUT,  timer:seconds(1)). %% 1sec(1000msec)
+
+-define(DIR_DB_PROP_PROCS, 'dir_db_num_of_procs').
+-define(DIR_DB_PROP_NAME,  'dir_db_name').
+-define(DIR_DB_PROP_PATH,  'dir_db_path').
+
+-define(DIR_DB_ID,   'leo_directory_db').
+-define(DIR_DB_PROCS, 8).
+-define(DIR_DB_NAME, 'leveldb').
+-define(DIR_DB_PATH, "./work/directory/").
+
+-define(env_dir_db_procs(),
+        case application:get_env(leo_storage, ?DIR_DB_PROP_PROCS) of
+            {ok, _EnvDirDBProcs} -> _EnvDirDBProcs;
+            _ -> ?DIR_DB_PROCS
+        end).
+
+-define(env_dir_db_name(),
+        case application:get_env(leo_storage, ?DIR_DB_PROP_NAME) of
+            {ok, _EnvDirDBName} -> _EnvDirDBName;
+            _ -> ?DIR_DB_NAME
+        end).
+
+-define(env_dir_db_path(),
+        case application:get_env(leo_storage, ?DIR_DB_PROP_PATH) of
+            {ok, _EnvDirDBPath} -> _EnvDirDBPath;
+            _ -> ?DIR_DB_PATH
+        end).
 
 
 %% For the multi-DC Replication and synchronization of data

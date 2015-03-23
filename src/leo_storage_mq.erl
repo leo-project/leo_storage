@@ -50,7 +50,7 @@
 -define(MSG_PATH_SYNC_OBJ_WITH_DC,  "6").
 -define(MSG_PATH_COMP_META_WITH_DC, "7").
 -define(MSG_PATH_DEL_DIR,           "8").
--define(MSG_PATH_ASYNC_METADATA,    "9").
+
 
 %%--------------------------------------------------------------------
 %% API
@@ -67,7 +67,7 @@ start(RootPath) ->
                                       RootPath::binary()).
 start(RefSup, RootPath) ->
     %% launch mq-sup under storage-sup
-    RefMqSup =
+    RefMQSup =
         case whereis(leo_mq_sup) of
             undefined ->
                 ChildSpec = {leo_mq_sup,
@@ -95,9 +95,8 @@ start(RefSup, RootPath) ->
              {?QUEUE_ID_RECOVERY_NODE,     ?MSG_PATH_RECOVERY_NODE},
              {?QUEUE_ID_SYNC_OBJ_WITH_DC,  ?MSG_PATH_SYNC_OBJ_WITH_DC},
              {?QUEUE_ID_COMP_META_WITH_DC, ?MSG_PATH_COMP_META_WITH_DC},
-             {?QUEUE_ID_DEL_DIR,           ?MSG_PATH_DEL_DIR},
-             {?QUEUE_ID_ASYNC_METADATA,    ?MSG_PATH_ASYNC_METADATA}
-            ], RefMqSup, RootPath_1).
+             {?QUEUE_ID_DEL_DIR,           ?MSG_PATH_DEL_DIR}
+            ], RefMQSup, RootPath_1).
 
 %% @private
 start_1([],_,_) ->
