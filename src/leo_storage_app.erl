@@ -128,10 +128,10 @@ after_proc({ok, Pid}) ->
     ok = launch_redundant_manager(Pid, Managers, QueueDir),
     ok = leo_storage_mq:start(Pid, QueueDir),
 
-    %% Launch directory-data's db
-    ok = leo_backend_db_sup:start_child(
-           'leo_backend_db_sup', ?DIRECTORY_DATA_ID,
-           ?DIRECTORY_DATA_PROCS, ?DIRECTORY_DATA_NAME, ?DIRECTORY_DATA_PATH),
+    %% %% Launch directory-data's db
+    %% ok = leo_backend_db_sup:start_child(
+    %%        'leo_backend_db_sup', ?DIRECTORY_DATA_ID,
+    %%        ?DIRECTORY_DATA_PROCS, ?DIRECTORY_DATA_NAME, ?DIRECTORY_DATA_PATH),
 
     %% After processing
     ensure_started(rex, rpc, start_link, worker, 2000),

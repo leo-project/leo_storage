@@ -339,11 +339,6 @@
 -define(DEF_BIN_OBJ_SIZE,  32).     %% object-size
 -define(DEF_BIN_PADDING, <<0:64>>). %% footer
 
--define(DIRECTORY_DATA_ID,   'leo_metadata_cluster_db').
--define(DIRECTORY_DATA_PROCS, 8).
--define(DIRECTORY_DATA_NAME, 'leveldb').
--define(DIRECTORY_DATA_PATH, "./work/directory/").
-
 
 -ifdef(TEST).
 -define(env_mdcr_sync_proc_buf_size(), 1024).

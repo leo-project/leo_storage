@@ -87,7 +87,7 @@ operate(Method, Data) ->
 %% @doc Initiates the server
 init([]) ->
     {ok, Pid} = gen_event:start_link(),
-    ok = gen_event:add_handler(Pid, leo_storage_event_metadata, []),
+    ok = gen_event:add_handler(Pid, leo_directory_event, []),
     {ok, #state{event_pid = Pid}}.
 
 
