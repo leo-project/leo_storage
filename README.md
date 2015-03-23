@@ -12,4 +12,4 @@ Overview
   * LeoFS's storage-cluster consists of a set of loosely connected nodes.
 *  Detail document is [here](http://www.leofs.org/docs/).
 * "leo_storage" uses [rebar](https://github.com/basho/rebar) build system. Makefile so that simply running "make" at the top level should work.
-* "leo_storage" requires Erlang R15B03-1 or later.
+* "leo_storage" requires Erlang R16B03-1 or later.
