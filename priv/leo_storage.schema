@@ -211,6 +211,39 @@
 
 
 %% --------------------------------------------------------------------
+%% STORAGE - Directory
+%% --------------------------------------------------------------------
+%% @doc A number of directory-db's processes
+{mapping,
+ "directory.db_num_of_procs",
+ "leo_storage.dir_db_num_of_procs",
+ [
+  {datatype, integer},
+  {default, 8}
+ ]}.
+
+
+%% @doc Directory-db's backend db: [bitcask, leveldb] - default:leveldb
+{mapping,
+ "directory.db_name",
+ "leo_storage.dir_db_name",
+ [
+  {datatype, atom},
+  {default, 'leveldb'}
+ ]}.
+
+
+%% @doc Directory-db's directory
+{mapping,
+ "directory.db_path",
+ "leo_storage.dir_db_path",
+ [
+  {datatype, string},
+  {default, "./work/directory/"}
+ ]}.
+
+
+%% --------------------------------------------------------------------
 %% STORAGE - Watchdog
 %% --------------------------------------------------------------------
 %%
