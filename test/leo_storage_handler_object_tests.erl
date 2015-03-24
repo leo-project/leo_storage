@@ -408,6 +408,9 @@ copy_({Node0, Node1}) ->
     meck:new(leo_watchdog_state, [non_strict]),
     meck:expect(leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end),
 
+    meck:new(leo_storage_event_notifier, [non_strict]),
+    meck:expect(leo_storage_event_notifier, replicate, fun(_,_,_) -> ok end),
+
     Res1 = leo_storage_handler_object:replicate([Node1, Node1], 0, ?TEST_KEY_0),
     ?assertEqual(ok, Res1),
 

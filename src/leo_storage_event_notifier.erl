@@ -21,7 +21,7 @@
 %% ---------------------------------------------------------------------
 %% Leo Storage - Event Notifier
 %%
-%% @doc LeoStorage's Evet Notifier
+%% @doc LeoStorage's Event Notifier
 %% @reference https://github.com/leo-project/leo_storage/blob/master/src/leo_storage_event_notifier.erl
 %% @end
 %%======================================================================
@@ -37,7 +37,9 @@
 
 %% API
 -export([start_link/0, stop/0]).
--export([operate/2]).
+-export([operate/2,
+         replicate/3
+        ]).
 
 %% gen_server callbacks
 -export([init/1,
@@ -65,20 +67,27 @@ start_link() ->
 
 
 %% @doc Stop this server
-%%
 -spec(stop() ->
              ok).
 stop() ->
     gen_server:call(?MODULE, stop, ?TIMEOUT).
 
 
-%% @doc Stop this server
-%%
+%% @doc Operate the data
 -spec(operate(Method, Data) ->
              ok | {error, any()} when Method::request_verb(),
                                       Data::#?OBJECT{}|#?METADATA{}).
 operate(Method, Data) ->
     gen_server:call(?MODULE, {operate, Method, Data}, ?TIMEOUT).
+
+
+%% @doc Replicate the data
+-spec(replicate(Nodes, Metadata, Bin) ->
+             ok | {error, any()} when Nodes::[atom()],
+                                      Metadata::#?METADATA{},
+                                      Bin::binary()).
+replicate(Nodes, Metadata, Bin) ->
+    gen_server:call(?MODULE, {replicate, Nodes, Metadata, Bin}, ?TIMEOUT).
 
 
 %%====================================================================
@@ -108,6 +117,31 @@ handle_call({operate, Method, #?OBJECT{} = Object}, _From,
     ok = leo_sync_remote_cluster:defer_stack(Object),
     ok = gen_event:notify(Pid, {Method, Metadata}),
     {reply, ok, State};
+
+handle_call({replicate, Nodes, #?METADATA{addr_id = AddrId,
+                                          key = Key,
+                                          del = IsDel} = Metadata, Bin},
+            _From, #state{event_pid = Pid} = State) ->
+    %% replicate the object for the local-cluster
+    Ret = leo_sync_local_cluster:stack(Nodes, AddrId, Key, Metadata, Bin),
+
+    %% replicate the object for the remote-cluster(s)
+    Object_1 = leo_object_storage_transformer:metadata_to_object(Metadata),
+    Object_2 = case (IsDel == ?DEL_TRUE) of
+                   true ->
+                       Object_1#?OBJECT{method = ?CMD_DELETE,
+                                        data  = <<>>,
+                                        dsize = 0,
+                                        del = ?DEL_TRUE};
+                   false ->
+                       Object_1#?OBJECT{method = ?CMD_PUT,
+                                        data = Bin}
+               end,
+    ok = leo_sync_remote_cluster:defer_stack(Object_2),
+
+    %% synchronize the metadata into the cluster
+    ok = gen_event:notify(Pid, {put, Metadata}),
+    {reply, Ret, State};
 
 handle_call(_Msg, _From, State) ->
     {reply, ok, State}.

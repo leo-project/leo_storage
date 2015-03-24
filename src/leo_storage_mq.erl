@@ -671,6 +671,7 @@ rebalance_1(#rebalance_message{node = Node,
     case leo_redundant_manager_api:get_member_by_node(Node) of
         {ok, #member{state = ?STATE_RUNNING}} ->
             ok = decrement_counter(?TBL_REBALANCE_COUNTER, VNodeId),
+
             case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
                 {ok, #redundancies{nodes = Redundancies}} ->
                     Ret = delete_node_from_redundancies(Redundancies, Node, []),

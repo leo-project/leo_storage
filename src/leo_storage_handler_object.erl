@@ -622,23 +622,12 @@ replicate(DestNodes, AddrId, Key) ->
                 #?METADATA{del = ?DEL_FALSE} = Metadata ->
                     case ?MODULE:get({Ref, Key}) of
                         {ok, Ref, Metadata, Bin} ->
-                            Ret = leo_sync_local_cluster:stack(
-                                    DestNodes, AddrId, Key, Metadata, Bin),
-                            Object_1 = leo_object_storage_transformer:metadata_to_object(Metadata),
-                            Object_2 = Object_1#?OBJECT{data = Bin},
-                            _ = leo_sync_remote_cluster:defer_stack(Object_2),
-                            Ret;
+                            leo_storage_event_notifier:replicate(DestNodes, Metadata, Bin);
                         {error, Ref, Cause} ->
                             {error, Cause}
                     end;
                 #?METADATA{del = ?DEL_TRUE} = Metadata ->
-                    EmptyBin = <<>>,
-                    leo_sync_local_cluster:stack(DestNodes, AddrId, Key, Metadata, EmptyBin),
-                    Object_1 = leo_object_storage_transformer:metadata_to_object(Metadata),
-                    Object_2 = Object_1#?OBJECT{data  = EmptyBin,
-                                                dsize = 0,
-                                                del   = ?DEL_TRUE},
-                    leo_sync_remote_cluster:defer_stack(Object_2);
+                    leo_storage_event_notifier:replicate(DestNodes, Metadata, <<>>);
                 _ ->
                     {error, invalid_data_type}
             end;
