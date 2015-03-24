@@ -158,7 +158,8 @@ slice_and_store(<<>>) ->
 slice_and_store(StackedBin) ->
     case slice(StackedBin) of
         {ok, {DirBin, #?METADATA{key = Key,
-                                 clock = Clock} = Metadata, StackedBin_1}} ->
+                                 clock = Clock,
+                                 del = Del} = Metadata, StackedBin_1}} ->
             KeyBin = term_to_binary({DirBin, Key}),
             ValBin = term_to_binary(Metadata),
             CanPutVal =
@@ -169,16 +170,32 @@ slice_and_store(StackedBin) ->
                                 true;
                             #?METADATA{} ->
                                 false;
-                            _ ->
-                                true
+                            not_found when Del == ?DEL_TRUE ->
+                                false;
+                            not_found when Del == ?DEL_FALSE ->
+                                true;
+                            {error,_Cause} ->
+                                ok = enqueue(Metadata),
+                                false
                         end;
                     _ ->
                         true
                 end,
 
             case CanPutVal of
-                true ->
+                true when Del == ?DEL_FALSE ->
                     case leo_backend_db_api:put(?DIR_DB_ID, KeyBin, ValBin) of
+                        ok ->
+                            ok;
+                        {error, Cause} ->
+                            error_logger:info_msg("~p,~p,~p,~p~n",
+                                                  [{module, ?MODULE_STRING},
+                                                   {function, "slice_and_store/1"},
+                                                   {line, ?LINE}, {body, Cause}]),
+                            enqueue(Metadata)
+                    end;
+                true when Del == ?DEL_TRUE ->
+                    case leo_backend_db_api:delete(?DIR_DB_ID, KeyBin) of
                         ok ->
                             ok;
                         {error, Cause} ->
