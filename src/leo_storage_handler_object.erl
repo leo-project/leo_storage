@@ -635,7 +635,7 @@ replicate(DestNodes, AddrId, Key) ->
                             {error, Cause}
                     end;
                 #?METADATA{del = ?DEL_TRUE} = Metadata ->
-                    leo_storage_event_notifier:replicate(DestNodes, Metadata, <<>>);                
+                    leo_storage_event_notifier:replicate(DestNodes, Metadata, <<>>);
                 _ ->
                     {error, invalid_data_type}
             end;
