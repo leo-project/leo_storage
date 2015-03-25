@@ -577,7 +577,15 @@ head_with_calc_md5(AddrId, Key, MD5Context) ->
 replicate(Object) ->
     %% Transform an object to a metadata
     Metadata = leo_object_storage_transformer:object_to_metadata(Object),
-    Method = Object#?OBJECT.method,
+    Method = case Object#?OBJECT.method of
+                 undefined ->
+                     case Object#?OBJECT.del of
+                         ?DEL_TRUE -> delete;
+                         ?DEL_FALSE -> put
+                     end;
+                 Method_0 ->
+                     Method_0
+            end,
     NumOfReplicas = Object#?OBJECT.num_of_replicas,
     AddrId = Metadata#?METADATA.addr_id,
 
@@ -627,7 +635,7 @@ replicate(DestNodes, AddrId, Key) ->
                             {error, Cause}
                     end;
                 #?METADATA{del = ?DEL_TRUE} = Metadata ->
-                    leo_storage_event_notifier:replicate(DestNodes, Metadata, <<>>);
+                    leo_storage_event_notifier:replicate(DestNodes, Metadata, <<>>);                
                 _ ->
                     {error, invalid_data_type}
             end;

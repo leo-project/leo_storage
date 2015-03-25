@@ -420,7 +420,7 @@ replicate(ClusterId, Object) ->
                   Object_1 = Object#?OBJECT{cluster_id = ClusterId,
                                             num_of_replicas = NumOfReplicas},
                   case leo_storage_handler_object:replicate(Object_1) of
-                      ok ->
+                      {ok, _ETag} ->
                           {ok, leo_object_storage_transformer:object_to_metadata(Object)};
                       {error, Cause} ->
                           {error, Cause}
