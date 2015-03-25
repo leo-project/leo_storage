@@ -36,10 +36,12 @@
 
 -export([start/0,
          add_container/1, remove_container/1,
-         append/1, append/3,
+         append/1, append/2, append/3,
+         create_directories/1,
          store/2]).
 -export([handle_send/3,
          handle_fail/2]).
+-export([get_directories/1]).
 
 
 %%--------------------------------------------------------------------
@@ -85,33 +87,43 @@ remove_container(DestNode) ->
 
 
 %% @doc Append a object into the ordning&reda
-%%
 -spec(append(Metadata) ->
-             ok | {error, any()} when Metadata::#?METADATA{}).
+             ok when Metadata::#?METADATA{}).
 append(#?METADATA{key = Key} = Metadata) ->
-    %% Retrieve a directory
-    Dir = get_dir(Key),
+    append(#?METADATA{key = Key} = Metadata, false).
+
+-spec(append(Metadata, IsDir) ->
+             ok when Metadata::#?METADATA{},
+                     IsDir::boolean()).
+append(#?METADATA{key = Key} = Metadata, IsDir) ->
+    %% Retrieve a directory from the key
+    Dir = case IsDir of
+              true ->
+                  Key;
+              false ->
+                  get_dirirecory_from_key(Key)
+          end,
 
     %% Retrieve destination nodes
     case leo_redundant_manager_api:get_redundancies_by_key(Dir) of
         {ok, #redundancies{nodes = RedundantNodes}} ->
+
             %% Store/Remove the metadata into the metadata-cluster
             case [Node || #redundant_node{available = true,
                                           node = Node} <- RedundantNodes] of
                 [] ->
-                    ok = enqueue(Metadata),
-                    {error, nodedown};
+                    enqueue(Metadata);
                 ActiveNodes ->
                     lists:foreach(fun(N) ->
                                           append(N, Dir, Metadata)
                                   end, ActiveNodes),
                     ok
             end;
-        {error, Cause} ->
-            ok = enqueue(Metadata),
-            {error, Cause}
+        {error,_Cause} ->
+            enqueue(Metadata)
     end.
 
+%% @private
 -spec(append(DestNodes, Dir, Metadata) ->
              ok | {error, any()} when DestNodes::[atom()],
                                       Dir::binary(),
@@ -128,7 +140,7 @@ append(DestNode, Dir, #?METADATA{addr_id = AddrId,
                       MetaSize:?DEF_BIN_META_SIZE,
                       MetaBin/binary,
                       ?DEF_BIN_PADDING/binary >>,
-            leo_ordning_reda_api:stack({metadata, DestNode}, {AddrId, Key}, Data);
+            leo_ordning_reda_api:stack({metadata, DestNode}, {AddrId, Dir, Key}, Data);
         false ->
             case add_container(DestNode) of
                 ok ->
@@ -141,6 +153,20 @@ append(DestNode, Dir, #?METADATA{addr_id = AddrId,
                     Error
             end
     end.
+
+
+%% @doc Create directories
+-spec(create_directories(Dir) ->
+             ok when Dir::[binary()]).
+create_directories([]) ->
+    ok;
+create_directories([Dir|Rest]) ->
+    append(#?METADATA{key = Dir,
+                      ksize = byte_size(Dir),
+                      clock = leo_date:clock(),
+                      timestamp = leo_date:now()
+                     }, true),
+    create_directories(Rest).
 
 
 %% @doc Store received objects into the directory's db
@@ -244,7 +270,16 @@ slice(Bin) ->
 %%--------------------------------------------------------------------
 %% @doc Handle send object to a remote-node.
 %%
-handle_send({_,DestNode},_StackedInfo, CompressedObjs) ->
+handle_send({_,DestNode}, StackedInfo, CompressedObjs) ->
+    %% Retrieve and stack directories of part of a key
+    case get_directories_from_stackinf(StackedInfo, sets:new()) of
+        [] ->
+            void;
+        Dirs ->
+            ok = create_directories(Dirs)
+    end,
+
+    %% Store and replicate directories into the cluster
     Ref = make_ref(),
     RPCKey = rpc:async_call(DestNode, ?MODULE, store, [Ref, CompressedObjs]),
     case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
@@ -276,15 +311,78 @@ handle_fail(_Unit, [{AddrId, Key}|Rest]) ->
 %%--------------------------------------------------------------------
 %% @doc Retrieve a directory from the key
 %% @private
-get_dir(Key) ->
+-spec(get_dirirecory_from_key(Key) ->
+             binary() when Key::binary()).
+get_dirirecory_from_key(Key) ->
     BinSlash = <<"/">>,
     case binary:matches(Key, [BinSlash],[]) of
         [] ->
-            Key;
+            <<>>;
         RetL ->
             {Len,_} = lists:last(RetL),
-            binary:part(Key, 0, Len)
+            Bin = binary:part(Key, 0, Len),
+            << Bin/binary, BinSlash/binary >>
     end.
+
+
+%% @doc Retrieve a directories from the metadata
+%% @private
+-spec(get_directories(Metadata) ->
+             [binary()] when Metadata::#?METADATA{}).
+get_directories(#?METADATA{key = Key} = Metadata) ->
+    BinSlash = <<"/">>,
+    case leo_misc:binary_tokens(Key, BinSlash) of
+        [] ->
+            [];
+        Tokens ->
+            case binary:matches(Key, [BinSlash],[]) of
+                [] ->
+                    [Metadata];
+                RetL ->
+                    Pos = byte_size(Key) - 1,
+                    case lists:last(RetL) of
+                        {Len,_} when Pos == Len ->
+                            get_directories_1(Tokens, Metadata, true, [], <<>>);
+                        _ ->
+                            get_directories_1(lists:sublist(Tokens, length(Tokens)-1),
+                                              Metadata, false, [], <<>>)
+                    end
+            end
+    end.
+
+%% @private
+get_directories_1([], Metadata, true, Acc,_Sofar) ->
+    get_directories_2(Acc, Metadata, []);
+
+get_directories_1([], Metadata, false, Acc, Sofar) ->
+    get_directories_2([Sofar|Acc], Metadata, []);
+
+get_directories_1([H|T], Metadata, IsDir, Acc, Sofar) ->
+    Bin = << Sofar/binary, H/binary, "/" >>,
+    get_directories_1(T, Metadata, IsDir, [Bin|Acc], Bin).
+
+%% @private
+get_directories_2([], Metadata, Acc) ->
+    Len = length(Acc),
+    lists:append([ lists:sublist(Acc, Len-1), [Metadata] ]);
+get_directories_2([H|T], #?METADATA{clock = Clock,
+                                    timestamp = Timestamp} = Metadata, Acc) ->
+    get_directories_2(T, Metadata, [#?METADATA{key = H,
+                                               ksize = byte_size(H),
+                                               clock = Clock,
+                                               timestamp = Timestamp}|Acc]).
+
+
+%% @doc
+-spec(get_directories_from_stackinf(StackedInfo, Acc) ->
+             [binary()] when StackedInfo::[{integer(), binary(), binary()}],
+                             Acc::any()).
+get_directories_from_stackinf([], Acc) ->
+    sets:to_list(Acc);
+get_directories_from_stackinf([{_AddrId, Dir, Dir}|Rest], Acc) ->
+    get_directories_from_stackinf(Rest, Acc);
+get_directories_from_stackinf([{_AddrId, Dir,_Key}|Rest], Acc) ->
+    get_directories_from_stackinf(Rest, sets:add_element(Dir, Acc)).
 
 
 %% @doc enqueue a message of a miss-replication into the queue
