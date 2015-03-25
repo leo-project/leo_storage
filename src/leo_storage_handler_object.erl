@@ -585,7 +585,7 @@ replicate(Object) ->
                      end;
                  Method_0 ->
                      Method_0
-            end,
+             end,
     NumOfReplicas = Object#?OBJECT.num_of_replicas,
     AddrId = Metadata#?METADATA.addr_id,
 
