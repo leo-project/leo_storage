@@ -80,7 +80,7 @@ defer_stack(#?OBJECT{addr_id = AddrId,
                               ok -> void;
                               {error, Cause}->
                                   ?warn("defer_stack/1", "key:~s, cause:~p",
-                                      [binary_to_list(Object#?OBJECT.key), Cause]),
+                                        [binary_to_list(Object#?OBJECT.key), Cause]),
                                   QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
                                   case leo_storage_mq:publish(
                                          QId, AddrId, Key) of
