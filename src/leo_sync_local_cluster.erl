@@ -189,36 +189,44 @@ slice_and_replicate(<<>>, Errors) ->
     {error, Errors};
 slice_and_replicate(Objects, Errors) ->
     %% Retrieve metadata, object and pending objects
-    {ok, Metadata, Object, Rest_5} = slice(Objects),
+    case slice(Objects) of
+        {ok, Metadata, Object, Rest_5} ->
+            slice_and_replicate_1(Metadata, Object, Rest_5, Errors);
+        _ ->
+            {error, Errors}
+    end.
 
-    %% store an object to object-storage
-    case leo_storage_handler_object:head(Metadata#?METADATA.addr_id,
-                                         Metadata#?METADATA.key, false) of
-        {ok, #?METADATA{clock = Clock}} when Clock == Metadata#?METADATA.clock ->
-            slice_and_replicate(Rest_5, Errors);
-        {ok, #?METADATA{addr_id = AddrId,
-                        key = Key,
-                        clock = Clock}} when Clock > Metadata#?METADATA.clock ->
+
+%% @doc Store an object to object-storage
+%% @private
+slice_and_replicate_1(#?METADATA{addr_id = AddrId,
+                                 key = Key,
+                                 clock = Clock} = Metadata, Object, StackedObject, Errors) ->
+    case leo_storage_handler_object:head(AddrId, Key, false) of
+        {ok, #?METADATA{clock = Clock_1}} when Clock == Clock_1 ->
+            slice_and_replicate(StackedObject, Errors);
+        {ok, #?METADATA{clock = Clock_1}} when Clock < Clock_1 ->
             ok = leo_storage_mq:publish(?QUEUE_TYPE_PER_OBJECT,
                                         AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
-            slice_and_replicate(Rest_5, Errors);
+            slice_and_replicate(StackedObject, Errors);
         _ ->
             case leo_misc:get_env(leo_redundant_manager, ?PROP_RING_HASH) of
                 {ok, RingHashCur} ->
-                    case leo_object_storage_api:store(Metadata#?METADATA{ring_hash = RingHashCur},
-                                                      Object) of
+                    case leo_object_storage_api:store(
+                           Metadata#?METADATA{ring_hash = RingHashCur},
+                           Object) of
                         ok ->
-                            slice_and_replicate(Rest_5, Errors);
+                            slice_and_replicate(StackedObject, Errors);
                         {error, Cause} ->
-                            ?warn("slice_and_replicate/2","key:~s, cause:~p",
+                            ?warn("slice_and_replicate_1/4","key:~s, cause:~p",
                                   [binary_to_list(Metadata#?METADATA.key), Cause]),
-                            slice_and_replicate(Rest_5, [Metadata|Errors])
+                            slice_and_replicate(StackedObject, [Metadata|Errors])
                     end;
                 _ ->
-                    ?warn("slice_and_replicate/2","key:~s, cause:~p",
+                    ?warn("slice_and_replicate_1/4","key:~s, cause:~p",
                           [binary_to_list(Metadata#?METADATA.key),
                            "Current ring-hash is not found"]),
-                    slice_and_replicate(Rest_5, [Metadata|Errors])
+                    slice_and_replicate(StackedObject, [Metadata|Errors])
             end
     end.
 
