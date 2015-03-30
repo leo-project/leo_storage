@@ -977,7 +977,7 @@
          list_to_atom(lists:append([NodeName, ":", integer_to_list(PortNum)]))
  end}.
 
-%% @doc
+%% @doc number of acceptors of rpc-server
 {mapping,
  "rpc.server.acceptors",
  "leo_rpc.num_of_acceptors",
@@ -986,7 +986,7 @@
   {default, 128}
  ]}.
 
-%% @doc
+%% @doc listen port number of rpc-server
 {mapping,
  "rpc.server.listen_port",
  "leo_rpc.listen_port",
@@ -995,7 +995,7 @@
   {default, 13077}
  ]}.
 
-%% @doc
+%% @doc listen timeout of rpc-server
 {mapping,
  "rpc.server.listen_timeout",
  "leo_rpc.listen_timeout",
@@ -1004,7 +1004,7 @@
   {default, 30000}
  ]}.
 
-%% @doc
+%% @doc connection pool size of rpc-client
 {mapping,
  "rpc.client.connection_pool_size",
  "leo_rpc.connection_pool_size",
@@ -1013,7 +1013,7 @@
   {default, 8}
  ]}.
 
-%% @doc
+%% @doc connection buffer size of rpc-client
 {mapping,
  "rpc.client.connection_buffer_size",
  "leo_rpc.connection_buffer_size",
@@ -1021,6 +1021,27 @@
   {datatype, integer},
   {default, 8}
  ]}.
+
+%% @doc max number of requests for reconnection to a remote-node
+{mapping,
+ "rpc.client.max_requests_for_reconnection",
+ "leo_rpc.max_requests_for_reconnection",
+ [
+  {datatype, integer},
+  {default, 1000}
+ ]}.
+
+{translation, "leo_rpc.max_requests_for_reconnection",
+ fun(Conf) ->
+         MaxReqs = cuttlefish_util:conf_get_value(
+                     "rpc.client.max_requests_for_reconnection", Conf),
+         case MaxReqs of
+             0 ->
+                 'infinity';
+             _ ->
+                 MaxReqs
+         end
+ end}.
 
 
 %% --------------------------------------------------------------------
