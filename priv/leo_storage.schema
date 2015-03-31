@@ -1061,20 +1061,8 @@
  "leo_rpc.max_requests_for_reconnection",
  [
   {datatype, integer},
-  {default, 1000}
+  {default, 64}
  ]}.
-
-{translation, "leo_rpc.max_requests_for_reconnection",
- fun(Conf) ->
-         MaxReqs = cuttlefish_util:conf_get_value(
-                     "rpc.client.max_requests_for_reconnection", Conf),
-         case MaxReqs of
-             0 ->
-                 'infinity';
-             _ ->
-                 MaxReqs
-         end
- end}.
 
 
 %% --------------------------------------------------------------------
