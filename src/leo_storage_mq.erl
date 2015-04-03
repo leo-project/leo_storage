@@ -50,6 +50,7 @@
 -define(MSG_PATH_SYNC_OBJ_WITH_DC,  "6").
 -define(MSG_PATH_COMP_META_WITH_DC, "7").
 -define(MSG_PATH_DEL_DIR,           "8").
+-define(MSG_PATH_ASYNC_DIR_META,    "9").
 
 
 %%--------------------------------------------------------------------
@@ -95,7 +96,8 @@ start(RefSup, RootPath) ->
              {?QUEUE_ID_RECOVERY_NODE,     ?MSG_PATH_RECOVERY_NODE},
              {?QUEUE_ID_SYNC_OBJ_WITH_DC,  ?MSG_PATH_SYNC_OBJ_WITH_DC},
              {?QUEUE_ID_COMP_META_WITH_DC, ?MSG_PATH_COMP_META_WITH_DC},
-             {?QUEUE_ID_DEL_DIR,           ?MSG_PATH_DEL_DIR}
+             {?QUEUE_ID_DEL_DIR,           ?MSG_PATH_DEL_DIR},
+             {?QUEUE_ID_ASYNC_DIR_META,    ?MSG_PATH_ASYNC_DIR_META}
             ], RefMQSup, RootPath_1).
 
 %% @private
@@ -179,6 +181,15 @@ publish(?QUEUE_TYPE_DEL_DIR = Id, Node, Keys) ->
                            timestamp = leo_date:now()}),
     leo_mq_api:publish(queue_id(Id), KeyBin, MsgBin);
 
+publish(?QUEUE_TYPE_ASYNC_DIR_META = Id, AddrId, Key) ->
+    Clock = leo_date:clock(),
+    KeyBin = term_to_binary({AddrId, Key, Clock}),
+    MsgBin = term_to_binary(
+               #dir_metadata{id   = Clock,
+                             addr_id = AddrId,
+                             key = Key,
+                             timestamp = leo_date:now()}),
+    leo_mq_api:publish(queue_id(Id), KeyBin, MsgBin);
 publish(_,_,_) ->
     {error, badarg}.
 
@@ -318,12 +329,12 @@ handle_call({consume, ?QUEUE_ID_ASYNC_DELETION, MessageBin}) ->
         #async_deletion_message{addr_id  = AddrId,
                                 key      = Key} ->
             case catch leo_storage_handler_object:delete(
-                   #?OBJECT{addr_id   = AddrId,
-                            key       = Key,
-                            clock     = leo_date:clock(),
-                            timestamp = leo_date:now(),
-                            del       = ?DEL_TRUE
-                           }, 0, false) of
+                         #?OBJECT{addr_id   = AddrId,
+                                  key       = Key,
+                                  clock     = leo_date:clock(),
+                                  timestamp = leo_date:now(),
+                                  del       = ?DEL_TRUE
+                                 }, 0, false) of
                 ok ->
                     ok;
                 {_,_Cause} ->
@@ -389,6 +400,22 @@ handle_call({consume, ?QUEUE_ID_DEL_DIR, MessageBin}) ->
                     node = Node} ->
             Ref = make_ref(),
             leo_storage_handler_object:delete_objects_under_dir([Node], Ref, Keys)
+    end;
+
+handle_call({consume, ?QUEUE_ID_ASYNC_DIR_META, MessageBin}) ->
+    case catch binary_to_term(MessageBin) of
+        {'EXIT', Cause} ->
+            ?error("handle_call/1 - QUEUE_ID_ASYNC_DIR_META",
+                   "cause:~p", [Cause]),
+            {error, Cause};
+        #dir_metadata{addr_id = AddrId,
+                      key = Key} ->
+            case leo_directory_sync:recover(AddrId, Key) of
+                ok ->
+                    ok;
+                {error,_Cause} ->
+                    publish(?QUEUE_TYPE_ASYNC_DIR_META, AddrId, Key)
+            end
     end.
 
 handle_call(_,_,_) ->
@@ -455,15 +482,20 @@ recover_node_callback_1(AddrId, Key, Node, RedundantNodes) ->
 sync_vnodes(_, _, []) ->
     ok;
 sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
-    Callback = sync_vnodes_callback(Node, FromAddrId, ToAddrId),
-    catch leo_object_storage_api:fetch_by_addr_id(FromAddrId, Callback),
-    catch notify_message_to_manager(?env_manager_nodes(leo_storage), ToAddrId, erlang:node()),
+    %% For object
+    Callback_1 = sync_vnodes_callback(object, Node, FromAddrId, ToAddrId),
+    _ = leo_object_storage_api:fetch_by_addr_id(FromAddrId, Callback_1),
+
+    %% For directory
+    Callback_2 = sync_vnodes_callback(directory, Node, FromAddrId, ToAddrId),
+    _ = leo_backend_db_api:fetch(?DIR_DB_ID,
+                                 term_to_binary({FromAddrId,<<>>,<<>>}), Callback_2),
     sync_vnodes(Node, RingHash, T).
 
 %% @private
--spec(sync_vnodes_callback(atom(), pos_integer(), pos_integer()) ->
+-spec(sync_vnodes_callback(?SYNC_TARGET_OBJ|?SYNC_TARGET_DIR, atom(), pos_integer(), pos_integer()) ->
              any()).
-sync_vnodes_callback(Node, FromAddrId, ToAddrId)->
+sync_vnodes_callback(SyncTarget, Node, FromAddrId, ToAddrId)->
     fun(K, V, Acc) ->
             %% Note: An object of copy is NOT equal current ring-hash.
             %%       Then a message in the rebalance-queue.
@@ -474,22 +506,21 @@ sync_vnodes_callback(Node, FromAddrId, ToAddrId)->
                 true ->
                     case catch leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
                         {'EXIT',_Cause} ->
-                            Acc;
+                            void;
                         {ok, #redundancies{nodes = Redundancies}} ->
                             Nodes = [N || #redundant_node{node = N} <- Redundancies],
                             case lists:member(Node, Nodes) of
-                                true ->
-                                    VNodeId = ToAddrId,
-                                    ?MODULE:publish(?QUEUE_TYPE_REBALANCE, Node,
-                                                    VNodeId, AddrId, K),
-                                    Acc;
+                                true when SyncTarget == ?SYNC_TARGET_OBJ ->
+                                    ?MODULE:publish(?QUEUE_TYPE_REBALANCE, Node, ToAddrId, AddrId, K);
+                                true when SyncTarget == ?SYNC_TARGET_DIR ->
+                                    ?MODULE:publish(?QUEUE_TYPE_ASYNC_DIR_META, Node, ToAddrId, AddrId, K);
                                 false ->
-                                    Acc
-                            end,
-                            Acc;
+                                    void
+                            end;
                         _ ->
-                            Acc
-                    end;
+                            void
+                    end,
+                    Acc;
                 false ->
                     Acc
             end
@@ -518,33 +549,6 @@ find_node_from_redundancies([#redundant_node{node = Node}|_], Node) ->
     true;
 find_node_from_redundancies([_|Rest], Node) ->
     find_node_from_redundancies(Rest, Node).
-
-
-%% @doc Notify a message to manager node(s)
-%%
--spec(notify_message_to_manager(list(), integer(), atom()) ->
-             ok | {error, any()}).
-notify_message_to_manager([],_VNodeId,_Node) ->
-    {error, 'fail_notification'};
-notify_message_to_manager([Manager|T], VNodeId, Node) ->
-    Res = case rpc:call(list_to_atom(Manager), leo_manager_api, notify,
-                        [synchronized, VNodeId, Node], ?DEF_REQ_TIMEOUT) of
-              ok ->
-                  ok;
-              {_, Cause} ->
-                  ?warn("notify_message_to_manager/3","vnode-id:~w, node:~w, cause:~p",
-                        [VNodeId, Node, Cause]),
-                  {error, Cause};
-              timeout = Cause ->
-                  {error, Cause}
-          end,
-
-    case Res of
-        ok ->
-            ok;
-        _Error ->
-            notify_message_to_manager(T, VNodeId, Node)
-    end.
 
 
 %% @doc correct_redundancies/1 - first.
@@ -845,5 +849,5 @@ queue_id(?QUEUE_TYPE_COMP_META_WITH_DC) ->
     ?QUEUE_ID_COMP_META_WITH_DC;
 queue_id(?QUEUE_TYPE_DEL_DIR) ->
     ?QUEUE_ID_DEL_DIR;
-queue_id(?QUEUE_TYPE_ASYNC_METADATA) ->
-    ?QUEUE_ID_ASYNC_METADATA.
+queue_id(?QUEUE_TYPE_ASYNC_DIR_META) ->
+    ?QUEUE_ID_ASYNC_DIR_META.

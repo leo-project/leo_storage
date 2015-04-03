@@ -135,9 +135,9 @@ stack_(_) ->
     ok = leo_directory_sync:append(Metadata_7),
     timer:sleep(timer:seconds(3)),
 
-    {ok, Bin_5} = leo_backend_db_api:get(?DIR_DB_ID, term_to_binary({<<"a/b/c/d/">>, Key_5})),
-    {ok, Bin_6} = leo_backend_db_api:get(?DIR_DB_ID, term_to_binary({<<"a/b/c/">>,   Key_6})),
-    {ok, Bin_7} = leo_backend_db_api:get(?DIR_DB_ID, term_to_binary({<<"a/b/">>,     Key_7})),
+    {ok, Bin_5} = leo_backend_db_api:get(?DIR_DB_ID, term_to_binary({0, <<"a/b/c/d/">>, Key_5})),
+    {ok, Bin_6} = leo_backend_db_api:get(?DIR_DB_ID, term_to_binary({0, <<"a/b/c/">>,   Key_6})),
+    {ok, Bin_7} = leo_backend_db_api:get(?DIR_DB_ID, term_to_binary({0, <<"a/b/">>,     Key_7})),
     ?assertEqual(Metadata_5, binary_to_term(Bin_5)),
     ?assertEqual(Metadata_6, binary_to_term(Bin_6)),
     ?assertEqual(Metadata_7, binary_to_term(Bin_7)),

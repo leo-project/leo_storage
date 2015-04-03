@@ -38,7 +38,9 @@
          add_container/1, remove_container/1,
          append/1, append/2, append/3,
          create_directories/1,
-         store/2]).
+         store/2,
+         recover/2
+        ]).
 -export([handle_send/3,
          handle_fail/2]).
 -export([get_directories/1]).
@@ -161,11 +163,18 @@ append(DestNode, Dir, #?METADATA{addr_id = AddrId,
 create_directories([]) ->
     ok;
 create_directories([Dir|Rest]) ->
-    append(#?METADATA{key = Dir,
-                      ksize = byte_size(Dir),
-                      clock = leo_date:clock(),
-                      timestamp = leo_date:now()
-                     }, true),
+    case leo_redundant_manager_api:get_redundancies_by_key(Dir) of
+        {ok, #redundancies{vnode_id_to = AddrId}} ->
+            append(#?METADATA{addr_id = AddrId,
+                              key = Dir,
+                              ksize = byte_size(Dir),
+                              clock = leo_date:clock(),
+                              timestamp = leo_date:now()
+                             }, true);
+        _ ->
+            %% @TODO
+            void
+    end,
     create_directories(Rest).
 
 
@@ -183,10 +192,11 @@ slice_and_store(<<>>) ->
     ok;
 slice_and_store(StackedBin) ->
     case slice(StackedBin) of
-        {ok, {DirBin, #?METADATA{key = Key,
+        {ok, {DirBin, #?METADATA{addr_id = AddrId,
+                                 key = Key,
                                  clock = Clock,
                                  del = Del} = Metadata, StackedBin_1}} ->
-            KeyBin = term_to_binary({DirBin, Key}),
+            KeyBin = term_to_binary({AddrId, DirBin, Key}),
             ValBin = term_to_binary(Metadata),
             CanPutVal =
                 case leo_backend_db_api:get(?DIR_DB_ID, KeyBin) of
@@ -263,6 +273,15 @@ slice(Bin) ->
                                       {line, ?LINE}, {body, Cause}]),
             {error, invalid_format}
     end.
+
+
+-spec(recover(AddrId, Key) ->
+             ok | {error, any()} when AddrId :: integer(),
+                                      Key :: binary()).
+recover(AddrId, Key) ->
+    %% @TODO:
+    ?debugVal({AddrId, Key}),
+    ok.
 
 
 %%--------------------------------------------------------------------

@@ -61,7 +61,7 @@
 -define(QUEUE_ID_SYNC_OBJ_WITH_DC,  'leo_sync_obj_with_dc_queue').
 -define(QUEUE_ID_COMP_META_WITH_DC, 'leo_comp_meta_with_dc_queue').
 -define(QUEUE_ID_DEL_DIR,           'leo_delete_dir_queue').
--define(QUEUE_ID_ASYNC_METADATA,    'leo_async_metadata_queue').
+-define(QUEUE_ID_ASYNC_DIR_META,    'leo_async_metadata_queue').
 
 -define(QUEUE_TYPE_PER_OBJECT,        'queue_type_per_object').
 -define(QUEUE_TYPE_SYNC_BY_VNODE_ID,  'queue_type_sync_by_vnode_id').
@@ -71,7 +71,7 @@
 -define(QUEUE_TYPE_SYNC_OBJ_WITH_DC,  'queue_type_sync_obj_with_dc').
 -define(QUEUE_TYPE_COMP_META_WITH_DC, 'queue_type_comp_meta_with_dc').
 -define(QUEUE_TYPE_DEL_DIR,           'queue_type_delete_dir').
--define(QUEUE_TYPE_ASYNC_METADATA,    'queue_type_async_metadata').
+-define(QUEUE_TYPE_ASYNC_DIR_META,    'queue_type_async_metadata').
 
 -define(ERR_TYPE_REPLICATE_DATA,      'error_msg_replicate_data').
 -define(ERR_TYPE_RECOVER_DATA,        'error_msg_recover_data').
@@ -81,6 +81,11 @@
 -define(ERR_TYPE_DELETE_INDEX,        'error_msg_delete_index').
 
 -define(TBL_REBALANCE_COUNTER,        'leo_rebalance_counter').
+
+
+-define(SYNC_TARGET_OBJ, 'object').
+-define(SYNC_TARGET_DIR, 'directory').
+
 
 %% @doc error messages.
 %%
@@ -179,6 +184,13 @@
           id = 0        :: integer(),
           node          :: atom(),
           keys = []     :: [binary()|undefined],
+          timestamp = 0 :: integer()
+         }).
+
+-record(dir_metadata, {
+          id = 0        :: integer(),
+          addr_id = 0   :: integer(),
+          key = <<>>    :: binary(),
           timestamp = 0 :: integer()
          }).
 
@@ -417,7 +429,7 @@
                       ?QUEUE_TYPE_SYNC_OBJ_WITH_DC |
                       ?QUEUE_TYPE_COMP_META_WITH_DC |
                       ?QUEUE_TYPE_DEL_DIR |
-                      ?QUEUE_TYPE_ASYNC_METADATA
+                      ?QUEUE_TYPE_ASYNC_DIR_META
                       ).
 
 -type(queue_id()   :: ?QUEUE_ID_PER_OBJECT |
@@ -428,17 +440,20 @@
                       ?QUEUE_ID_SYNC_OBJ_WITH_DC |
                       ?QUEUE_ID_COMP_META_WITH_DC |
                       ?QUEUE_ID_DEL_DIR |
-                      ?QUEUE_ID_ASYNC_METADATA
+                      ?QUEUE_ID_ASYNC_DIR_META
                       ).
 
--define(mq_id_and_alias, [{leo_delete_dir_queue,        "delete directories"},
-                          {leo_comp_meta_with_dc_queue, "compare metadata w/remote-node"},
-                          {leo_sync_obj_with_dc_queue,  "sync objs w/remote-node"},
-                          {leo_recovery_node_queue,     "recovery objs of node"},
-                          {leo_async_deletion_queue,    "async deletion of objs"},
-                          {leo_rebalance_queue,         "rebalance objs"},
-                          {leo_sync_by_vnode_id_queue,  "sync objs by vnode-id"},
-                          {leo_per_object_queue,        "recover inconsistent objs"}]).
+-define(mq_id_and_alias, [
+                          {?QUEUE_ID_PER_OBJECT,        "recover inconsistent objs"},
+                          {?QUEUE_ID_SYNC_BY_VNODE_ID,  "sync objs by vnode-id"},
+                          {?QUEUE_ID_REBALANCE,         "rebalance objs"},
+                          {?QUEUE_ID_ASYNC_DELETION,    "async deletion of objs"},
+                          {?QUEUE_ID_RECOVERY_NODE,     "recovery objs of node"},
+                          {?QUEUE_ID_SYNC_OBJ_WITH_DC,  "sync objs w/remote-node"},
+                          {?QUEUE_ID_COMP_META_WITH_DC, "compare metadata w/remote-node"},
+                          {?QUEUE_ID_DEL_DIR,           "delete directories"},
+                          {?QUEUE_ID_ASYNC_DIR_META,    "async metadata of directories recovery"}
+                         ]).
 
 
 %% For the watchdog

@@ -66,8 +66,7 @@
 
 mq_test_() ->
     {foreach, fun setup/0, fun teardown/1,
-     [{with, [T]} || T <- [fun start_/1,
-                           fun publish_/1,
+     [{with, [T]} || T <- [fun publish_/1,
                            fun subscribe_0_/1,
                            fun subscribe_1_/1,
                            fun subscribe_2_/1,
@@ -87,20 +86,9 @@ setup() ->
     true = rpc:call(Test1Node, code, add_path, ["../deps/meck/ebin"]),
 
     %% gen mock.
-    %% meck:new(leo_logger_api, [non_strict]),
-    %% meck:expect(leo_logger_api, new,          fun(_,_,_) -> ok end),
-    %% meck:expect(leo_logger_api, new,          fun(_,_,_,_,_) -> ok end),
-    %% meck:expect(leo_logger_api, new,          fun(_,_,_,_,_,_) -> ok end),
-    %% meck:expect(leo_logger_api, add_appender, fun(_,_) -> ok end),
-    %% meck:expect(leo_logger_api, append,       fun(_,_) -> ok end),
-    %% meck:expect(leo_logger_api, append,       fun(_,_,_) -> ok end),
-
     meck:new(leo_mq_api, [non_strict]),
     meck:expect(leo_mq_api, new,     fun(_,_,_) -> ok end),
     meck:expect(leo_mq_api, publish, fun(_,_,_) -> ok end),
-
-    meck:new(leo_mq_logger, [non_strict]),
-    meck:expect(leo_mq_logger, append, fun(_MQ) -> ok end),
 
     meck:new(leo_redundant_manager_api, [non_strict]),
     meck:expect(leo_redundant_manager_api, get_redundancies_by_key,
@@ -134,6 +122,12 @@ setup() ->
                 fun(_) ->
                         {ok,{12345,56789}}
                 end),
+
+    meck:new(leo_backend_db_api, [non_strict]),
+    meck:expect(leo_backend_db_api, fetch,
+                fun(_,_,_) ->
+                        {ok,[]}
+                end),
     {Test0Node, Test1Node}.
 
 teardown({_Test0Node, Test1Node}) ->
@@ -144,20 +138,6 @@ teardown({_Test0Node, Test1Node}) ->
     timer:sleep(100),
     ok.
 
-
-start_(_) ->
-    %% @TODO
-    %% RefSup = case whereis(leo_storage_sup) of
-    %%              undefined ->
-    %%                  {ok, Pid} = leo_storage_sup:start_link(),
-    %%                  Pid;
-    %%              Pid ->
-    %%                  Pid
-    %%          end,
-    %% ok = leo_storage_mq:start(RefSup, "queue"),
-    %% Res = meck:history(leo_mq_api),
-    %% ?assertEqual(4, length(Res)),
-    ok.
 
 %% sync vnode-id queue.
 publish_({_, Test1Node}) ->
@@ -178,6 +158,10 @@ publish_({_, Test1Node}) ->
            ?QUEUE_TYPE_PER_OBJECT, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_DELETE_INDEX),
     ok = leo_storage_mq:publish(
            ?QUEUE_TYPE_PER_OBJECT, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_RECOVER_DATA),
+
+    ok = leo_storage_mq:publish(
+           ?QUEUE_TYPE_ASYNC_DIR_META, ?TEST_VNODE_ID, ?TEST_KEY_1),
+
 
     History0 = meck:history(leo_mq_api),
     ?assertEqual(true, length(History0) > 0),
