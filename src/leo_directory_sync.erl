@@ -108,16 +108,18 @@ append(#?METADATA{key = Key} = Metadata, IsDir) ->
 
     %% Retrieve destination nodes
     case leo_redundant_manager_api:get_redundancies_by_key(Dir) of
-        {ok, #redundancies{nodes = RedundantNodes}} ->
+        {ok, #redundancies{nodes = RedundantNodes,
+                           vnode_id_to = AddrId}} ->
+            Metadata_1 = Metadata#?METADATA{addr_id = AddrId},
 
             %% Store/Remove the metadata into the metadata-cluster
             case [Node || #redundant_node{available = true,
                                           node = Node} <- RedundantNodes] of
                 [] ->
-                    enqueue(Metadata);
+                    enqueue(Metadata_1);
                 ActiveNodes ->
                     lists:foreach(fun(N) ->
-                                          append(N, Dir, Metadata)
+                                          append(N, Dir, Metadata_1)
                                   end, ActiveNodes),
                     ok
             end;

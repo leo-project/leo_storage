@@ -483,22 +483,31 @@ sync_vnodes(_, _, []) ->
     ok;
 sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
     %% For object
-    Callback_1 = sync_vnodes_callback(object, Node, FromAddrId, ToAddrId),
+    Callback_1 = sync_vnodes_callback(
+                   ?SYNC_TARGET_OBJ, Node, FromAddrId, ToAddrId),
     _ = leo_object_storage_api:fetch_by_addr_id(FromAddrId, Callback_1),
 
     %% For directory
-    Callback_2 = sync_vnodes_callback(directory, Node, FromAddrId, ToAddrId),
-    _ = leo_backend_db_api:fetch(?DIR_DB_ID, <<131,104>>, Callback_2),
+    DBInstance = ?DIR_DB_ID,
+    case leo_backend_db_api:has_instance(DBInstance) of
+        true ->
+            Callback_2 = sync_vnodes_callback(
+                           ?SYNC_TARGET_DIR, Node, FromAddrId, ToAddrId),
+            _ = leo_backend_db_api:fetch(DBInstance, <<131,104>>, Callback_2);
+        false ->
+            void
+    end,
     sync_vnodes(Node, RingHash, T).
 
 %% @private
 -spec(sync_vnodes_callback(?SYNC_TARGET_OBJ|?SYNC_TARGET_DIR, atom(), pos_integer(), pos_integer()) ->
              any()).
 sync_vnodes_callback(SyncTarget, Node, FromAddrId, ToAddrId)->
-    fun(K, V, Acc) ->
+    fun(_K, V, Acc) ->
             %% Note: An object of copy is NOT equal current ring-hash.
             %%       Then a message in the rebalance-queue.
-            #?METADATA{addr_id = AddrId} = binary_to_term(V),
+            #?METADATA{addr_id = AddrId,
+                       key = Key} = binary_to_term(V),
 
             case (AddrId >= FromAddrId andalso
                   AddrId =< ToAddrId) of
@@ -510,9 +519,9 @@ sync_vnodes_callback(SyncTarget, Node, FromAddrId, ToAddrId)->
                             Nodes = [N || #redundant_node{node = N} <- Redundancies],
                             case lists:member(Node, Nodes) of
                                 true when SyncTarget == ?SYNC_TARGET_OBJ ->
-                                    ?MODULE:publish(?QUEUE_TYPE_REBALANCE, Node, ToAddrId, AddrId, K);
+                                    ?MODULE:publish(?QUEUE_TYPE_REBALANCE, Node, ToAddrId, AddrId, Key);
                                 true when SyncTarget == ?SYNC_TARGET_DIR ->
-                                    ?MODULE:publish(?QUEUE_TYPE_ASYNC_DIR_META, AddrId, K);
+                                    ?MODULE:publish(?QUEUE_TYPE_ASYNC_DIR_META, AddrId, Key);
                                 false ->
                                     void
                             end;
