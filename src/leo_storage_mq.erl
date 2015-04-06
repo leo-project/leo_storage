@@ -488,8 +488,7 @@ sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
 
     %% For directory
     Callback_2 = sync_vnodes_callback(directory, Node, FromAddrId, ToAddrId),
-    _ = leo_backend_db_api:fetch(?DIR_DB_ID,
-                                 term_to_binary({FromAddrId,<<>>,<<>>}), Callback_2),
+    _ = leo_backend_db_api:fetch(?DIR_DB_ID, <<131,104>>, Callback_2),
     sync_vnodes(Node, RingHash, T).
 
 %% @private
@@ -513,7 +512,7 @@ sync_vnodes_callback(SyncTarget, Node, FromAddrId, ToAddrId)->
                                 true when SyncTarget == ?SYNC_TARGET_OBJ ->
                                     ?MODULE:publish(?QUEUE_TYPE_REBALANCE, Node, ToAddrId, AddrId, K);
                                 true when SyncTarget == ?SYNC_TARGET_DIR ->
-                                    ?MODULE:publish(?QUEUE_TYPE_ASYNC_DIR_META, Node, ToAddrId, AddrId, K);
+                                    ?MODULE:publish(?QUEUE_TYPE_ASYNC_DIR_META, AddrId, K);
                                 false ->
                                     void
                             end;
