@@ -39,7 +39,7 @@
          append/1, append/2, append/3,
          create_directories/1,
          store/2,
-         recover/2
+         recover/1, recover/2
         ]).
 -export([handle_send/3,
          handle_fail/2]).
@@ -165,17 +165,16 @@ append(DestNode, Dir, #?METADATA{addr_id = AddrId,
 create_directories([]) ->
     ok;
 create_directories([Dir|Rest]) ->
+    Metadata = #?METADATA{key = Dir,
+                          ksize = byte_size(Dir),
+                          clock = leo_date:clock(),
+                          timestamp = leo_date:now()},
+
     case leo_redundant_manager_api:get_redundancies_by_key(Dir) of
         {ok, #redundancies{vnode_id_to = AddrId}} ->
-            append(#?METADATA{addr_id = AddrId,
-                              key = Dir,
-                              ksize = byte_size(Dir),
-                              clock = leo_date:clock(),
-                              timestamp = leo_date:now()
-                             }, true);
+            append(Metadata#?METADATA{addr_id = AddrId}, true);
         _ ->
-            %% @TODO
-            void
+            enqueue(Metadata)
     end,
     create_directories(Rest).
 
@@ -206,18 +205,16 @@ slice_and_store(StackedBin) ->
                         case catch binary_to_term(ValBin_1) of
                             #?METADATA{clock = Clock_1} when Clock > Clock_1 ->
                                 true;
-                            #?METADATA{} ->
-                                false;
-                            not_found when Del == ?DEL_TRUE ->
-                                false;
-                            not_found when Del == ?DEL_FALSE ->
-                                true;
-                            {error,_Cause} ->
-                                ok = enqueue(Metadata),
+                            _ ->
                                 false
                         end;
-                    _ ->
-                        true
+                    not_found when Del == ?DEL_TRUE ->
+                        false;
+                    not_found when Del == ?DEL_FALSE ->
+                        true;
+                    {error,_Cause} ->
+                        ok = enqueue(Metadata),
+                        false
                 end,
 
             case CanPutVal of
@@ -277,13 +274,33 @@ slice(Bin) ->
     end.
 
 
+%% @doc Recover a metadata
+-spec(recover(Metadata) ->
+             ok | {error, any()} when Metadata::#?METADATA{}).
+recover(#?METADATA{key = <<>>}) ->
+    {error, invalid_data};
+recover(#?METADATA{key = Key} = Metadata) ->
+    IsDir = (binary:last(Key) == 16#2f),
+    append(Metadata, IsDir).
+
+
 -spec(recover(AddrId, Key) ->
              ok | {error, any()} when AddrId :: integer(),
                                       Key :: binary()).
 recover(AddrId, Key) ->
-    %% @TODO:
-    ?debugVal({AddrId, Key}),
-    ok.
+    %% Retrieve a metadata
+    KeyBin = term_to_binary({AddrId, Key}),
+    case leo_backend_db_api:get(?DIR_DB_ID, KeyBin) of
+        {ok, ValBin} ->
+            case catch binary_to_term(ValBin) of
+                #?METADATA{} = Metadata ->
+                    recover(Metadata);
+                _ ->
+                    {error, invalid_data}
+            end;
+        Other ->
+            Other
+    end.
 
 
 %%--------------------------------------------------------------------

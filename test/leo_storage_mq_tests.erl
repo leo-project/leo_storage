@@ -128,6 +128,10 @@ setup() ->
                 fun(_,_,_) ->
                         {ok,[]}
                 end),
+    meck:expect(leo_backend_db_api, has_instance,
+                fun(_) ->
+                        true
+                end),
     {Test0Node, Test1Node}.
 
 teardown({_Test0Node, Test1Node}) ->
@@ -160,8 +164,8 @@ publish_({_, Test1Node}) ->
            ?QUEUE_TYPE_PER_OBJECT, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_RECOVER_DATA),
 
     ok = leo_storage_mq:publish(
-           ?QUEUE_TYPE_ASYNC_DIR_META, ?TEST_VNODE_ID, ?TEST_KEY_1),
-
+           ?QUEUE_TYPE_ASYNC_DIR_META, #?METADATA{addr_id = ?TEST_VNODE_ID,
+                                                  key = ?TEST_KEY_1}),
 
     History0 = meck:history(leo_mq_api),
     ?assertEqual(true, length(History0) > 0),

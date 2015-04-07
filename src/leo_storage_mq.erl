@@ -133,6 +133,13 @@ publish(?QUEUE_TYPE_RECOVERY_NODE = Id, Node) ->
                                       node      = Node,
                                       timestamp = leo_date:now()}),
     leo_mq_api:publish(queue_id(Id), KeyBin, MsgBin);
+
+publish(?QUEUE_TYPE_ASYNC_DIR_META = Id, #?METADATA{addr_id = AddrId,
+                                                    key = Key} = Metadata) ->
+    Clock = leo_date:clock(),
+    KeyBin = term_to_binary({AddrId, Key, Clock}),
+    MsgBin = term_to_binary(Metadata),
+    leo_mq_api:publish(queue_id(Id), KeyBin, MsgBin);
 publish(_,_) ->
     {error, badarg}.
 
@@ -179,16 +186,6 @@ publish(?QUEUE_TYPE_DEL_DIR = Id, Node, Keys) ->
                            node = Node,
                            keys = Keys,
                            timestamp = leo_date:now()}),
-    leo_mq_api:publish(queue_id(Id), KeyBin, MsgBin);
-
-publish(?QUEUE_TYPE_ASYNC_DIR_META = Id, AddrId, Key) ->
-    Clock = leo_date:clock(),
-    KeyBin = term_to_binary({AddrId, Key, Clock}),
-    MsgBin = term_to_binary(
-               #dir_metadata{id   = Clock,
-                             addr_id = AddrId,
-                             key = Key,
-                             timestamp = leo_date:now()}),
     leo_mq_api:publish(queue_id(Id), KeyBin, MsgBin);
 publish(_,_,_) ->
     {error, badarg}.
@@ -408,14 +405,15 @@ handle_call({consume, ?QUEUE_ID_ASYNC_DIR_META, MessageBin}) ->
             ?error("handle_call/1 - QUEUE_ID_ASYNC_DIR_META",
                    "cause:~p", [Cause]),
             {error, Cause};
-        #dir_metadata{addr_id = AddrId,
-                      key = Key} ->
-            case leo_directory_sync:recover(AddrId, Key) of
+        #?METADATA{} = Metadata ->
+            case leo_directory_sync:recover(Metadata) of
                 ok ->
                     ok;
                 {error,_Cause} ->
-                    publish(?QUEUE_TYPE_ASYNC_DIR_META, AddrId, Key)
-            end
+                    publish(?QUEUE_TYPE_ASYNC_DIR_META, Metadata)
+            end;
+        _ ->
+            ok
     end.
 
 handle_call(_,_,_) ->
@@ -493,7 +491,7 @@ sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
         true ->
             Callback_2 = sync_vnodes_callback(
                            ?SYNC_TARGET_DIR, Node, FromAddrId, ToAddrId),
-            _ = leo_backend_db_api:fetch(DBInstance, <<131,104>>, Callback_2);
+            _ = leo_backend_db_api:fetch(DBInstance, <<>>, Callback_2);
         false ->
             void
     end,
@@ -506,30 +504,33 @@ sync_vnodes_callback(SyncTarget, Node, FromAddrId, ToAddrId)->
     fun(_K, V, Acc) ->
             %% Note: An object of copy is NOT equal current ring-hash.
             %%       Then a message in the rebalance-queue.
-            #?METADATA{addr_id = AddrId,
-                       key = Key} = binary_to_term(V),
-
-            case (AddrId >= FromAddrId andalso
-                  AddrId =< ToAddrId) of
-                true ->
-                    case catch leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
-                        {'EXIT',_Cause} ->
-                            void;
-                        {ok, #redundancies{nodes = Redundancies}} ->
-                            Nodes = [N || #redundant_node{node = N} <- Redundancies],
-                            case lists:member(Node, Nodes) of
-                                true when SyncTarget == ?SYNC_TARGET_OBJ ->
-                                    ?MODULE:publish(?QUEUE_TYPE_REBALANCE, Node, ToAddrId, AddrId, Key);
-                                true when SyncTarget == ?SYNC_TARGET_DIR ->
-                                    ?MODULE:publish(?QUEUE_TYPE_ASYNC_DIR_META, AddrId, Key);
-                                false ->
+            case catch binary_to_term(V) of
+                #?METADATA{addr_id = AddrId,
+                           key = Key} = Metadata ->
+                    case (AddrId >= FromAddrId andalso
+                          AddrId =< ToAddrId) of
+                        true ->
+                            case catch leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
+                                {'EXIT',_Cause} ->
+                                    void;
+                                {ok, #redundancies{nodes = Redundancies}} ->
+                                    Nodes = [N || #redundant_node{node = N} <- Redundancies],
+                                    case lists:member(Node, Nodes) of
+                                        true when SyncTarget == ?SYNC_TARGET_OBJ ->
+                                            ?MODULE:publish(?QUEUE_TYPE_REBALANCE, Node, ToAddrId, AddrId, Key);
+                                        true when SyncTarget == ?SYNC_TARGET_DIR ->
+                                            ?MODULE:publish(?QUEUE_TYPE_ASYNC_DIR_META, Metadata);
+                                        false ->
+                                            void
+                                    end;
+                                _ ->
                                     void
-                            end;
-                        _ ->
-                            void
-                    end,
-                    Acc;
-                false ->
+                            end,
+                            Acc;
+                        false ->
+                            Acc
+                    end;
+                _ ->
                     Acc
             end
     end.

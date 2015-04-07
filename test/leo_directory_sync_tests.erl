@@ -60,6 +60,7 @@ setup() ->
                      fun(_Dir) ->
                              ?debugVal(_Dir),
                              {ok, #redundancies{
+                                     vnode_id_to = 0,
                                      nodes = [#redundant_node{available = true,
                                                               node = Node}]}}
                      end),

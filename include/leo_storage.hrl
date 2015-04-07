@@ -187,14 +187,6 @@
           timestamp = 0 :: integer()
          }).
 
--record(dir_metadata, {
-          id = 0        :: integer(),
-          addr_id = 0   :: integer(),
-          key = <<>>    :: binary(),
-          timestamp = 0 :: integer()
-         }).
-
-
 
 %% @doc macros.
 %%
