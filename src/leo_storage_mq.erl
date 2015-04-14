@@ -643,6 +643,8 @@ correct_redundancies_3(InconsistentNodes, [Node|Rest], Metadata) ->
                   ok;
               {value, {error, Cause}} ->
                   {error, Cause};
+              {value, not_found = Cause} ->
+                  {error, Cause};
               {value, {badrpc = Cause, _}} ->
                   {error, Cause};
               timeout = Cause->

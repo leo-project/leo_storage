@@ -80,7 +80,7 @@ defer_stack(#?OBJECT{addr_id = AddrId,
                               ok -> void;
                               {error, Cause}->
                                   ?warn("defer_stack/1", "key:~s, cause:~p",
-                                      [binary_to_list(Object#?OBJECT.key), Cause]),
+                                        [binary_to_list(Object#?OBJECT.key), Cause]),
                                   QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
                                   case leo_storage_mq:publish(
                                          QId, AddrId, Key) of
@@ -219,56 +219,68 @@ get_cluster_members_2([#?CLUSTER_INFO{cluster_id = ClusterId}|Rest],
              ok when ListOfMetadata::[#?METADATA{}]).
 compare_metadata([]) ->
     ok;
-compare_metadata([#?METADATA{cluster_id = ClusterId,
-                             addr_id    = AddrId,
-                             key        = Key,
-                             clock      = Clock,
-                             del        = Del}|Rest]) ->
-    case catch leo_object_storage_api:head({AddrId, Key}) of
-        {ok, MetaBin} ->
-            #?METADATA{clock = Clock_1,
-                       del   = Del_1} = binary_to_term(MetaBin),
-            case (Clock == Clock_1 andalso
-                  Del   == Del_1) of
-                true ->
-                    void;
-                false ->
-                    QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
-                    case leo_storage_mq:publish(
-                           QId, ClusterId, AddrId, Key) of
-                        ok ->
-                            void;
-                        {error, Cause} ->
-                            ?warn("compare_metadata/1",
-                                  "qid:~p, cluster-id:~p, addr-id:~p, key:~p, cause:~p",
-                                  [QId, ClusterId, AddrId, Key, Cause])
-                    end
-            end;
-        not_found ->
-            QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
-            case leo_storage_mq:publish(QId, ClusterId, AddrId, Key, ?DEL_TRUE) of
-                ok ->
-                    void;
-                {error, Cause} ->
-                    ?warn("compare_metadata/1",
-                          "qid:~p, cluster-id:~p, addr-id:~p, key:~p, cause:~p",
-                          [QId, ClusterId, AddrId, Key, Cause])
-            end;
-        {_, Cause} ->
-            ?warn("comapare_metadata/1",
-                  "key:~s, cause:~p", [binary_to_list(Key), Cause]),
-            QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
-            case leo_storage_mq:publish(QId, ClusterId, AddrId, Key) of
-                ok ->
-                    void;
-                {error, Cause} ->
-                    ?warn("compare_metadata/1",
-                          "qid:~p, cluster-id;~p, addr-id:~p, key:~p, cause:~p",
-                          [QId, ClusterId, AddrId, Key, Cause])
-            end
-    end,
+compare_metadata([#?METADATA{addr_id = AddrId,
+                             key = Key} = Metadata|Rest]) ->
+    Ret = leo_object_storage_api:head({AddrId, Key}),
+    ok = compare_metadata_1(Ret, Metadata),
     compare_metadata(Rest).
 
+%% @private
+compare_metadata_1({ok, MetaBin}, #?METADATA{cluster_id = ClusterId,
+                                             addr_id = AddrId,
+                                             key = Key,
+                                             clock = Clock,
+                                             del = Del}) ->
+    #?METADATA{clock = Clock_1,
+               del = Del_1} = binary_to_term(MetaBin),
+    case (Clock == Clock_1 andalso
+          Del == Del_1) of
+        true ->
+            ok;
+        false ->
+            QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
+            case leo_storage_mq:publish(
+                   QId, ClusterId, AddrId, Key) of
+                ok ->
+                    ok;
+                {error, Cause} ->
+                    ?warn("compare_metadata_1/2",
+                          "qid:~p, cluster-id:~p, addr-id:~p, key:~p, cause:~p",
+                          [QId, ClusterId, AddrId, Key, Cause]),
+                    ok
+            end
+    end;
+compare_metadata_1(not_found, #?METADATA{del = ?DEL_TRUE}) ->
+    ok;
+compare_metadata_1(not_found, #?METADATA{cluster_id = ClusterId,
+                                         addr_id = AddrId,
+                                         key = Key,
+                                         del = ?DEL_FALSE}) ->
+    QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
+    case leo_storage_mq:publish(QId, ClusterId, AddrId, Key, ?DEL_TRUE) of
+        ok ->
+            ok;
+        {error, Cause} ->
+            ?warn("compare_metadata_1/2",
+                  "qid:~p, cluster-id:~p, addr-id:~p, key:~p, cause:~p",
+                  [QId, ClusterId, AddrId, Key, Cause]),
+            ok
+    end;
+compare_metadata_1({_,Cause}, #?METADATA{cluster_id = ClusterId,
+                                         addr_id = AddrId,
+                                         key = Key}) ->
+    ?warn("comapare_metadata_1/2",
+          "key:~s, cause:~p", [binary_to_list(Key), Cause]),
+    QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
+    case leo_storage_mq:publish(QId, ClusterId, AddrId, Key) of
+        ok ->
+            ok;
+        {error, Cause} ->
+            ?warn("compare_metadata/1",
+                  "qid:~p, cluster-id;~p, addr-id:~p, key:~p, cause:~p",
+                  [QId, ClusterId, AddrId, Key, Cause]),
+            ok
+    end.
 
 %%--------------------------------------------------------------------
 %% Callback
@@ -420,7 +432,7 @@ replicate(ClusterId, Object) ->
                   Object_1 = Object#?OBJECT{cluster_id = ClusterId,
                                             num_of_replicas = NumOfReplicas},
                   case leo_storage_handler_object:replicate(Object_1) of
-                      ok ->
+                      {ok, _ETag} ->
                           {ok, leo_object_storage_transformer:object_to_metadata(Object)};
                       {error, Cause} ->
                           {error, Cause}

@@ -3,7 +3,7 @@
 %%
 %% LeoFS
 %%
-%% Copyright (c) 2012-2013 Rakuten, Inc.
+%% Copyright (c) 2012-2015 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -122,7 +122,7 @@
  "leo_storage.system_version",
  [
   {datatype, string},
-  {default, "1.2.7"}
+  {default, "1.2.8"}
  ]}.
 
 %% @doc Path of object-container
@@ -363,7 +363,7 @@
  ]}.
 
 
-%% @doc
+%% @doc Monitoring target paths
 {mapping,
  "watchdog.disk.target_paths",
  "leo_watchdog.disk_target_paths",
@@ -415,32 +415,32 @@
  "leo_watchdog.disk_threshold_util",
  [
   {datatype, integer},
-  {default, 100}
+  {default, 90}
  ]}.
 
 %% @doc Threshold disk read kb/sec
-%%      default:131072(KB) - 256MB
+%%      default:98304(KB) - 96MB
 {mapping,
  "watchdog.disk.threshold_disk_rkb",
  "leo_watchdog.disk_threshold_rkb",
  [
   {datatype, integer},
-  {default, 262144}
+  {default, 98304}
  ]}.
 
 %% @doc Threshold disk write kb/sec
-%%      default:262144(KB) - 256MB
+%%      default:98304(KB) - 96MB
 {mapping,
  "watchdog.disk.threshold_disk_wkb",
  "leo_watchdog.disk_threshold_wkb",
  [
   {datatype, integer},
-  {default, 262144}
+  {default, 98304}
  ]}.
 
 
-%% @doc Threshold disk write kb/sec
-%%      default:262144(KB) - 256MB
+%% @doc Monitoring target devices
+%%
 {mapping,
  "watchdog.disk.target_devices",
  "leo_watchdog.disk_target_devices",
@@ -686,17 +686,17 @@
  "leo_storage.mq_num_of_batch_process_reg",
  [
   {datatype, integer},
-  {default, 5000}
+  {default, 1000}
  ]}.
 
 %% @doc Step number of mq-server's processes
-%%      default: 1000
+%%      default: 250
 {mapping,
  "mq.num_of_batch_process_step",
  "leo_storage.mq_num_of_batch_process_step",
  [
   {datatype, integer},
-  {default, 1000}
+  {default, 250}
  ]}.
 
 
@@ -706,7 +706,7 @@
 %% @doc Minimum value of interval between batch proccesses
 %%      default: 10
 {mapping,
- "mq.interval_beween_batch_procs_min",
+ "mq.interval_between_batch_procs_min",
  "leo_storage.mq_interval_between_batch_procs_min",
  [
   {datatype, integer},
@@ -716,7 +716,7 @@
 %% @doc Maximum value of interval between batch proccesses
 %%      default: 1000
 {mapping,
- "mq.interval_beween_batch_procs_max",
+ "mq.interval_between_batch_procs_max",
  "leo_storage.mq_interval_between_batch_procs_max",
  [
   {datatype, integer},
@@ -724,19 +724,19 @@
  ]}.
 
 %% @doc Regular value of interval between batch proccesses
-%%      default: 1000
+%%      default: 300
 {mapping,
- "mq.interval_beween_batch_procs_regular",
+ "mq.interval_between_batch_procs_regular",
  "leo_storage.mq_interval_between_batch_procs_reg",
  [
   {datatype, integer},
-  {default, 100}
+  {default, 300}
  ]}.
 
 %% @doc Step value of interval between batch proccesses
-%%      default: 1000
+%%      default: 100
 {mapping,
- "mq.interval_beween_batch_procs_step",
+ "mq.interval_between_batch_procs_step",
  "leo_storage.mq_interval_between_batch_procs_step",
  [
   {datatype, integer},
@@ -977,7 +977,7 @@
          list_to_atom(lists:append([NodeName, ":", integer_to_list(PortNum)]))
  end}.
 
-%% @doc
+%% @doc number of acceptors of rpc-server
 {mapping,
  "rpc.server.acceptors",
  "leo_rpc.num_of_acceptors",
@@ -986,7 +986,7 @@
   {default, 128}
  ]}.
 
-%% @doc
+%% @doc listen port number of rpc-server
 {mapping,
  "rpc.server.listen_port",
  "leo_rpc.listen_port",
@@ -995,7 +995,7 @@
   {default, 13077}
  ]}.
 
-%% @doc
+%% @doc listen timeout of rpc-server
 {mapping,
  "rpc.server.listen_timeout",
  "leo_rpc.listen_timeout",
@@ -1004,7 +1004,7 @@
   {default, 30000}
  ]}.
 
-%% @doc
+%% @doc connection pool size of rpc-client
 {mapping,
  "rpc.client.connection_pool_size",
  "leo_rpc.connection_pool_size",
@@ -1013,13 +1013,22 @@
   {default, 8}
  ]}.
 
-%% @doc
+%% @doc connection buffer size of rpc-client
 {mapping,
  "rpc.client.connection_buffer_size",
  "leo_rpc.connection_buffer_size",
  [
   {datatype, integer},
   {default, 8}
+ ]}.
+
+%% @doc max number of requests for reconnection to a remote-node
+{mapping,
+ "rpc.client.max_requests_for_reconnection",
+ "leo_rpc.max_requests_for_reconnection",
+ [
+  {datatype, integer},
+  {default, 64}
  ]}.
 
 
