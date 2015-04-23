@@ -239,7 +239,7 @@
  "leo_storage.dir_db_path",
  [
   {datatype, string},
-  {default, "./work/directory/"}
+  {default, "./avs/directory/"}
  ]}.
 
 

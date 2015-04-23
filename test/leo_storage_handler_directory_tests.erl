@@ -63,28 +63,35 @@ teardown([_, Node1]) ->
 
 find_by_parent_dir_([Node0, Node1]) ->
     meck:new(leo_redundant_manager_api, [non_strict]),
-    meck:expect(leo_redundant_manager_api, get_members,
-                fun() ->
-                        Members = [#member{node  = Node0,
-                                           state = ?STATE_RUNNING},
-                                   #member{node  = Node1,
-                                           state = ?STATE_RUNNING},
-                                   #member{node  = 'stoped_node',
-                                           state = ?STATE_STOP}
-                                  ],
-                        {ok, Members}
-                end),
+    ok = meck:expect(leo_redundant_manager_api, get_members,
+                     fun() ->
+                             Members = [#member{node  = Node0,
+                                                state = ?STATE_RUNNING},
+                                        #member{node  = Node1,
+                                                state = ?STATE_RUNNING},
+                                        #member{node  = 'stoped_node',
+                                                state = ?STATE_STOP}
+                                       ],
+                             {ok, Members}
+                     end),
+    ok = meck:expect(leo_redundant_manager_api, get_redundancies_by_key,
+                     fun(_Dir) ->
+                             ?debugVal(_Dir),
+                             {ok, #redundancies{
+                                     vnode_id_to = 0,
+                                     nodes = [#redundant_node{available = false,
+                                                              node = Node0},
+                                              #redundant_node{available = true,
+                                                              node = Node1}
+                                             ]}}
+                     end),
 
-    ok = rpc:call(Node0, meck, new,    [leo_storage_handler_object, [no_link, non_strict]]),
-    ok = rpc:call(Node0, meck, expect, [leo_storage_handler_object, prefix_search,
-                                        fun(_ParentDir, _,_) ->
-                                                {ok, [#?METADATA{key="air/on/g/0.png"}]}
-                                        end]),
-    ok = rpc:call(Node1, meck, new,    [leo_storage_handler_object, [no_link, non_strict]]),
-    ok = rpc:call(Node1, meck, expect, [leo_storage_handler_object, prefix_search,
-                                        fun(_ParentDir,_,_) ->
-                                                {ok, [#?METADATA{key="air/on/g/1.png"},
-                                                      #?METADATA{key="air/on/g/1.png"}]}
+    ok = rpc:call(Node1, meck, new,    [leo_backend_db_api, [no_link, non_strict]]),
+    ok = rpc:call(Node1, meck, expect, [leo_backend_db_api, fetch,
+                                        fun(_InstanceName,_KeyBin,_Fun,_MaxKeys) ->
+                                                {ok, [#?METADATA{key="air/on/g/0.png"},
+                                                      #?METADATA{key="air/on/g/1.png"}
+                                                     ]}
                                         end]),
 
     {ok, Res} = leo_storage_handler_directory:find_by_parent_dir("air/on/g/", none, none, 1000),

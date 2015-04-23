@@ -646,8 +646,10 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
     Fun = fun(Key, V, Acc) when length(Acc) =< MaxKeys ->
                   Meta = binary_to_term(V),
                   InRange = case Marker of
-                                [] -> true;
-                                Key -> false;
+                                [] ->
+                                    true;
+                                Key ->
+                                    false;
                                 _  ->
                                     (Marker == hd(lists:sort([Marker, Key])))
                             end,

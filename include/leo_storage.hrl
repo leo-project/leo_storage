@@ -216,12 +216,6 @@
             _ -> "./work/queue"
         end).
 
--define(env_directory_data_dir(),
-        case application:get_env(leo_storage, directory_data_dir) of
-            {ok, EnvDirectoryDataDir} -> EnvDirectoryDataDir;
-            _ -> "./work/directory"
-        end).
-
 -define(env_mq_backend_db(),
         case application:get_env(leo_storage, mq_backend_db) of
             {ok, EnvMQBackendDB} ->
@@ -337,7 +331,7 @@
 -define(DIR_DB_ID,   'leo_directory_db').
 -define(DIR_DB_PROCS, 8).
 -define(DIR_DB_NAME, 'leveldb').
--define(DIR_DB_PATH, "./work/directory/").
+-define(DIR_DB_PATH, "./avs/directory/").
 
 -define(env_dir_db_procs(),
         case application:get_env(leo_storage, ?DIR_DB_PROP_PROCS) of

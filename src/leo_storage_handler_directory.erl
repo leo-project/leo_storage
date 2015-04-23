@@ -43,52 +43,63 @@
 %%--------------------------------------------------------------------
 %% @doc Find by index from the backenddb.
 %%
--spec(find_by_parent_dir(ParentDir, Delimiter, Marker, MaxKeys) ->
+-spec(find_by_parent_dir(Dir, Delimiter, Marker, MaxKeys) ->
              {ok, list()} |
-             {error, any()} when ParentDir::binary(),
+             {error, any()} when Dir::binary(),
                                  Delimiter::binary()|null,
                                  Marker::binary()|null,
                                  MaxKeys::integer()).
-find_by_parent_dir(ParentDir, _Delimiter, Marker, MaxKeys) ->
-    NewMaxKeys = case is_integer(MaxKeys) of
-                     true  -> MaxKeys;
-                     false -> ?DEF_MAX_KEYS
-                 end,
-    NewMarker  = case is_binary(Marker) of
-                     true  -> Marker;
-                     false -> <<>>
-                 end,
 
-    {ok, Members} = leo_redundant_manager_api:get_members(),
-    Nodes = lists:foldl(fun(#member{node  = Node,
-                                    state = ?STATE_RUNNING}, Acc) ->
-                                [Node|Acc];
-                           (_, Acc) ->
-                                Acc
-                        end, [], Members),
+find_by_parent_dir(Dir, _Delimiter, Marker, MaxKeys) when is_binary(Marker) == false ->
+    find_by_parent_dir(Dir, _Delimiter, <<>>, MaxKeys);
+find_by_parent_dir(Dir, _Delimiter, Marker, MaxKeys) when is_integer(MaxKeys) == false ->
+    find_by_parent_dir(Dir, _Delimiter, Marker, ?DEF_MAX_KEYS);
+find_by_parent_dir(Dir, _Delimiter, Marker, MaxKeys) ->
+    %% Retrieve charge of nodes
+    case leo_redundant_manager_api:get_redundancies_by_key(Dir) of
+        {ok, #redundancies{nodes = Nodes,
+                           vnode_id_to = AddrId}} ->
+            find_by_parent_dir_1(Nodes, AddrId, Dir, Marker, MaxKeys);
+        Error ->
+            Error
+    end.
 
-    {ResL0, _BadNodes} = rpc:multicall(Nodes, leo_storage_handler_object, prefix_search,
-                                       [ParentDir, NewMarker, NewMaxKeys], ?DEF_REQ_TIMEOUT),
+%% @doc Retrieve metadatas under the directory
+%% @private
+find_by_parent_dir_1([],_,_,_,_) ->
+    {error, ?ERROR_COULD_NOT_GET_META};
+find_by_parent_dir_1([#redundant_node{available = false}|Rest], AddrId, Dir, Marker, MaxKeys) ->
+    find_by_parent_dir_1(Rest, AddrId, Dir, Marker, MaxKeys);
+find_by_parent_dir_1([#redundant_node{node = Node}|Rest], AddrId, Dir, Marker, MaxKeys) ->
+    DirSize = byte_size(Dir),
+    KeyBin = << AddrId:128, DirSize:16, Dir/binary >>,
 
-    case lists:foldl(
-           fun({ok, List}, Acc0) ->
-                   lists:foldl(
-                     fun(#?METADATA{key = Key} = Meta0, Acc1) ->
-                             case lists:keyfind(Key, 2, Acc1) of
-                                 false ->
-                                     [Meta0|Acc1];
-                                 #?METADATA{clock = Clock} when Meta0#?METADATA.clock > Clock ->
-                                     Acc2 = lists:keydelete(Key, 2, Acc1),
-                                     [Meta0|Acc2];
-                                 _ ->
-                                     Acc1
-                             end
-                     end, Acc0, List);
-              (_, Acc0) ->
-                   Acc0
-           end, [], ResL0) of
-        [] ->
-            {ok, []};
-        List ->
-            {ok, lists:sublist(ordsets:from_list(lists:flatten(List)), NewMaxKeys)}
+    Fun = fun(_K, V, Acc) ->
+                  case catch binary_to_term(V) of
+                      #?METADATA{} = Metadata ->
+                          ?debugVal(Metadata),
+                          [Metadata|Acc];
+                      _ ->
+                          Acc
+                  end
+          end,
+
+    RPCKey = rpc:async_call(Node, leo_backend_db_api, fetch, [?DIR_DB_ID, KeyBin, Fun, MaxKeys]),
+    Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
+              {value, {ok, RetL}} ->
+                  {ok, lists:reverse(RetL)};
+              {value, not_found} ->
+                  {ok, []};
+              {value, {error, Cause}} ->
+                  {error, Cause};
+              {badrpc, Cause} ->
+                  {error, Cause};
+              timeout = Cause ->
+                  {error, Cause}
+          end,
+    case Ret of
+        {ok,_} ->
+            Ret;
+        {error,_} ->
+            find_by_parent_dir_1(Rest, AddrId, Dir, Marker, MaxKeys)
     end.
