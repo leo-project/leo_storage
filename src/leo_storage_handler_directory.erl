@@ -72,7 +72,7 @@ find_by_parent_dir_1([#redundant_node{available = false}|Rest], AddrId, Dir, Mar
     find_by_parent_dir_1(Rest, AddrId, Dir, Marker, MaxKeys);
 find_by_parent_dir_1([#redundant_node{node = Node}|Rest], AddrId, Dir, Marker, MaxKeys) ->
     DirSize = byte_size(Dir),
-    KeyBin = << AddrId:128, DirSize:16, Dir/binary >>,
+    KeyBin = << DirSize:16, Dir/binary >>,
 
     Fun = fun(_K, V, Acc) ->
                   case catch binary_to_term(V) of

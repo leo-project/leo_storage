@@ -198,7 +198,7 @@ slice_and_store(StackedBin) ->
                                  del = Del} = Metadata, StackedBin_1}} ->
             DirSize = byte_size(DirBin),
             KeySize = byte_size(Key),
-            KeyBin = << AddrId:128, DirSize:16, DirBin/binary, KeySize:16, Key/binary >>,
+            KeyBin = << DirSize:16, DirBin/binary, KeySize:16, Key/binary >>,
             ValBin = term_to_binary(Metadata),
             CanPutVal =
                 case leo_backend_db_api:get(?DIR_DB_ID, KeyBin) of
