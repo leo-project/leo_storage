@@ -192,13 +192,10 @@ slice_and_store(<<>>) ->
     ok;
 slice_and_store(StackedBin) ->
     case slice(StackedBin) of
-        {ok, {DirBin, #?METADATA{addr_id = AddrId,
-                                 key = Key,
+        {ok, {DirBin, #?METADATA{key = Key,
                                  clock = Clock,
                                  del = Del} = Metadata, StackedBin_1}} ->
-            DirSize = byte_size(DirBin),
-            KeySize = byte_size(Key),
-            KeyBin = << DirSize:16, DirBin/binary, KeySize:16, Key/binary >>,
+            KeyBin = << DirBin/binary, "\t", Key/binary >>,
             ValBin = term_to_binary(Metadata),
             CanPutVal =
                 case leo_backend_db_api:get(?DIR_DB_ID, KeyBin) of
@@ -222,7 +219,6 @@ slice_and_store(StackedBin) ->
                 true when Del == ?DEL_FALSE ->
                     case leo_backend_db_api:put(?DIR_DB_ID, KeyBin, ValBin) of
                         ok ->
-                            ?debugVal({KeyBin, AddrId, DirBin, Key}),
                             ok;
                         {error, Cause} ->
                             error_logger:info_msg("~p,~p,~p,~p~n",
@@ -265,7 +261,6 @@ slice(Bin) ->
         <<_Fotter:64, Rest_5/binary>> = Rest_4,
 
         Metadata = binary_to_term(MetaBin),
-        ?debugVal(Metadata),
         {ok, {DirBin, Metadata, Rest_5}}
     catch
         _:Cause ->

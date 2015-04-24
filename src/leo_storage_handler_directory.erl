@@ -59,7 +59,17 @@ find_by_parent_dir(Dir, _Delimiter, Marker, MaxKeys) ->
     case leo_redundant_manager_api:get_redundancies_by_key(Dir) of
         {ok, #redundancies{nodes = Nodes,
                            vnode_id_to = AddrId}} ->
-            find_by_parent_dir_1(Nodes, AddrId, Dir, Marker, MaxKeys);
+            Dir_1 = case binary:last(Dir) of
+                        %% "/"
+                        16#2f ->
+                            << Dir/binary, "\t" >>;
+                        %% "*"
+                        16#2a ->
+                            binary:part(Dir, {0, byte_size(Dir) - 1});
+                        _Other ->
+                            << Dir/binary, "/\t" >>
+                    end,
+            find_by_parent_dir_1(Nodes, AddrId, Dir_1, Marker, MaxKeys);
         Error ->
             Error
     end.
@@ -71,13 +81,10 @@ find_by_parent_dir_1([],_,_,_,_) ->
 find_by_parent_dir_1([#redundant_node{available = false}|Rest], AddrId, Dir, Marker, MaxKeys) ->
     find_by_parent_dir_1(Rest, AddrId, Dir, Marker, MaxKeys);
 find_by_parent_dir_1([#redundant_node{node = Node}|Rest], AddrId, Dir, Marker, MaxKeys) ->
-    DirSize = byte_size(Dir),
-    KeyBin = << DirSize:16, Dir/binary >>,
-
+    KeyBin = << Dir/binary >>,
     Fun = fun(_K, V, Acc) ->
                   case catch binary_to_term(V) of
                       #?METADATA{} = Metadata ->
-                          ?debugVal(Metadata),
                           [Metadata|Acc];
                       _ ->
                           Acc
@@ -87,7 +94,9 @@ find_by_parent_dir_1([#redundant_node{node = Node}|Rest], AddrId, Dir, Marker, M
     RPCKey = rpc:async_call(Node, leo_backend_db_api, fetch, [?DIR_DB_ID, KeyBin, Fun, MaxKeys]),
     Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
               {value, {ok, RetL}} ->
-                  {ok, lists:reverse(RetL)};
+                  RetL_1 = ordsets:to_list(
+                             ordsets:from_list(RetL)),
+                  {ok, RetL_1};
               {value, not_found} ->
                   {ok, []};
               {value, {error, Cause}} ->
