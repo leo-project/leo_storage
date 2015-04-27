@@ -89,12 +89,13 @@ find_by_parent_dir_([Node0, Node1]) ->
     ok = rpc:call(Node1, meck, new,    [leo_backend_db_api, [no_link, non_strict]]),
     ok = rpc:call(Node1, meck, expect, [leo_backend_db_api, fetch,
                                         fun(_InstanceName,_KeyBin,_Fun,_MaxKeys) ->
-                                                {ok, [#?METADATA{key="air/on/g/0.png"},
-                                                      #?METADATA{key="air/on/g/1.png"}
+                                                {ok, [#?METADATA{key = <<"air/on/g/0.png">>},
+                                                      #?METADATA{key = <<"air/on/g/1.png">>}
                                                      ]}
                                         end]),
 
-    {ok, Res} = leo_storage_handler_directory:find_by_parent_dir("air/on/g/", none, none, 1000),
+    {ok, Res} = leo_storage_handler_directory:find_by_parent_dir(<<"air/on/g/">>, <<>>, <<>>, 1000),
+    ?debugVal(Res),
     ?assertEqual(2, length(Res)),
 
     meck:unload(),

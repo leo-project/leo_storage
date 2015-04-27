@@ -55,6 +55,7 @@ find_by_parent_dir(Dir, _Delimiter, Marker, MaxKeys) when is_binary(Marker) == f
 find_by_parent_dir(Dir, _Delimiter, Marker, MaxKeys) when is_integer(MaxKeys) == false ->
     find_by_parent_dir(Dir, _Delimiter, Marker, ?DEF_MAX_KEYS);
 find_by_parent_dir(Dir, _Delimiter, Marker, MaxKeys) ->
+    ?debugVal({Dir, Marker, MaxKeys}),
     %% Retrieve charge of nodes
     case leo_redundant_manager_api:get_redundancies_by_key(Dir) of
         {ok, #redundancies{nodes = Nodes,
