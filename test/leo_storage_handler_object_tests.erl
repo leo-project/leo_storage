@@ -56,17 +56,11 @@ object_handler_test_() ->
     {foreach, fun setup/0, fun teardown/1,
      [{with, [T]} || T <- [fun get_a0_/1,
                            fun get_a1_/1,
-                           %% fun get_b0_/1,
-                           %% fun get_b1_/1,
-                           %% fun get_b2_/1,
-                           %% fun get_b3_/1,
-                           %% fun get_c0_/1,
                            fun put_0_/1,
                            fun put_1_/1,
                            fun delete_/1,
                            fun head_/1,
                            fun copy_/1,
-                           fun prefix_search_/1,
                            fun prefix_search_and_remove_objects_/1
                           ]]}.
 
@@ -431,18 +425,6 @@ copy_({Node0, Node1}) ->
     ?assertEqual(ok, Res2),
     ok.
 
-
-prefix_search_({_Node0, _Node1}) ->
-    meck:new(leo_object_storage_api, [non_strict]),
-    meck:expect(leo_object_storage_api, fetch_by_key,
-                fun(_ParentDir, Fun) ->
-                        Fun(?TEST_KEY_0, term_to_binary(#?METADATA{}), []),
-                        Fun(?TEST_KEY_1, term_to_binary(#?METADATA{}), [#?METADATA{key=?TEST_KEY_0}])
-                end),
-
-    Res = leo_storage_handler_object:prefix_search(?TEST_DIR_0, [], 1000),
-    ?assertEqual(2, length(Res)),
-    ok.
 
 prefix_search_and_remove_objects_(_) ->
     meck:new(leo_object_storage_api, [non_strict]),

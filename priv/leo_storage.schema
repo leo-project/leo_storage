@@ -219,7 +219,7 @@
  "leo_storage.dir_db_num_of_procs",
  [
   {datatype, integer},
-  {default, 8}
+  {default, 1}
  ]}.
 
 

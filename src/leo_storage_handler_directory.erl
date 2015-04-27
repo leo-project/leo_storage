@@ -55,7 +55,6 @@ find_by_parent_dir(Dir, _Delimiter, Marker, MaxKeys) when is_binary(Marker) == f
 find_by_parent_dir(Dir, _Delimiter, Marker, MaxKeys) when is_integer(MaxKeys) == false ->
     find_by_parent_dir(Dir, _Delimiter, Marker, ?DEF_MAX_KEYS);
 find_by_parent_dir(Dir, _Delimiter, Marker, MaxKeys) ->
-    ?debugVal({Dir, Marker, MaxKeys}),
     %% Retrieve charge of nodes
     case leo_redundant_manager_api:get_redundancies_by_key(Dir) of
         {ok, #redundancies{nodes = Nodes,
@@ -82,22 +81,32 @@ find_by_parent_dir_1([],_,_,_,_) ->
 find_by_parent_dir_1([#redundant_node{available = false}|Rest], AddrId, Dir, Marker, MaxKeys) ->
     find_by_parent_dir_1(Rest, AddrId, Dir, Marker, MaxKeys);
 find_by_parent_dir_1([#redundant_node{node = Node}|Rest], AddrId, Dir, Marker, MaxKeys) ->
-    KeyBin = << Dir/binary >>,
     Fun = fun(_K, V, Acc) ->
                   case catch binary_to_term(V) of
-                      #?METADATA{} = Metadata ->
-                          [Metadata|Acc];
+                      #?METADATA{key = Key,
+                                 del = ?DEL_FALSE} = Metadata ->
+                          case Marker of
+                              Key ->
+                                  Acc;
+                              <<>> ->
+                                  [Metadata|Acc];
+                              _ ->
+                                  case lists:sort([Marker, Key]) of
+                                      [Marker|_] ->
+                                          [Metadata|Acc];
+                                      _Other ->
+                                          Acc
+                                  end
+                          end;
                       _ ->
                           Acc
                   end
           end,
 
-    RPCKey = rpc:async_call(Node, leo_backend_db_api, fetch, [?DIR_DB_ID, KeyBin, Fun, MaxKeys]),
+    RPCKey = rpc:async_call(Node, leo_backend_db_api, fetch, [?DIR_DB_ID, Dir, Fun, MaxKeys]),
     Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
               {value, {ok, RetL}} ->
-                  RetL_1 = ordsets:to_list(
-                             ordsets:from_list(RetL)),
-                  {ok, RetL_1};
+                  {ok, lists:sort(RetL)};
               {value, not_found} ->
                   {ok, []};
               {value, {error, Cause}} ->
