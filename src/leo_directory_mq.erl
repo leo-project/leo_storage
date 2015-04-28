@@ -122,7 +122,7 @@ handle_call({consume, ?MODULE, MessageBin}) ->
         #?METADATA{addr_id = AddrId,
                    key = Key} ->
             %% Retrieve latest metadata of the object
-            case leo_storage_handler_object:head(AddrId, Key) of
+            case leo_storage_handler_object:head(AddrId, Key, true) of
                 {ok, Metadata_1} ->
                     leo_directory_sync:append(Metadata_1);
                 {error, not_found} ->
@@ -130,7 +130,7 @@ handle_call({consume, ?MODULE, MessageBin}) ->
                 _ ->
                     ok
             end;
-        _ ->
+        _Error ->
             {error, invalid_format}
     end;
 handle_call(_) ->

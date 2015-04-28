@@ -90,29 +90,33 @@ remove_container(DestNode) ->
 %% @doc Append a object into the ordning&reda
 -spec(append(Metadata) ->
              ok when Metadata::#?METADATA{}).
+append(#?METADATA{key = <<>>}) ->
+    ok;
 append(#?METADATA{key = Key} = Metadata) ->
     %% Retrieve a directory from the key
-    Dir = get_directory_from_key(Key),
-
-    %% Retrieve destination nodes
-    case leo_redundant_manager_api:get_redundancies_by_key(Dir) of
-        {ok, #redundancies{nodes = RedundantNodes,
-                           vnode_id_to = AddrId}} ->
-            Metadata_1 = Metadata#?METADATA{addr_id = AddrId},
-
-            %% Store/Remove the metadata into the metadata-cluster
-            case [Node || #redundant_node{available = true,
-                                          node = Node} <- RedundantNodes] of
-                [] ->
-                    enqueue(Metadata_1);
-                ActiveNodes ->
-                    lists:foreach(fun(N) ->
-                                          append(N, Dir, Metadata_1)
-                                  end, ActiveNodes),
-                    ok
-            end;
-        {error,_Cause} ->
-            enqueue(Metadata)
+    case get_directory_from_key(Key) of
+        <<>> ->
+            ok;
+        Dir ->
+            %% Retrieve destination nodes
+            case leo_redundant_manager_api:get_redundancies_by_key(Dir) of
+                {ok, #redundancies{id = AddrId,
+                                   nodes = RedundantNodes}} ->
+                    %% Store/Remove the metadata into the metadata-cluster
+                    case [Node || #redundant_node{available = true,
+                                                  node = Node} <- RedundantNodes] of
+                        [] ->
+                            enqueue(Metadata);
+                        ActiveNodes ->
+                            Metadata_1 = Metadata#?METADATA{addr_id = AddrId},
+                            lists:foreach(fun(N) ->
+                                                  append(N, Dir, Metadata_1)
+                                          end, ActiveNodes),
+                            ok
+                    end;
+                {error,_Cause} ->
+                    enqueue(Metadata)
+            end
     end.
 
 %% @private
@@ -160,7 +164,7 @@ create_directories([Dir|Rest]) ->
                           timestamp = leo_date:now()},
 
     case leo_redundant_manager_api:get_redundancies_by_key(Dir) of
-        {ok, #redundancies{vnode_id_to = AddrId}} ->
+        {ok, #redundancies{id = AddrId}} ->
             append(Metadata#?METADATA{addr_id = AddrId});
         _ ->
             enqueue(Metadata)
@@ -327,9 +331,8 @@ handle_send({_,DestNode}, StackedInfo, CompressedObjs) ->
              ok | {error, any()}).
 handle_fail(_Unit, []) ->
     ok;
-handle_fail(_Unit, [{AddrId,_Dir, Key}|Rest]) ->
-    ok = enqueue(#?METADATA{addr_id = AddrId,
-                            key = Key}),
+handle_fail(_Unit, [{_AddrId,_Dir, Key}|Rest]) ->
+    ok = enqueue(#?METADATA{key = Key}),
     handle_fail(_Unit, Rest).
 
 
@@ -342,7 +345,9 @@ handle_fail(_Unit, [{AddrId,_Dir, Key}|Rest]) ->
              binary() when Key::binary()).
 get_directory_from_key(Key) ->
     BinSlash = <<"/">>,
-    case binary:last(Key) of
+    case catch binary:last(Key) of
+        {'EXIT',_Cause} ->
+            <<>>;
         %% "/"
         16#2f ->
             case binary:matches(Key, [BinSlash],[]) of
@@ -430,5 +435,11 @@ get_directories_from_stacked_info([{_AddrId, Dir,_Key}|Rest], Acc) ->
 
 %% @doc enqueue a message of a miss-replication into the queue
 %% @private
-enqueue(Metadata) ->
-    leo_directory_mq:publish(Metadata).
+enqueue(#?METADATA{key = Key} = Metadata) ->
+    case leo_redundant_manager_api:get_redundancies_by_key(Key) of
+        {ok, #redundancies{id = AddrId}} ->
+            leo_directory_mq:publish(Metadata#?METADATA{addr_id = AddrId});
+        _ ->
+            %% @TODO: output an error log
+            ok
+    end.
