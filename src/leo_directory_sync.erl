@@ -343,6 +343,8 @@ handle_fail(_Unit, [{_AddrId,_Dir, Key}|Rest]) ->
 %% @private
 -spec(get_directory_from_key(Key) ->
              binary() when Key::binary()).
+get_directory_from_key(<<>>) ->
+    <<>>;
 get_directory_from_key(Key) ->
     BinSlash = <<"/">>,
     case catch binary:last(Key) of
