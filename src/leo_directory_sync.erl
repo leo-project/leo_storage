@@ -327,7 +327,7 @@ handle_send({_,DestNode}, StackedInfo, CompressedObjs) ->
              ok | {error, any()}).
 handle_fail(_Unit, []) ->
     ok;
-handle_fail(_Unit, [{AddrId, Key}|Rest]) ->
+handle_fail(_Unit, [{AddrId,_Dir, Key}|Rest]) ->
     ok = enqueue(#?METADATA{addr_id = AddrId,
                             key = Key}),
     handle_fail(_Unit, Rest).
