@@ -100,17 +100,15 @@ append(#?METADATA{key = Key} = Metadata) ->
         Dir ->
             %% Retrieve destination nodes
             case leo_redundant_manager_api:get_redundancies_by_key(Dir) of
-                {ok, #redundancies{id = AddrId,
-                                   nodes = RedundantNodes}} ->
+                {ok, #redundancies{nodes = RedundantNodes}} ->
                     %% Store/Remove the metadata into the metadata-cluster
                     case [Node || #redundant_node{available = true,
                                                   node = Node} <- RedundantNodes] of
                         [] ->
                             enqueue(Metadata);
                         ActiveNodes ->
-                            Metadata_1 = Metadata#?METADATA{addr_id = AddrId},
                             lists:foreach(fun(N) ->
-                                                  append(N, Dir, Metadata_1)
+                                                  append(N, Dir, Metadata)
                                           end, ActiveNodes),
                             ok
                     end;
@@ -195,9 +193,9 @@ slice_and_store(StackedBin) ->
                 case leo_backend_db_api:get(?DIR_DB_ID, KeyBin) of
                     {ok, ValBin_1} ->
                         case catch binary_to_term(ValBin_1) of
-                            #?METADATA{clock = Clock_1} when Clock > Clock_1 ->
+                            #?METADATA{clock = Clock_1} when Clock >= Clock_1 ->
                                 true;
-                            _ ->
+                            _Metadata ->
                                 false
                         end;
                     not_found when Del == ?DEL_TRUE ->

@@ -59,7 +59,7 @@ setup() ->
     ok = meck:expect(leo_redundant_manager_api, get_redundancies_by_key,
                      fun(_Dir) ->
                              {ok, #redundancies{
-                                     vnode_id_to = 0,
+                                     id = 0,
                                      nodes = [#redundant_node{available = true,
                                                               node = Node}]}}
                      end),
@@ -133,11 +133,14 @@ stack_(_) ->
     ok = leo_directory_sync:append(Metadata_5),
     ok = leo_directory_sync:append(Metadata_6),
     ok = leo_directory_sync:append(Metadata_7),
-    timer:sleep(timer:seconds(3)),
+    timer:sleep(timer:seconds(4) + 500),
 
     {ok, Bin_5} = leo_backend_db_api:get(?DIR_DB_ID, <<"a/b/c/d/", "\t", Key_5/binary >>),
     {ok, Bin_6} = leo_backend_db_api:get(?DIR_DB_ID, <<"a/b/c/",   "\t", Key_6/binary >>),
     {ok, Bin_7} = leo_backend_db_api:get(?DIR_DB_ID, <<"a/b/",     "\t", Key_7/binary >>),
+    %% ?debugVal(binary_to_term(Bin_5)),
+    %% ?debugVal(binary_to_term(Bin_6)),
+    %% ?debugVal(binary_to_term(Bin_7)),
     ?assertEqual(Metadata_5, binary_to_term(Bin_5)),
     ?assertEqual(Metadata_6, binary_to_term(Bin_6)),
     ?assertEqual(Metadata_7, binary_to_term(Bin_7)),

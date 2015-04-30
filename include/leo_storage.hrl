@@ -322,7 +322,11 @@
 
 %% For Directory
 -define(CONTAINER_BUF_SIZE, 1024 * 256). %% 256kb
--define(CONTAINER_TIMEOUT,  timer:seconds(1)). %% 1sec(1000msec)
+-ifdef(TEST).
+-define(CONTAINER_TIMEOUT,  1).
+-else.
+-define(CONTAINER_TIMEOUT,  timer:seconds(1)).
+-endif.
 
 -define(DIR_DB_PROP_PROCS, 'dir_db_num_of_procs').
 -define(DIR_DB_PROP_NAME,  'dir_db_name').
