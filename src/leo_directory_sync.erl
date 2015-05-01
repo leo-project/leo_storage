@@ -29,6 +29,7 @@
 -behaviour(leo_ordning_reda_behaviour).
 
 -include("leo_storage.hrl").
+-include_lib("leo_logger/include/leo_logger.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
 -include_lib("leo_ordning_reda/include/leo_ordning_reda.hrl").
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
@@ -439,7 +440,8 @@ enqueue(#?METADATA{key = Key} = Metadata) ->
     case leo_redundant_manager_api:get_redundancies_by_key(Key) of
         {ok, #redundancies{id = AddrId}} ->
             leo_directory_mq:publish(Metadata#?METADATA{addr_id = AddrId});
-        _ ->
-            %% @TODO: output an error log
+        {error, Cause} ->
+            ?error("enqueue/1",
+                   "key:~p, cause:~p", [Key, Cause]),
             ok
     end.
