@@ -73,28 +73,18 @@ start() ->
 handle_notify(?WD_SUB_ID_1,_Alarm,_Unixtime) ->
     case is_active_watchdog() of
         true ->
-            %% Increase waiting time of data-compaction/batch-proc
+            %% @TODO:Refactor leo_compact_fsm_controller
             leo_compact_fsm_controller:incr_interval(),
-            %% Decrease the number of batch-procs
             leo_compact_fsm_controller:decr_batch_of_msgs(),
-            %% Increase interval of mq-compsumption
-            leo_mq_api:incr_interval(?QUEUE_ID_PER_OBJECT),
-            leo_mq_api:incr_interval(?QUEUE_ID_SYNC_BY_VNODE_ID),
-            leo_mq_api:incr_interval(?QUEUE_ID_REBALANCE),
-            leo_mq_api:incr_interval(?QUEUE_ID_ASYNC_DELETION),
-            leo_mq_api:incr_interval(?QUEUE_ID_RECOVERY_NODE),
-            leo_mq_api:incr_interval(?QUEUE_ID_SYNC_OBJ_WITH_DC),
-            leo_mq_api:incr_interval(?QUEUE_ID_COMP_META_WITH_DC),
-            leo_mq_api:incr_interval(?QUEUE_ID_DEL_DIR),
-            %% Decrease a batch of messages
-            leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_PER_OBJECT),
-            leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_SYNC_BY_VNODE_ID),
-            leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_REBALANCE),
-            leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_ASYNC_DELETION),
-            leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_RECOVERY_NODE),
-            leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_SYNC_OBJ_WITH_DC),
-            leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_COMP_META_WITH_DC),
-            leo_mq_api:decr_batch_of_msgs(?QUEUE_ID_DEL_DIR),
+
+            leo_mq_api:decrease(?QUEUE_ID_PER_OBJECT),
+            leo_mq_api:decrease(?QUEUE_ID_SYNC_BY_VNODE_ID),
+            leo_mq_api:decrease(?QUEUE_ID_REBALANCE),
+            leo_mq_api:decrease(?QUEUE_ID_ASYNC_DELETION),
+            leo_mq_api:decrease(?QUEUE_ID_RECOVERY_NODE),
+            leo_mq_api:decrease(?QUEUE_ID_SYNC_OBJ_WITH_DC),
+            leo_mq_api:decrease(?QUEUE_ID_COMP_META_WITH_DC),
+            leo_mq_api:decrease(?QUEUE_ID_DEL_DIR),
             ok;
         false ->
             ok
@@ -142,28 +132,18 @@ handle_notify(?WD_SUB_ID_2, #watchdog_alarm{state = #watchdog_state{
 handle_notify(?WD_SUB_ID_1,_State,_SafeTimes,_Unixtime) ->
     case is_active_watchdog() of
         true ->
-            %% Decrease waiting time of data-compaction/batch-proc
+            %% @TODO:Refactor leo_compact_fsm_controller
             leo_compact_fsm_controller:decr_interval(),
-            %% Increase the number of batch-procs
             leo_compact_fsm_controller:incr_batch_of_msgs(),
-            %% Decrease waiting time of mq-compsumption
-            leo_mq_api:decr_interval(?QUEUE_ID_PER_OBJECT),
-            leo_mq_api:decr_interval(?QUEUE_ID_SYNC_BY_VNODE_ID),
-            leo_mq_api:decr_interval(?QUEUE_ID_REBALANCE),
-            leo_mq_api:decr_interval(?QUEUE_ID_ASYNC_DELETION),
-            leo_mq_api:decr_interval(?QUEUE_ID_RECOVERY_NODE),
-            leo_mq_api:decr_interval(?QUEUE_ID_SYNC_OBJ_WITH_DC),
-            leo_mq_api:decr_interval(?QUEUE_ID_COMP_META_WITH_DC),
-            leo_mq_api:decr_interval(?QUEUE_ID_DEL_DIR),
-            %% Increase a batch of messages
-            leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_PER_OBJECT),
-            leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_SYNC_BY_VNODE_ID),
-            leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_REBALANCE),
-            leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_ASYNC_DELETION),
-            leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_RECOVERY_NODE),
-            leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_SYNC_OBJ_WITH_DC),
-            leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_COMP_META_WITH_DC),
-            leo_mq_api:incr_batch_of_msgs(?QUEUE_ID_DEL_DIR),
+
+            leo_mq_api:increase(?QUEUE_ID_PER_OBJECT),
+            leo_mq_api:increase(?QUEUE_ID_SYNC_BY_VNODE_ID),
+            leo_mq_api:increase(?QUEUE_ID_REBALANCE),
+            leo_mq_api:increase(?QUEUE_ID_ASYNC_DELETION),
+            leo_mq_api:increase(?QUEUE_ID_RECOVERY_NODE),
+            leo_mq_api:increase(?QUEUE_ID_SYNC_OBJ_WITH_DC),
+            leo_mq_api:increase(?QUEUE_ID_COMP_META_WITH_DC),
+            leo_mq_api:increase(?QUEUE_ID_DEL_DIR),
             ok;
         false ->
             ok
