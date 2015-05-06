@@ -73,10 +73,7 @@ start() ->
 handle_notify(?WD_SUB_ID_1,_Alarm,_Unixtime) ->
     case is_active_watchdog() of
         true ->
-            %% @TODO:Refactor leo_compact_fsm_controller
-            leo_compact_fsm_controller:incr_interval(),
-            leo_compact_fsm_controller:decr_batch_of_msgs(),
-
+            leo_compact_fsm_controller:decrease(),
             leo_mq_api:decrease(?QUEUE_ID_PER_OBJECT),
             leo_mq_api:decrease(?QUEUE_ID_SYNC_BY_VNODE_ID),
             leo_mq_api:decrease(?QUEUE_ID_REBALANCE),
@@ -132,10 +129,7 @@ handle_notify(?WD_SUB_ID_2, #watchdog_alarm{state = #watchdog_state{
 handle_notify(?WD_SUB_ID_1,_State,_SafeTimes,_Unixtime) ->
     case is_active_watchdog() of
         true ->
-            %% @TODO:Refactor leo_compact_fsm_controller
-            leo_compact_fsm_controller:decr_interval(),
-            leo_compact_fsm_controller:incr_batch_of_msgs(),
-
+            leo_compact_fsm_controller:increase(),
             leo_mq_api:increase(?QUEUE_ID_PER_OBJECT),
             leo_mq_api:increase(?QUEUE_ID_SYNC_BY_VNODE_ID),
             leo_mq_api:increase(?QUEUE_ID_REBALANCE),
