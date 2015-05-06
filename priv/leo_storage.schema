@@ -210,6 +210,17 @@
  ]}.
 
 
+%% @doc leo-object-storage.threshold_slow_processing
+%% @deprecated (v1.2.9-)
+{mapping,
+ "object_storage.threshold_of_slow_processing",
+ "leo_object_storage.threshold_slow_processing",
+ [
+  {datatype, integer},
+  {default, 1000} %% 1000ms
+ ]}.
+
+
 %% --------------------------------------------------------------------
 %% STORAGE - Watchdog
 %% --------------------------------------------------------------------
