@@ -122,8 +122,19 @@ after_proc({ok, Pid}) ->
     ok = launch_object_storage(Pid),
     ok = leo_ordning_reda_api:start(),
 
-    QueueDir = ?env_queue_dir(leo_storage),
+    %% Check the managers whether they are alive or not
     Managers = ?env_manager_nodes(leo_storage),
+    IsAliveManagers = is_alive_managers(Managers),
+
+    %% Launch others
+    after_proc_1(IsAliveManagers, Pid, Managers);
+after_proc(Error) ->
+    ?error("after_proc/1", "cause:~p", [Error]),
+    init:stop().
+
+%% @private
+after_proc_1(true, Pid, Managers) ->
+    QueueDir = ?env_queue_dir(leo_storage),
     ok = launch_redundant_manager(Pid, Managers, QueueDir),
     ok = leo_storage_mq:start(Pid, QueueDir),
 
@@ -157,13 +168,26 @@ after_proc({ok, Pid}) ->
     timer:apply_after(timer:seconds(3), ?MODULE, start_mnesia, []),
     timer:apply_after(timer:seconds(3), ?MODULE, start_statistics, []),
     {ok, Pid};
+after_proc_1(false,_,Managers) ->
+    ?error("after_proc/1", "cause:~s, managers:~p",
+           ["Not alive managers", Managers]),
+    init:stop().
 
-after_proc(Error) ->
-    Error.
+
+%% @private
+is_alive_managers([]) ->
+    false;
+is_alive_managers([Manager|Rest]) ->
+    case leo_misc:node_existence(Manager) of
+        true ->
+            true;
+        false ->
+            is_alive_managers(Rest)
+    end.
 
 
 %% @doc Launch Logger
-%%
+%% @private
 launch_logger() ->
     DefLogDir = "./log/",
     LogDir    = case application:get_env(leo_storage, log_appender) of
@@ -177,7 +201,7 @@ launch_logger() ->
 
 
 %% @doc Launch Object-Storage
-%%
+%% @private
 launch_object_storage(RefSup) ->
     ObjStoageInfo =
         case ?env_storage_device() of
