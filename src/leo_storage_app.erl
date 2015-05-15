@@ -39,18 +39,18 @@
 
 %% Application and Supervisor callbacks
 -export([start/2, prep_stop/1, stop/1]).
--export([start_mnesia/0,
-         start_statistics/0
-        ]).
+
 
 %%----------------------------------------------------------------------
 %% Application behaviour callbacks
 %%----------------------------------------------------------------------
+%% @doc Start the application
 start(_Type, _Args) ->
     application:start(leo_watchdog),
     Res = leo_storage_sup:start_link(),
     after_proc(Res).
 
+%% @doc Prepare stoping the application
 prep_stop(_State) ->
     catch leo_object_storage_sup:stop(),
     catch leo_redundant_manager_sup:stop(),
@@ -59,12 +59,20 @@ prep_stop(_State) ->
     catch leo_storage_sup:stop(),
     ok.
 
+%% @doc Stop the application
 stop(_State) ->
     ok.
 
 
 %% @doc Start mnesia and create tables
+%% @private
 start_mnesia() ->
+    start_mnesia(0).
+
+%% @private
+start_mnesia(?RETRY_TIMES) ->
+    {error, "Could not create mnesia's tables"};
+start_mnesia(RetryTimes) ->
     try
         %% Create cluster-related tables
         application:ensure_started(mnesia),
@@ -73,15 +81,24 @@ start_mnesia() ->
         leo_mdcr_tbl_cluster_info:create_table(ram_copies, [node()]),
         leo_mdcr_tbl_cluster_stat:create_table(ram_copies, [node()]),
         leo_mdcr_tbl_cluster_mgr:create_table(ram_copies, [node()]),
-        leo_mdcr_tbl_cluster_member:create_table(ram_copies, [node()])
+        leo_mdcr_tbl_cluster_member:create_table(ram_copies, [node()]),
+        ok
     catch
         _:_Cause ->
-            timer:apply_after(timer:seconds(1), ?MODULE, start_mnesia, [])
-    end,
-    ok.
+            timer:sleep(timer:seconds(1)),
+            start_mnesia(RetryTimes + 1)
+    end.
+
 
 %% @doc Start statistics
+%% @private
 start_statistics() ->
+    start_statistics(0).
+
+%% @private
+start_statistics(?RETRY_TIMES) ->
+    {error, "Launch failure of statistics"};
+start_statistics(RetryTimes) ->
     try
         %% Launch metric-servers
         application:ensure_started(mnesia),
@@ -91,12 +108,12 @@ start_statistics() ->
         leo_statistics_api:create_tables(ram_copies, [node()]),
         leo_metrics_vm:start_link(?SNMP_SYNC_INTERVAL_10S),
         leo_metrics_req:start_link(?SNMP_SYNC_INTERVAL_60S),
-        leo_storage_statistics:start_link(?SNMP_SYNC_INTERVAL_60S)
+        leo_storage_statistics:start_link(?SNMP_SYNC_INTERVAL_60S),
+        ok
     catch
         _:_Cause ->
-            timer:apply_after(timer:seconds(1), ?MODULE, start_statistics, [])
-    end,
-    ok.
+            start_statistics(RetryTimes + 1)
+    end.
 
 
 %%----------------------------------------------------------------------
@@ -112,6 +129,7 @@ ensure_started(Id, Module, Method, Type, Timeout) ->
         Pid -> Pid
     end.
 
+
 %% @private
 after_proc({ok, Pid}) ->
     ensure_started(inet_db, inet_db, start_link, worker, 2000),
@@ -122,48 +140,78 @@ after_proc({ok, Pid}) ->
     ok = launch_object_storage(Pid),
     ok = leo_ordning_reda_api:start(),
 
-    QueueDir = ?env_queue_dir(leo_storage),
+    %% Check the managers whether they are alive or not
     Managers = ?env_manager_nodes(leo_storage),
-    ok = launch_redundant_manager(Pid, Managers, QueueDir),
-    ok = leo_storage_mq:start(Pid, QueueDir),
+    IsAliveManagers = is_alive_managers(Managers),
 
-    %% After processing
-    ensure_started(rex, rpc, start_link, worker, 2000),
-    ok = leo_storage_api:register_in_monitor(first),
-
-    %% Launch leo-rpc
-    ok = leo_rpc:start(),
-
-    %% Watchdog for Storage in order to operate 'auto-compaction' automatically
-    case ?env_auto_compaction_enabled() of
-        true ->
-            {ok, _} = supervisor:start_child(
-                        leo_watchdog_sup, {leo_storage_watchdog,
-                                           {leo_storage_watchdog, start_link,
-                                            [?env_warn_active_size_ratio(),
-                                             ?env_threshold_active_size_ratio(),
-                                             ?env_storage_watchdog_interval()
-                                            ]},
-                                           permanent,
-                                           2000,
-                                           worker,
-                                           [leo_storage_watchdog]}),
-            ok = leo_storage_watchdog_sub:start();
-        false ->
-            void
-    end,
-
-    %% Launch statistics/mnesia-related processes
-    timer:apply_after(timer:seconds(3), ?MODULE, start_mnesia, []),
-    timer:apply_after(timer:seconds(3), ?MODULE, start_statistics, []),
-    {ok, Pid};
-
+    %% Launch others
+    after_proc_1(IsAliveManagers, Pid, Managers);
 after_proc(Error) ->
-    Error.
+    ?error("after_proc/1", "cause:~p", [Error]),
+    init:stop().
+
+%% @private
+after_proc_1(true, Pid, Managers) ->
+    try
+        QueueDir = ?env_queue_dir(leo_storage),
+        ok = launch_redundant_manager(Pid, Managers, QueueDir),
+        ok = leo_storage_mq:start(Pid, QueueDir),
+
+        %% After processing
+        ensure_started(rex, rpc, start_link, worker, 2000),
+        ok = leo_storage_api:register_in_monitor(first),
+
+        %% Launch leo-rpc
+        ok = leo_rpc:start(),
+
+        %% Watchdog for Storage in order to operate 'auto-compaction' automatically
+        case ?env_auto_compaction_enabled() of
+            true ->
+                {ok, _} = supervisor:start_child(
+                            leo_watchdog_sup, {leo_storage_watchdog,
+                                               {leo_storage_watchdog, start_link,
+                                                [?env_warn_active_size_ratio(),
+                                                 ?env_threshold_active_size_ratio(),
+                                                 ?env_storage_watchdog_interval()
+                                                ]},
+                                               permanent,
+                                               2000,
+                                               worker,
+                                               [leo_storage_watchdog]}),
+                ok = leo_storage_watchdog_sub:start();
+            false ->
+                void
+        end,
+
+        %% Launch statistics/mnesia-related processes
+        ok = start_mnesia(),
+        ok = start_statistics(),
+        {ok, Pid}
+    catch
+        _:Cause ->
+            ?error("after_proc_1/3", "cause:~p", [{"Launch failure", Cause}]),
+            init:stop()
+    end;
+after_proc_1(false,_,Managers) ->
+    ?error("after_proc_1/3", "cause:~s, managers:~p",
+           ["Not alive managers", Managers]),
+    init:stop().
+
+
+%% @private
+is_alive_managers([]) ->
+    false;
+is_alive_managers([Manager|Rest]) ->
+    case leo_misc:node_existence(Manager) of
+        true ->
+            true;
+        false ->
+            is_alive_managers(Rest)
+    end.
 
 
 %% @doc Launch Logger
-%%
+%% @private
 launch_logger() ->
     DefLogDir = "./log/",
     LogDir    = case application:get_env(leo_storage, log_appender) of
@@ -177,7 +225,7 @@ launch_logger() ->
 
 
 %% @doc Launch Object-Storage
-%%
+%% @private
 launch_object_storage(RefSup) ->
     ObjStoageInfo =
         case ?env_storage_device() of

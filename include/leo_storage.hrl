@@ -27,8 +27,9 @@
 %% @doc default-values.
 %%
 -define(SHUTDOWN_WAITING_TIME, 2000).
--define(MAX_RESTART,              5).
--define(MAX_TIME,                60).
+-define(MAX_RESTART, 5).
+-define(MAX_TIME, 60).
+-define(RETRY_TIMES, 5).
 
 -ifdef(TEST).
 -define(TIMEOUT,         1000).
