@@ -452,10 +452,10 @@ get_node_status() ->
           {compaction_num_of_batch_procs_max,            ?env_compaction_num_of_batch_procs_max()},
           {compaction_num_of_batch_procs_reg,            ?env_compaction_num_of_batch_procs_reg()},
           {compaction_num_of_batch_procs_step,           ?env_compaction_num_of_batch_procs_step()},
-          {compaction_interval_between_batch_procs_min,  ?env_compaction_interval_between_batch_procs_min()},
-          {compaction_interval_between_batch_procs_max,  ?env_compaction_interval_between_batch_procs_max()},
-          {compaction_interval_between_batch_procs_reg,  ?env_compaction_interval_between_batch_procs_reg()},
-          {compaction_interval_between_batch_procs_step, ?env_compaction_interval_between_batch_procs_step()},
+          {compaction_interval_between_batch_procs_min,  ?env_compaction_interval_min()},
+          {compaction_interval_between_batch_procs_max,  ?env_compaction_interval_max()},
+          {compaction_interval_between_batch_procs_reg,  ?env_compaction_interval_reg()},
+          {compaction_interval_between_batch_procs_step, ?env_compaction_interval_step()},
           %% others
           {statistics, Statistics}
          ]}.

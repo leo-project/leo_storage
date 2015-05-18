@@ -41,6 +41,7 @@
 
 %% Callback
 -export([init/1,
+         update_property/3,
          handle_call/2,
          handle_fail/2]).
 
@@ -92,6 +93,15 @@ state() ->
              ok | {error, Cause} when State::any(),
                                       Cause::any()).
 init(_State) ->
+    ok.
+
+
+%% @doc Update a property
+-spec(update_property(Item, Value, State) ->
+             ok | {error, any()} when Item::atom(),
+                                      Value::any(),
+                                      State::#state{}).
+update_property(_,_,_) ->
     ok.
 
 
