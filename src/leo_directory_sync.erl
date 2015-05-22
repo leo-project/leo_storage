@@ -63,8 +63,14 @@ start() ->
             DirDBProcs = ?env_dir_db_procs(),
             DirDBName  = ?env_dir_db_name(),
             DirDBPath  = ?env_dir_db_path(),
+            DirDBPath_1 = case DirDBProcs of
+                              1 ->
+                                  filename:join([DirDBPath, "1"]);
+                              _ ->
+                                  DirDBPath
+                          end,
             leo_backend_db_sup:start_child(
-              SupRef, ?DIR_DB_ID, DirDBProcs, DirDBName, DirDBPath)
+              SupRef, ?DIR_DB_ID, DirDBProcs, DirDBName, DirDBPath_1)
     end.
 
 
