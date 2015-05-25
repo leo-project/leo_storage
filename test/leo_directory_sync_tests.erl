@@ -141,8 +141,17 @@ stack_(_) ->
     ?assertEqual(Metadata_5, binary_to_term(Bin_5)),
     ?assertEqual(Metadata_6, binary_to_term(Bin_6)),
     ?assertEqual(Metadata_7, binary_to_term(Bin_7)),
+
+    %%
+    %% TEST: Store metadatas w/sync
+    %%
+    ?debugFmt("~n --- TEST: Store metadatas w/sync", []),
+    Key_8 = <<"a/$$_dir_$$">>,
+    Metadata_8 = #?METADATA{key = Key_8,
+                            ksize = byte_size(Key_8)},
+    ok = leo_directory_sync:append(sync, Metadata_8),
+    {ok, Bin_8} = leo_backend_db_api:get(?DIR_DB_ID, <<"a/", "\t", Key_8/binary >>),
+    ?assertEqual(Metadata_8, binary_to_term(Bin_8)),
     ok.
 
-
 -endif.
-

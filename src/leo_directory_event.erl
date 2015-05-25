@@ -30,6 +30,7 @@
 -behaviour(gen_event).
 
 -include("leo_storage.hrl").
+-include_lib("leo_object_storage/include/leo_object_storage.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 %% gen_server callbacks
@@ -47,9 +48,15 @@
 init([]) ->
     {ok, []}.
 
-handle_event({Method, Metadata}, State) when Method == put;
-                                             Method == delete ->
-    _ = leo_directory_sync:append(Metadata),
+handle_event({Method, #?METADATA{key = Key} = Metadata}, State) when Method == put;
+                                                                     Method == delete ->
+    SyncMode = case binary:match(Key, [<<"$$_dir_$$">>],[]) of
+                   nomatch ->
+                       async;
+                   _ ->
+                       sync
+               end,
+    _ = leo_directory_sync:append(SyncMode, Metadata),
     {ok, State};
 handle_event(_, State) ->
     {ok, State}.

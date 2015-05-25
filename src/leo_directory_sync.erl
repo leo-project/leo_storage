@@ -37,7 +37,7 @@
 
 -export([start/0,
          add_container/1, remove_container/1,
-         append/1, append/3,
+         append/1, append/2, append/3,
          create_directories/1,
          store/2,
          recover/1, recover/2
@@ -99,7 +99,12 @@ remove_container(DestNode) ->
              ok when Metadata::#?METADATA{}).
 append(#?METADATA{key = <<>>}) ->
     ok;
-append(#?METADATA{key = Key} = Metadata) ->
+append(Metadata) ->
+    append(async, Metadata).
+
+
+append(SyncMode, #?METADATA{addr_id = AddrId,
+                            key = Key} = Metadata) ->
     %% Retrieve a directory from the key
     case get_directory_from_key(Key) of
         <<>> ->
@@ -113,7 +118,11 @@ append(#?METADATA{key = Key} = Metadata) ->
                                                   node = Node} <- RedundantNodes] of
                         [] ->
                             enqueue(Metadata);
-                        ActiveNodes ->
+                        ActiveNodes when SyncMode == sync ->
+                            StackedInfo = [{AddrId, Dir, Key}],
+                            Bin = get_dir_and_metadata_bin(Dir, Metadata),
+                            handle_send({metadata, hd(ActiveNodes)}, StackedInfo, Bin);
+                        ActiveNodes when SyncMode == async ->
                             lists:foreach(fun(N) ->
                                                   append(N, Dir, Metadata)
                                           end, ActiveNodes),
@@ -133,14 +142,7 @@ append(DestNode, Dir, #?METADATA{addr_id = AddrId,
                                  key = Key} = Metadata) ->
     case leo_ordning_reda_api:has_container({metadata, DestNode}) of
         true ->
-            DirSize  = byte_size(Dir),
-            MetaBin  = term_to_binary(Metadata),
-            MetaSize = byte_size(MetaBin),
-            Data = << DirSize:?DEF_BIN_DIR_SIZE,
-                      Dir/binary,
-                      MetaSize:?DEF_BIN_META_SIZE,
-                      MetaBin/binary,
-                      ?DEF_BIN_PADDING/binary >>,
+            Data = get_dir_and_metadata_bin(Dir, Metadata),
             leo_ordning_reda_api:stack({metadata, DestNode}, {AddrId, Dir, Key}, Data);
         false ->
             case add_container(DestNode) of
@@ -154,6 +156,19 @@ append(DestNode, Dir, #?METADATA{addr_id = AddrId,
                     Error
             end
     end.
+
+
+%% @doc Retrieve binary of a directory and a metadata
+%% @private
+get_dir_and_metadata_bin(Dir, Metadata) ->
+    DirSize  = byte_size(Dir),
+    MetaBin  = term_to_binary(Metadata),
+    MetaSize = byte_size(MetaBin),
+    << DirSize:?DEF_BIN_DIR_SIZE,
+       Dir/binary,
+       MetaSize:?DEF_BIN_META_SIZE,
+       MetaBin/binary,
+       ?DEF_BIN_PADDING/binary >>.
 
 
 %% @doc Create directories

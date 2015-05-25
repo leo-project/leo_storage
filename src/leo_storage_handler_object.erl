@@ -201,7 +201,6 @@ get_fun(AddrId, Key, StartPos, EndPos) ->
 put({Object, Ref}) ->
     AddrId = Object#?OBJECT.addr_id,
     Key    = Object#?OBJECT.key,
-
     case Object#?OBJECT.del of
         ?DEL_TRUE->
             case leo_object_storage_api:head({AddrId, Key}) of
