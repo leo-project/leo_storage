@@ -94,6 +94,18 @@ find_by_parent_dir_([Node0, Node1]) ->
                                                      ]}
                                         end]),
 
+    ok = rpc:call(Node1, meck, new,    [leo_cache_api, [no_link, non_strict]]),
+    ok = rpc:call(Node1, meck, expect, [leo_cache_api, get,
+                                        fun(_) ->
+                                                not_found
+                                        end]),
+
+    ok = rpc:call(Node1, meck, new,    [leo_misc, [no_link, non_strict]]),
+    ok = rpc:call(Node1, meck, expect, [leo_misc, binary_tokens,
+                                        fun(_,_) ->
+                                                [<<"air/on/g/">>]
+                                        end]),
+
     {ok, Res} = leo_storage_handler_directory:find_by_parent_dir(<<"air/on/g/">>, <<>>, <<>>, 1000),
     ?debugVal(Res),
     ?assertEqual(2, length(Res)),

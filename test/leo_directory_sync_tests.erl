@@ -146,6 +146,20 @@ stack_(_) ->
     %% TEST: Store metadatas w/sync
     %%
     ?debugFmt("~n --- TEST: Store metadatas w/sync", []),
+    ok = meck:new(leo_cache_api, [non_strict]),
+    ok = meck:expect(leo_cache_api, put,
+                     fun(_,_) ->
+                             ok
+                     end),
+    ok = meck:expect(leo_cache_api, delete,
+                     fun(_) ->
+                             ok
+                     end),
+    ok = meck:expect(leo_cache_api, get,
+                     fun(_) ->
+                             not_found
+                     end),
+
     Key_8 = <<"a/$$_dir_$$">>,
     Metadata_8 = #?METADATA{key = Key_8,
                             ksize = byte_size(Key_8)},

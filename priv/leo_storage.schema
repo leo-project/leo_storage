@@ -255,6 +255,46 @@
 
 
 %% --------------------------------------------------------------------
+%% CACHE for Directory's Metadata
+%% --------------------------------------------------------------------
+%% @doc A number of cache workers
+{mapping,
+ "cache.cache_workers",
+ "leo_cache.cache_workers",
+ [
+  {datatype, integer},
+  {default, 16}
+ ]}.
+
+%% @doc Memory cache capacity in bytes
+{mapping,
+ "cache.cache_ram_capacity",
+ "leo_cache.cache_ram_capacity",
+ [
+  {datatype, bytesize},
+  {default, 1073741824} %% 1GB
+ ]}.
+
+%% @doc Cache Expire in seconds
+{mapping,
+ "cache.cache_expire",
+ "leo_cache.cache_expire",
+ [
+  {datatype, integer},
+  {default, 1800} %% 30min
+ ]}.
+
+%% @doc Cache Max Content Length in bytes
+{mapping,
+ "cache.cache_max_content_len",
+ "leo_cache.cache_max_content_len",
+ [
+  {datatype, bytesize},
+  {default, 524288} %% 512KB
+ ]}.
+
+
+%% --------------------------------------------------------------------
 %% STORAGE - Watchdog
 %% --------------------------------------------------------------------
 %%

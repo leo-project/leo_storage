@@ -22,8 +22,6 @@
 %% LeoFS Storage - Constant/Macro/Record
 %%
 %%====================================================================
--author('Yosuke Hara').
-
 %% @doc default-values.
 %%
 -define(SHUTDOWN_WAITING_TIME, 2000).
@@ -326,7 +324,7 @@
 -ifdef(TEST).
 -define(CONTAINER_TIMEOUT,  1).
 -else.
--define(CONTAINER_TIMEOUT,  timer:seconds(1)).
+-define(CONTAINER_TIMEOUT,  250).
 -endif.
 
 -define(DIR_DB_PROP_PROCS, 'dir_db_num_of_procs').
@@ -337,6 +335,8 @@
 -define(DIR_DB_PROCS, 8).
 -define(DIR_DB_NAME, 'leveldb').
 -define(DIR_DB_PATH, "./avs/directory/").
+
+-define(DEF_MAX_CACHE_DIR_METADATA, 10000).
 
 -define(env_dir_db_procs(),
         case application:get_env(leo_storage, ?DIR_DB_PROP_PROCS) of
@@ -355,6 +355,13 @@
             {ok, _EnvDirDBPath} -> _EnvDirDBPath;
             _ -> ?DIR_DB_PATH
         end).
+
+-record(metadata_cache, {
+          dir = <<>> :: binary(),
+          rows = 0 :: non_neg_integer(),
+          metadatas = [] :: [tuple()],
+          created_at = 0 :: pos_integer()
+         }).
 
 
 %% For the multi-DC Replication and synchronization of data

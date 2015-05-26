@@ -24,6 +24,7 @@
 %% @end
 %%======================================================================
 -module(leo_directory_sync).
+
 -author('Yosuke Hara').
 
 -behaviour(leo_ordning_reda_behaviour).
@@ -101,8 +102,6 @@ append(#?METADATA{key = <<>>}) ->
     ok;
 append(Metadata) ->
     append(async, Metadata).
-
-
 append(SyncMode, #?METADATA{addr_id = AddrId,
                             key = Key} = Metadata) ->
     %% Retrieve a directory from the key
@@ -198,13 +197,43 @@ create_directories([Dir|Rest]) ->
              ok | {error, any()} when Ref::reference(),
                                       StackedBin::binary()).
 store(Ref, StackedBin) ->
-    Ret = slice_and_store(StackedBin),
+    {Ret, Dirs} = slice_and_store(StackedBin, ordsets:new()),
+    ok = cache_dir_metadata(Dirs),
     {Ret, Ref}.
 
+
+%% @doc Cache metadatas under the dir
 %% @private
-slice_and_store(<<>>) ->
+cache_dir_metadata([]) ->
     ok;
-slice_and_store(StackedBin) ->
+cache_dir_metadata([Dir|Rest]) ->
+    case leo_cache_api:delete(Dir) of
+        ok ->
+            case leo_storage_handler_directory:find_by_parent_dir(
+                   Dir, [], <<>>, ?DEF_MAX_CACHE_DIR_METADATA) of
+                {ok, MetadataList} when MetadataList /= [] ->
+                    leo_cache_api:put(Dir, term_to_binary(
+                                             #metadata_cache{dir = Dir,
+                                                             rows = length(MetadataList),
+                                                             metadatas = MetadataList,
+                                                             created_at = leo_date:now()
+                                                            }));
+                _ ->
+                    void
+            end;
+        {error, Cause} ->
+            ?error("cache_dir_metadata/1",
+                   "dir:~p, cause:~p", [Dir, Cause])
+    end,
+    cache_dir_metadata(Rest).
+
+
+%% @doc Retrieve values from a stacked-bin,
+%%      then store restored value into the metadata-db
+%% @private
+slice_and_store(<<>>, Acc) ->
+    {ok, ordsets:to_list(Acc)};
+slice_and_store(StackedBin, Acc) ->
     case slice(StackedBin) of
         {ok, {DirBin, #?METADATA{key = Key,
                                  clock = Clock,
@@ -229,37 +258,79 @@ slice_and_store(StackedBin) ->
                         false
                 end,
 
-            case CanPutVal of
-                true when Del == ?DEL_FALSE ->
-                    case leo_backend_db_api:put(?DIR_DB_ID, KeyBin, ValBin) of
-                        ok ->
-                            ok;
-                        {error, Cause} ->
-                            error_logger:info_msg("~p,~p,~p,~p~n",
-                                                  [{module, ?MODULE_STRING},
-                                                   {function, "slice_and_store/1"},
-                                                   {line, ?LINE}, {body, Cause}]),
-                            enqueue(Metadata)
-                    end;
-                true when Del == ?DEL_TRUE ->
-                    case leo_backend_db_api:delete(?DIR_DB_ID, KeyBin) of
-                        ok ->
-                            ok;
-                        {error, Cause} ->
-                            error_logger:info_msg("~p,~p,~p,~p~n",
-                                                  [{module, ?MODULE_STRING},
-                                                   {function, "slice_and_store/1"},
-                                                   {line, ?LINE}, {body, Cause}]),
-                            enqueue(Metadata)
-                    end;
-                false ->
-                    void
-            end,
-            slice_and_store(StackedBin_1);
+            %% Store and Remove a metadata from the dir's metadata-db
+            %% and append a dir into the set
+            Acc_1 =
+                case CanPutVal of
+                    true when Del == ?DEL_FALSE ->
+                        case leo_backend_db_api:put(?DIR_DB_ID, KeyBin, ValBin) of
+                            ok ->
+                                append_dir(DirBin, Metadata, Acc);
+                            {error, Cause} ->
+                                error_logger:info_msg("~p,~p,~p,~p~n",
+                                                      [{module, ?MODULE_STRING},
+                                                       {function, "slice_and_store/1"},
+                                                       {line, ?LINE}, {body, Cause}]),
+                                enqueue(Metadata),
+                                Acc
+                        end;
+                    true when Del == ?DEL_TRUE ->
+                        case leo_backend_db_api:delete(?DIR_DB_ID, KeyBin) of
+                            ok ->
+                                append_dir(DirBin, Metadata, Acc);
+                            {error, Cause} ->
+                                error_logger:info_msg("~p,~p,~p,~p~n",
+                                                      [{module, ?MODULE_STRING},
+                                                       {function, "slice_and_store/1"},
+                                                       {line, ?LINE}, {body, Cause}]),
+                                enqueue(Metadata),
+                                Acc
+                        end;
+                    false ->
+                        Acc
+                end,
+            slice_and_store(StackedBin_1, Acc_1);
         _ ->
-            {error, invalid_format}
+            {{error, invalid_format},[]}
     end.
 
+
+%% @doc Append a dir
+%% @private
+append_dir(DirBin, #?METADATA{key = Key} = Metadata, Acc) ->
+    append_dir_1(binary:last(Key), DirBin, Metadata, Acc).
+
+%% @private
+append_dir_1(16#2f, DirBin, #?METADATA{key = Key} = Metadata, Acc) ->
+    case leo_cache_api:get(DirBin) of
+        {ok, CacheBin} ->
+            case binary_to_term(CacheBin) of
+                #metadata_cache{
+                   metadatas = MetaList} = MetaCache ->
+                    case lists:keyfind(Key, 2, MetaList) of
+                        false ->
+                            OrdSets = ordsets:from_list(MetaList),
+                            MetaList_1 = ordsets:to_list(ordsets:add_element(Metadata, OrdSets)),
+                            leo_cache_api:put(
+                              DirBin, term_to_binary(MetaCache#metadata_cache{
+                                                       rows = length(MetaList_1),
+                                                       metadatas = MetaList_1,
+                                                       created_at = leo_date:now()}));
+                        _ ->
+                            void
+                    end;
+                _ ->
+                    void
+            end;
+        _ ->
+            void
+    end,
+    Acc;
+append_dir_1(_,DirBin,_,Acc) ->
+    ordsets:add_element(DirBin, Acc).
+
+
+%% @doc Retrieve a value from a stacked-bin
 %% @private
 slice(Bin) ->
     try
@@ -466,3 +537,12 @@ enqueue(#?METADATA{key = Key} = Metadata) ->
                    "key:~p, cause:~p", [Key, Cause]),
             ok
     end.
+
+
+%% CacheExpire =
+%%     case application:get_env(leo_cache, cache_expire) of
+%%         {ok, EnvCacheExpire} ->
+%%             EnvCacheExpire;
+%%         _ ->
+%%             timer:minutes(5)
+%%     end.

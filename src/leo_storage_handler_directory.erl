@@ -24,6 +24,7 @@
 %% @end
 %%======================================================================
 -module(leo_storage_handler_directory).
+
 -author('Yosuke Hara').
 
 -include("leo_storage.hrl").
@@ -31,7 +32,8 @@
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
--export([find_by_parent_dir/4
+-export([find_by_parent_dir/4,
+         find_by_parent_dir_from_remote/3
         ]).
 
 -define(DEF_MAX_KEYS, 1000).
@@ -73,13 +75,41 @@ find_by_parent_dir(Dir, _Delimiter, Marker, MaxKeys) ->
             Error
     end.
 
+
 %% @doc Retrieve metadatas under the directory
+%% @TODO: retrieve metadata processing: need to handle marker and maxkeys
+%%
+-spec(find_by_parent_dir_from_remote(Dir, Marker, MaxKeys) ->
+             {ok, list()} |
+             {error, any()} when Dir::binary(),
+                                 Marker::binary()|null,
+                                 MaxKeys::integer()).
+find_by_parent_dir_from_remote(Dir, <<>> = Marker, MaxKeys) ->
+    Dir_1 = hd(leo_misc:binary_tokens(Dir, <<"\t">>)),
+    Ret = case leo_cache_api:get(Dir_1) of
+              {ok, MetaBin} ->
+                  case binary_to_term(MetaBin) of
+                      #metadata_cache{dir = Dir_1,
+                                      rows = _Rows,
+                                      metadatas = MetadataList} ->
+                          {ok, MetadataList};
+                      _ ->
+                          not_found
+                  end;
+              _ ->
+                  not_found
+          end,
+    case Ret of
+        not_found ->
+            find_by_parent_dir_from_remote_1(Dir, Marker, MaxKeys);
+        _ ->
+            Ret
+    end;
+find_by_parent_dir_from_remote(Dir, Marker, MaxKeys) ->
+    find_by_parent_dir_from_remote_1(Dir, Marker, MaxKeys).
+
 %% @private
-find_by_parent_dir_1([],_,_,_,_) ->
-    {error, ?ERROR_COULD_NOT_GET_META};
-find_by_parent_dir_1([#redundant_node{available = false}|Rest], AddrId, Dir, Marker, MaxKeys) ->
-    find_by_parent_dir_1(Rest, AddrId, Dir, Marker, MaxKeys);
-find_by_parent_dir_1([#redundant_node{node = Node}|Rest], AddrId, Dir, Marker, MaxKeys) ->
+find_by_parent_dir_from_remote_1(Dir, Marker, MaxKeys) ->
     Fun = fun(_K, V, Acc) ->
                   case catch binary_to_term(V) of
                       #?METADATA{key = Key,
@@ -101,8 +131,18 @@ find_by_parent_dir_1([#redundant_node{node = Node}|Rest], AddrId, Dir, Marker, M
                           Acc
                   end
           end,
+    leo_backend_db_api:fetch(?DIR_DB_ID, Dir, Fun, MaxKeys).
 
-    RPCKey = rpc:async_call(Node, leo_backend_db_api, fetch, [?DIR_DB_ID, Dir, Fun, MaxKeys]),
+
+%% @doc Retrieve metadatas under the directory
+%% @private
+find_by_parent_dir_1([],_,_,_,_) ->
+    {error, ?ERROR_COULD_NOT_GET_META};
+find_by_parent_dir_1([#redundant_node{available = false}|Rest], AddrId, Dir, Marker, MaxKeys) ->
+    find_by_parent_dir_1(Rest, AddrId, Dir, Marker, MaxKeys);
+find_by_parent_dir_1([#redundant_node{node = Node}|Rest], AddrId, Dir, Marker, MaxKeys) ->
+    RPCKey = rpc:async_call(Node, ?MODULE,
+                            find_by_parent_dir_from_remote, [Dir, Marker, MaxKeys]),
     Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
               {value, {ok, RetL}} ->
                   {ok, lists:sort(RetL)};

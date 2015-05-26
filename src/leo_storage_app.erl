@@ -30,6 +30,11 @@
 -behaviour(application).
 
 -include("leo_storage.hrl").
+-include_lib("leo_cache/include/leo_cache.hrl").
+-undef(error).
+-undef(warn).
+-undef(PROP_OPTIONS).
+
 -include_lib("leo_commons/include/leo_commons.hrl").
 -include_lib("leo_logger/include/leo_logger.hrl").
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
@@ -116,6 +121,31 @@ start_statistics(RetryTimes) ->
     end.
 
 
+%% @doc Launch LeoCache
+%% @pricate
+start_mem_cache() ->
+    NumOfCacheWorkers =
+        case application:get_env(leo_cache, cache_workers) of
+            {ok, EnvNumOfCacheWorkers} ->
+                EnvNumOfCacheWorkers;
+            _ ->
+                ?DEF_PROP_RAM_CACHE_WORKERS
+        end,
+    CacheRAMCapacity =
+        case application:get_env(leo_cache, cache_ram_capacity) of
+            {ok, EnvCacheRAMCapacity} ->
+                EnvCacheRAMCapacity;
+            _ ->
+                ?DEF_PROP_RAM_CACHE_SIZE
+        end,
+    ok = leo_cache_api:start([{?PROP_RAM_CACHE_NAME,    ?DEF_PROP_RAM_CACHE},
+                              {?PROP_RAM_CACHE_WORKERS, NumOfCacheWorkers},
+                              {?PROP_RAM_CACHE_SIZE,    CacheRAMCapacity},
+                              {?PROP_DISC_CACHE_SIZE,   0}
+                             ]),
+    ok.
+
+
 %%----------------------------------------------------------------------
 %% INNER FUNCTION
 %%----------------------------------------------------------------------
@@ -191,6 +221,7 @@ after_proc_1(true, Pid, Managers) ->
         %% Launch statistics/mnesia-related processes
         ok = start_mnesia(),
         ok = start_statistics(),
+        ok = start_mem_cache(),
         {ok, Pid}
     catch
         _:Cause ->
