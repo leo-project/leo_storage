@@ -48,15 +48,9 @@
 init([]) ->
     {ok, []}.
 
-handle_event({Method, #?METADATA{key = Key} = Metadata}, State) when Method == put;
-                                                                     Method == delete ->
-    SyncMode = case binary:match(Key, [<<"$$_dir_$$">>],[]) of
-                   nomatch ->
-                       async;
-                   _ ->
-                       sync
-               end,
-    _ = leo_directory_sync:append(SyncMode, Metadata),
+handle_event({Method, Metadata}, State) when Method == put;
+                                             Method == delete ->
+    _ = leo_directory_sync:append(async, Metadata),
     {ok, State};
 handle_event(_, State) ->
     {ok, State}.

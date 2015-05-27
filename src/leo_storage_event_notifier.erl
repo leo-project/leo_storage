@@ -107,7 +107,7 @@ handle_call(stop, _From, State) ->
 handle_call({operate, Method, #?METADATA{} = Metadata}, _From,
             #state{event_pid = Pid} = State) when Method == ?CMD_PUT;
                                                   Method == ?CMD_DELETE ->
-    ok = gen_event:notify(Pid, {Method, Metadata}),
+    _ = notify_fun(Pid, Method, Metadata),
     {reply, ok, State};
 
 handle_call({operate, Method, #?OBJECT{} = Object}, _From,
@@ -115,7 +115,7 @@ handle_call({operate, Method, #?OBJECT{} = Object}, _From,
                                                   Method == ?CMD_DELETE ->
     Metadata = leo_object_storage_transformer:object_to_metadata(Object),
     ok = leo_sync_remote_cluster:defer_stack(Object),
-    ok = gen_event:notify(Pid, {Method, Metadata}),
+    _ = notify_fun(Pid, Method, Metadata),
     {reply, ok, State};
 
 handle_call({replicate, Nodes, #?METADATA{addr_id = AddrId,
@@ -140,7 +140,7 @@ handle_call({replicate, Nodes, #?METADATA{addr_id = AddrId,
     ok = leo_sync_remote_cluster:defer_stack(Object_2),
 
     %% synchronize the metadata into the cluster
-    ok = gen_event:notify(Pid, {put, Metadata}),
+    _ = notify_fun(Pid, put, Metadata),
     {reply, Ret, State};
 
 handle_call(_Msg, _From, State) ->
@@ -173,3 +173,24 @@ terminate(_Reason,_State) ->
 %% @doc Convert process state when code is changed
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
+
+%%====================================================================
+%% Inner Functions
+%%====================================================================
+%% @doc Notify a message to directory_sync
+%% @private
+notify_fun(Pid, Method, #?METADATA{key = Key} = Metadata) ->
+    %% synchronize the metadata into the cluster
+    SyncMode = case binary:match(Key, [<<"$$_dir_$$">>],[]) of
+                   nomatch ->
+                       async;
+                   _ ->
+                       sync
+               end,
+    case SyncMode of
+        async ->
+            gen_event:notify(Pid, {Method, Metadata});
+        sync ->
+            leo_directory_sync:append(SyncMode, Metadata)
+    end.
