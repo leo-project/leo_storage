@@ -45,7 +45,9 @@
         ]).
 -export([handle_send/3,
          handle_fail/2]).
--export([get_directories/1]).
+-export([get_directories/1,
+         get_directory_from_key/1
+        ]).
 
 
 %%--------------------------------------------------------------------
@@ -427,11 +429,7 @@ handle_fail(_Unit, [{_AddrId,_Dir, Key}|Rest]) ->
     handle_fail(_Unit, Rest).
 
 
-%%--------------------------------------------------------------------
-%% INNER FUNCTION
-%%--------------------------------------------------------------------
 %% @doc Retrieve a directory from the key
-%% @private
 -spec(get_directory_from_key(Key) ->
              binary() when Key::binary()).
 get_directory_from_key(<<>>) ->
@@ -468,7 +466,6 @@ get_directory_from_key(Key) ->
 
 
 %% @doc Retrieve a directories from the metadata
-%% @private
 -spec(get_directories(Metadata) ->
              [binary()] when Metadata::#?METADATA{}).
 get_directories(#?METADATA{key = Key} = Metadata) ->
@@ -515,6 +512,7 @@ get_directories_2([H|T], #?METADATA{clock = Clock,
 
 
 %% @doc
+%% @private
 -spec(get_directories_from_stacked_info(StackedInfo, Acc) ->
              [binary()] when StackedInfo::[{integer(), binary(), binary()}],
                              Acc::any()).
@@ -537,12 +535,3 @@ enqueue(#?METADATA{key = Key} = Metadata) ->
                    "key:~p, cause:~p", [Key, Cause]),
             ok
     end.
-
-
-%% CacheExpire =
-%%     case application:get_env(leo_cache, cache_expire) of
-%%         {ok, EnvCacheExpire} ->
-%%             EnvCacheExpire;
-%%         _ ->
-%%             timer:minutes(5)
-%%     end.

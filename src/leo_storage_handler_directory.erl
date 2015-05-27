@@ -28,12 +28,14 @@
 -author('Yosuke Hara').
 
 -include("leo_storage.hrl").
+-include_lib("leo_logger/include/leo_logger.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
--export([find_by_parent_dir/4,
-         find_by_parent_dir_from_remote/3
+-export([is_dir/1, ask_is_dir/1,
+         find_by_parent_dir/4,
+         ask_to_find_by_parent_dir/3
         ]).
 
 -define(DEF_MAX_KEYS, 1000).
@@ -42,6 +44,57 @@
 %%--------------------------------------------------------------------
 %% API
 %%--------------------------------------------------------------------
+%% @doc Find by index from the backenddb.
+%%
+-spec(is_dir(Dir) ->
+             boolean() when Dir::binary()).
+is_dir(Dir) ->
+    case leo_redundant_manager_api:get_redundancies_by_key(Dir) of
+        {ok, #redundancies{nodes = Nodes}} ->
+            is_dir_1(Nodes, Dir);
+        Error ->
+            Error
+    end.
+
+%% @private
+is_dir_1([],_Dir) ->
+    false;
+is_dir_1([#redundant_node{available = false}|Rest], Dir) ->
+    is_dir_1(Rest, Dir);
+is_dir_1([#redundant_node{node = Node}|Rest], Dir) ->
+    RPCKey = rpc:async_call(Node, ?MODULE, ask_is_dir, [Dir]),
+    Reply = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
+                {value, Ret} ->
+                    Ret;
+                {badrpc, Cause} ->
+                    {error, Cause};
+                timeout = Cause ->
+                    {error, Cause}
+            end,
+    case Reply of
+        {ok,_} ->
+            erlang:element(2, Reply);
+        {error, Reason} ->
+            ?error("is_dir_1/2", "dir:~p, cause:~p", [Dir, Reason]),
+            is_dir_1(Rest, Dir)
+    end.
+
+
+-spec(ask_is_dir(Dir) ->
+             boolean() when Dir::binary()).
+ask_is_dir(Dir) ->
+    ParentDir = leo_directory_sync:get_directory_from_key(Dir),
+    Dir_1 = << ParentDir/binary, "\t", Dir/binary >>,
+    case leo_backend_db_api:get(?DIR_DB_ID, Dir_1) of
+        {ok,_} ->
+            {ok, true};
+        not_found ->
+            {ok, false};
+        Error ->
+            Error
+    end.
+
+
 %% @doc Find by index from the backenddb.
 %%
 -spec(find_by_parent_dir(Dir, Delimiter, Marker, MaxKeys) ->
@@ -60,16 +113,7 @@ find_by_parent_dir(Dir, _Delimiter, Marker, MaxKeys) ->
     case leo_redundant_manager_api:get_redundancies_by_key(Dir) of
         {ok, #redundancies{nodes = Nodes,
                            vnode_id_to = AddrId}} ->
-            Dir_1 = case binary:last(Dir) of
-                        %% "/"
-                        16#2f ->
-                            << Dir/binary, "\t" >>;
-                        %% "*"
-                        16#2a ->
-                            binary:part(Dir, {0, byte_size(Dir) - 1});
-                        _Other ->
-                            << Dir/binary, "/\t" >>
-                    end,
+            Dir_1 = get_managed_dir_name(Dir),
             find_by_parent_dir_1(Nodes, AddrId, Dir_1, Marker, MaxKeys);
         Error ->
             Error
@@ -77,14 +121,15 @@ find_by_parent_dir(Dir, _Delimiter, Marker, MaxKeys) ->
 
 
 %% @doc Retrieve metadatas under the directory
-%% @TODO: retrieve metadata processing: need to handle marker and maxkeys
-%%
--spec(find_by_parent_dir_from_remote(Dir, Marker, MaxKeys) ->
+%% @TODO:
+%%    * Need to handle marker and maxkeys to respond the correct list
+%%    * Re-cache metadatas
+-spec(ask_to_find_by_parent_dir(Dir, Marker, MaxKeys) ->
              {ok, list()} |
              {error, any()} when Dir::binary(),
                                  Marker::binary()|null,
                                  MaxKeys::integer()).
-find_by_parent_dir_from_remote(Dir, <<>> = Marker, MaxKeys) ->
+ask_to_find_by_parent_dir(Dir, <<>> = Marker, MaxKeys) ->
     Dir_1 = hd(leo_misc:binary_tokens(Dir, <<"\t">>)),
     Ret = case leo_cache_api:get(Dir_1) of
               {ok, MetaBin} ->
@@ -101,15 +146,15 @@ find_by_parent_dir_from_remote(Dir, <<>> = Marker, MaxKeys) ->
           end,
     case Ret of
         not_found ->
-            find_by_parent_dir_from_remote_1(Dir, Marker, MaxKeys);
+            ask_to_find_by_parent_dir_1(Dir, Marker, MaxKeys);
         _ ->
             Ret
     end;
-find_by_parent_dir_from_remote(Dir, Marker, MaxKeys) ->
-    find_by_parent_dir_from_remote_1(Dir, Marker, MaxKeys).
+ask_to_find_by_parent_dir(Dir, Marker, MaxKeys) ->
+    ask_to_find_by_parent_dir_1(Dir, Marker, MaxKeys).
 
 %% @private
-find_by_parent_dir_from_remote_1(Dir, Marker, MaxKeys) ->
+ask_to_find_by_parent_dir_1(Dir, Marker, MaxKeys) ->
     Fun = fun(_K, V, Acc) ->
                   case catch binary_to_term(V) of
                       #?METADATA{key = Key,
@@ -142,7 +187,7 @@ find_by_parent_dir_1([#redundant_node{available = false}|Rest], AddrId, Dir, Mar
     find_by_parent_dir_1(Rest, AddrId, Dir, Marker, MaxKeys);
 find_by_parent_dir_1([#redundant_node{node = Node}|Rest], AddrId, Dir, Marker, MaxKeys) ->
     RPCKey = rpc:async_call(Node, ?MODULE,
-                            find_by_parent_dir_from_remote, [Dir, Marker, MaxKeys]),
+                            ask_to_find_by_parent_dir, [Dir, Marker, MaxKeys]),
     Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
               {value, {ok, RetL}} ->
                   {ok, lists:sort(RetL)};
@@ -160,4 +205,22 @@ find_by_parent_dir_1([#redundant_node{node = Node}|Rest], AddrId, Dir, Marker, M
             Ret;
         {error,_} ->
             find_by_parent_dir_1(Rest, AddrId, Dir, Marker, MaxKeys)
+    end.
+
+
+%% @doc Retrieve a managed dir name from the actual dir's name
+%% @private
+-spec(get_managed_dir_name(Dir) ->
+             NewDir when Dir::binary(),
+                         NewDir::binary()).
+get_managed_dir_name(Dir) ->
+    case binary:last(Dir) of
+        %% "/"
+        16#2f ->
+            << Dir/binary, "\t" >>;
+        %% "*"
+        16#2a ->
+            binary:part(Dir, {0, byte_size(Dir) - 1});
+        _Other ->
+            << Dir/binary, "/\t" >>
     end.
