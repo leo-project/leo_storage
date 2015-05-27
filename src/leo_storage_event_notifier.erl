@@ -192,5 +192,12 @@ notify_fun(Pid, Method, #?METADATA{key = Key} = Metadata) ->
         async ->
             gen_event:notify(Pid, {Method, Metadata});
         sync ->
+            Dir = leo_directory_sync:get_directory_from_key(Key),
+            leo_directory_sync:append(SyncMode,
+                                      #?METADATA{key = Dir,
+                                                 ksize = byte_size(Dir),
+                                                 dsize = -1,
+                                                 clock = leo_date:clock(),
+                                                 timestamp = leo_date:now()}),
             leo_directory_sync:append(SyncMode, Metadata)
     end.
