@@ -146,7 +146,21 @@ ask_to_find_by_parent_dir(Dir, <<>> = Marker, MaxKeys) ->
           end,
     case Ret of
         not_found ->
-            ask_to_find_by_parent_dir_1(Dir, Marker, MaxKeys);
+            case ask_to_find_by_parent_dir_1(Dir, Marker, MaxKeys) of
+                {ok, MetadataList_1} = Reply ->
+                    %% @TODO:
+                    Rows = length(MetadataList_1),
+                    leo_cache_api:put(Dir_1,
+                                      term_to_binary(
+                                        #metadata_cache{dir = Dir_1,
+                                                        rows = Rows,
+                                                        metadatas = MetadataList_1,
+                                                        created_at = leo_date:now()
+                                                       })),
+                    Reply;
+                Error ->
+                    Error
+            end;
         _ ->
             Ret
     end;

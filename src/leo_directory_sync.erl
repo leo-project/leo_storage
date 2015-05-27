@@ -41,6 +41,7 @@
          append/1, append/2, append/3,
          create_directories/1,
          store/2,
+         cache_dir_metadata/1,
          recover/1, recover/2
         ]).
 -export([handle_send/3,
@@ -205,7 +206,9 @@ store(Ref, StackedBin) ->
 
 
 %% @doc Cache metadatas under the dir
-%% @private
+%%
+-spec(cache_dir_metadata([binary()]) ->
+             ok).
 cache_dir_metadata([]) ->
     ok;
 cache_dir_metadata([Dir|Rest]) ->
