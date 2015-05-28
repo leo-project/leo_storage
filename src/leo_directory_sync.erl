@@ -174,9 +174,9 @@ append_metadatas_1(_, [], SoFar) ->
 append_metadatas_1(SyncMode, [#?METADATA{key = Key} = Metadata|Rest], {ResL, Errors}) ->
     Acc = case append(SyncMode, Metadata) of
               ok ->
-                  [{ok, Key}|ResL];
+                  {[{ok, Key}|ResL], Errors};
               Error ->
-                  [{Key, Error}|Errors]
+                  {ResL, [{Key, Error}|Errors]}
           end,
     append_metadatas_1(SyncMode, Rest, Acc).
 
