@@ -39,6 +39,7 @@
 -export([start/0,
          add_container/1, remove_container/1,
          append/1, append/2, append/3,
+         append_metadatas/2,
          create_directories/1,
          store/2,
          cache_dir_metadata/1,
@@ -158,6 +159,26 @@ append(DestNode, Dir, #?METADATA{addr_id = AddrId,
                     Error
             end
     end.
+
+
+%% @doc Append metadatas in bulk
+-spec(append_metadatas(SyncMode, Metadatas) ->
+             [any()] when SyncMode::async|sync,
+                          Metadatas::[#?METADATA{}]).
+append_metadatas(SyncMode, Metadatas) ->
+    append_metadatas_1(SyncMode, Metadatas, {[],[]}).
+
+%% @private
+append_metadatas_1(_, [], SoFar) ->
+    SoFar;
+append_metadatas_1(SyncMode, [#?METADATA{key = Key} = Metadata|Rest], {ResL, Errors}) ->
+    Acc = case append(SyncMode, Metadata) of
+              ok ->
+                  [{ok, Key}|ResL];
+              Error ->
+                  [{Key, Error}|Errors]
+          end,
+    append_metadatas_1(SyncMode, Rest, Acc).
 
 
 %% @doc Retrieve binary of a directory and a metadata
