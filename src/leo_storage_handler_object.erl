@@ -431,6 +431,16 @@ delete_objects_under_dir(Object) ->
         {'EXIT',_} ->
             ok;
         ?BIN_SLASH = Bin ->
+            %% for metadata-layer
+            Dir = leo_directory_sync:get_directory_from_key(Key),
+            _ = leo_cache_api:delete(Dir),
+            _ = leo_directory_sync:append(sync, #?METADATA{key = Dir,
+                                                           ksize = byte_size(Dir),
+                                                           dsize = -1,
+                                                           clock = leo_date:clock(),
+                                                           timestamp = leo_date:now(),
+                                                           del = ?DEL_TRUE
+                                                          }),
             %% for remote storage nodes
             Targets =  [ Bin, undefined ],
             Ref = make_ref(),

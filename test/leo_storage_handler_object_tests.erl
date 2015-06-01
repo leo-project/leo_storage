@@ -239,6 +239,15 @@ delete_({Node0, Node1}) ->
                                                                     available = true}],
                                            n = 2, r = 1, w = 1, d = 1}}
                 end),
+    meck:expect(leo_redundant_manager_api, get_redundancies_by_key,
+                fun(_) ->
+                        {ok, #redundancies{id = 0,
+                                           nodes = [#redundant_node{node = Node0,
+                                                                    available = true},
+                                                    #redundant_node{node = Node1,
+                                                                    available = true}],
+                                           n = 2, r = 1, w = 1, d = 1}}
+                end),
     meck:expect(leo_redundant_manager_api, get_members_by_status,
                 fun(_State) ->
                         not_found
@@ -259,6 +268,12 @@ delete_({Node0, Node1}) ->
 
     meck:new(leo_watchdog_state, [non_strict]),
     meck:expect(leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end),
+
+    meck:new(leo_cache_api, [non_strict]),
+    meck:expect(leo_cache_api, delete, fun(_) -> ok end),
+
+    ok = rpc:call(Node1, meck, new,    [leo_cache_api, [no_link, non_strict]]),
+    ok = rpc:call(Node1, meck, expect, [leo_cache_api, delete, fun(_) -> ok end]),
 
     ok = rpc:call(Node1, meck, new,    [leo_metrics_req, [no_link, non_strict]]),
     ok = rpc:call(Node1, meck, expect, [leo_metrics_req, notify, fun(_) -> ok end]),

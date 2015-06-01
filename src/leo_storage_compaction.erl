@@ -52,7 +52,7 @@ has_charge_of_node(Key, NumOfReplicas) ->
 %% @doc Update a metadata (during the data-compaction processing)
 -spec(update_metadata(Method::put|delete, Key::binary(), Metadata::#?METADATA{}) ->
                  ok | {error, any()}).
-update_metadata(_Method,_Key, Metadata) ->    
+update_metadata(_Method,_Key, Metadata) ->
     leo_directory_sync:append(async, Metadata).
 
 

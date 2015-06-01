@@ -181,6 +181,14 @@ code_change(_OldVsn, State, _Extra) ->
 %% @doc Notify a message to directory_sync
 %% @private
 notify_fun(Pid, Method, #?METADATA{key = Key} = Metadata) ->
+    %% check child of an object?
+    IsChild = (nomatch =/= binary:match(Key, [<<"\n">>],[])),
+    notify_fun_1(IsChild, Pid, Method, Metadata).
+
+%% @private
+notify_fun_1(true,_Pid,_Method,_Metadata) ->
+    ok;
+notify_fun_1(false, Pid, Method, #?METADATA{key = Key} = Metadata) ->
     %% synchronize the metadata into the cluster
     SyncMode = case binary:match(Key, [<<"$$_dir_$$">>],[]) of
                    nomatch ->
