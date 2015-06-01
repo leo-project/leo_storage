@@ -123,7 +123,7 @@ find_by_parent_dir(Dir, _Delimiter, Marker, MaxKeys) ->
 %% @doc Retrieve metadatas under the directory
 %% @TODO:
 %%    * Need to handle marker and maxkeys to respond the correct list
-%%    * Re-cache metadatas
+%%    * Re-cache metadatas when the directory has many metadatas over maxkeys
 -spec(ask_to_find_by_parent_dir(Dir, Marker, MaxKeys) ->
              {ok, list()} |
              {error, any()} when Dir::binary(),
@@ -148,7 +148,6 @@ ask_to_find_by_parent_dir(Dir, <<>> = Marker, MaxKeys) ->
         not_found ->
             case ask_to_find_by_parent_dir_1(Dir, Marker, MaxKeys) of
                 {ok, MetadataList_1} = Reply ->
-                    %% @TODO:
                     Rows = length(MetadataList_1),
                     leo_cache_api:put(Dir_1,
                                       term_to_binary(

@@ -138,6 +138,11 @@ start_mem_cache() ->
             _ ->
                 ?DEF_PROP_RAM_CACHE_SIZE
         end,
+
+    {ok, _} = supervisor:start_child(
+                leo_storage_sup, {leo_cache_sup,
+                                  {leo_cache_sup, start_link,
+                                   []}, permanent, 2000, worker, [leo_cache_sup]}),
     ok = leo_cache_api:start([{?PROP_RAM_CACHE_NAME,    ?DEF_PROP_RAM_CACHE},
                               {?PROP_RAM_CACHE_WORKERS, NumOfCacheWorkers},
                               {?PROP_RAM_CACHE_SIZE,    CacheRAMCapacity},
