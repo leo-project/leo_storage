@@ -46,7 +46,6 @@
 -spec(has_charge_of_node(Key::binary(), NumOfReplicas::pos_integer()) ->
                  boolean()).
 has_charge_of_node(Key, NumOfReplicas) ->
-    ?debugVal({Key, NumOfReplicas}),
     leo_redundant_manager_api:has_charge_of_node(Key, NumOfReplicas).
 
 
@@ -54,7 +53,6 @@ has_charge_of_node(Key, NumOfReplicas) ->
 -spec(update_metadata(Method::put|delete, Key::binary(), Metadata::#?METADATA{}) ->
                  ok | {error, any()}).
 update_metadata(_Method,_Key, Metadata) ->    
-    ?debugVal({_Method,_Key, Metadata}),
     leo_directory_sync:append(async, Metadata).
 
 
