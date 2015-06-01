@@ -298,8 +298,7 @@ compact(start, NumOfTargets, MaxProc) ->
                                 lists:sublist(TargetPids1, NumOfTargets)
                         end,
                     leo_object_storage_api:compact_data(
-                      TargetPids2, MaxProc,
-                      fun leo_redundant_manager_api:has_charge_of_node/2)
+                      TargetPids2, MaxProc, leo_storage_compaction)
             end;
         _ ->
             {error,'not_running'}
