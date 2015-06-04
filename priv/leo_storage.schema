@@ -224,6 +224,16 @@
 %% --------------------------------------------------------------------
 %% STORAGE - Watchdog
 %% --------------------------------------------------------------------
+%% @doc When reach a number of safe (clear watchdog), a watchdog loosen the control
+{mapping,
+ "watchdog.common.loosen_control_at_safe_count",
+ "leo_watchdog.subscriber_safe_times",
+ [
+  {datatype, integer},
+  {default, 1}
+ ]}.
+
+
 %%
 %%  Watchdog.REX
 %%
