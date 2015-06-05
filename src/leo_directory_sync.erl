@@ -221,18 +221,51 @@ create_directories([Dir|Rest]) ->
              ok | {error, any()} when Ref::reference(),
                                       StackedBin::binary()).
 store(Ref, StackedBin) ->
-    {Ret, Dirs} = slice_and_store(StackedBin, ordsets:new()),
-    ok = cache_dir_metadata(Dirs),
+    {Ret, DirL} = slice_and_store(StackedBin, dict:new()),
+    ok = restore_dir_metadata(DirL),
+    ok = cache_dir_metadata(DirL),
     {Ret, Ref}.
 
 
+%% @doc Restore a dir's metadata
+%% @private
+-spec(restore_dir_metadata([{Dir, {Clock, Timestamp}}]) ->
+             ok when Dir::binary(),
+                     Clock::non_neg_integer(),
+                     Timestamp::non_neg_integer()).
+restore_dir_metadata([]) ->
+    ok;
+restore_dir_metadata([{Dir, {Clock, Timestamp}}|Rest]) ->
+    Parent = get_directory_from_key(Dir),
+    KeyBin = << Parent/binary, "\t", Dir/binary >>,
+    Metadata = #?METADATA{key = KeyBin,
+                          ksize = byte_size(KeyBin),
+                          clock = Clock,
+                          timestamp = Timestamp},
+    case leo_backend_db_api:put(?DIR_DB_ID,
+                                KeyBin, term_to_binary(Metadata)) of
+        ok ->
+            ok;
+        {error, Cause} ->
+            error_logger:info_msg("~p,~p,~p,~p~n",
+                                  [{module, ?MODULE_STRING},
+                                   {function, "restore_dir_metadata/1"},
+                                   {line, ?LINE}, {body, Cause}]),
+            enqueue(Metadata)
+    end,
+    restore_dir_metadata(Rest).
+
+
 %% @doc Cache metadatas under the dir
-%%
--spec(cache_dir_metadata([binary()]) ->
-             ok).
+%% @private
+-spec(cache_dir_metadata([{Dir, {Clock, Timestamp}}]) ->
+             ok when Dir::binary(),
+                     Clock::non_neg_integer(),
+                     Timestamp::non_neg_integer()).
 cache_dir_metadata([]) ->
     ok;
-cache_dir_metadata([Dir|Rest]) ->
+cache_dir_metadata([{Dir,_}|Rest]) ->
+    %% Re-cache metadatas under the directory
     case leo_cache_api:delete(Dir) of
         ok ->
             case leo_storage_handler_directory:find_by_parent_dir(
@@ -258,7 +291,7 @@ cache_dir_metadata([Dir|Rest]) ->
 %%      then store restored value into the metadata-db
 %% @private
 slice_and_store(<<>>, Acc) ->
-    {ok, ordsets:to_list(Acc)};
+    {ok, lists:sort(dict:to_list(Acc))};
 slice_and_store(StackedBin, Acc) ->
     case slice(StackedBin) of
         {ok, {DirBin, #?METADATA{key = Key,
@@ -352,8 +385,20 @@ append_dir_1(16#2f, DirBin, #?METADATA{key = Key} = Metadata, Acc) ->
             void
     end,
     Acc;
-append_dir_1(_,DirBin,_,Acc) ->
-    ordsets:add_element(DirBin, Acc).
+append_dir_1(_,DirBin, #?METADATA{clock = Clock,
+                                  timestamp = Timestamp}, Acc) ->
+    Current = {Clock, Timestamp},
+    case dict:is_key(DirBin, Acc) of
+        true ->
+            case dict:find(DirBin, Acc) of
+                error ->
+                    dict:store(DirBin, Current, Acc);
+                {Clock_1, Timestamp_1} when Clock < Clock_1 ->
+                    dict:store(DirBin, {Clock_1, Timestamp_1}, Acc)
+            end;
+        false ->
+            dict:store(DirBin, Current, Acc)
+    end.
 
 
 %% @doc Retrieve a value from a stacked-bin
