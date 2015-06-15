@@ -593,7 +593,7 @@
  "leo_object_storage.compaction_waiting_time_regular",
  [
   {datatype, integer},
-  {default, 300}
+  {default, 500}
  ]}.
 
 %% @doc Maximum waiting time/batch-proc (msec)
@@ -602,7 +602,7 @@
  "leo_object_storage.compaction_waiting_time_max",
  [
   {datatype, integer},
-  {default, 1000}
+  {default, 3000}
  ]}.
 
 %% @doc Step of compaction-proc waiting time(msec)
@@ -621,7 +621,7 @@
  "leo_object_storage.batch_procs_min",
  [
   {datatype, integer},
-  {default, 1000}
+  {default, 100}
  ]}.
 
 %% @doc Regular compaction batch processes
@@ -630,7 +630,7 @@
  "leo_object_storage.batch_procs_regular",
  [
   {datatype, integer},
-  {default, 10000}
+  {default, 2000}
  ]}.
 
 %% @doc Maximum compaction batch processes
@@ -639,7 +639,7 @@
  "leo_object_storage.batch_procs_max",
  [
   {datatype, integer},
-  {default, 100000}
+  {default, 10000}
  ]}.
 
 %% @doc Step compaction batch processes
