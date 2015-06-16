@@ -161,7 +161,7 @@ get(AddrId, Key, StartPos, EndPos, ReqId) ->
              {error, any()} when AddrId::integer(),
                                  Key::binary()).
 get_fun(AddrId, Key) ->
-    get_fun(AddrId, Key, 0, 0).
+    get_fun(AddrId, Key, -1, -1).
 
 -spec(get_fun(AddrId, Key, StartPos, EndPos) ->
              {ok, #?METADATA{}, #?OBJECT{}} |
