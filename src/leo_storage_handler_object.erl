@@ -32,6 +32,7 @@
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
 -include_lib("leo_ordning_reda/include/leo_ordning_reda.hrl").
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
+-undef(MAX_RETRY_TIMES).
 -include_lib("leo_statistics/include/leo_statistics.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
@@ -160,7 +161,7 @@ get(AddrId, Key, StartPos, EndPos, ReqId) ->
              {error, any()} when AddrId::integer(),
                                  Key::binary()).
 get_fun(AddrId, Key) ->
-    get_fun(AddrId, Key, 0, 0).
+    get_fun(AddrId, Key, -1, -1).
 
 -spec(get_fun(AddrId, Key, StartPos, EndPos) ->
              {ok, #?METADATA{}, #?OBJECT{}} |
@@ -328,10 +329,11 @@ delete_chunked_objects(CIndex, ParentKey) ->
     Key    = << ParentKey/binary, "\n", IndexBin/binary >>,
     AddrId = leo_redundant_manager_chash:vnode_id(Key),
 
-    case delete(#?OBJECT{addr_id  = AddrId,
-                         key      = Key,
-                         cindex   = CIndex,
-                         clock    = leo_date:clock(),
+    case delete(#?OBJECT{addr_id   = AddrId,
+                         key       = Key,
+                         cindex    = CIndex,
+                         clock     = leo_date:clock(),
+                         timestamp = leo_date:now(),
                          del       = ?DEL_TRUE
                         }, 0) of
         ok ->

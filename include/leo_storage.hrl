@@ -103,14 +103,14 @@
 %% @doc request parameter for READ
 %%
 -record(read_parameter, {
-          ref           :: reference(),
-          addr_id       :: integer(),
-          key           :: binary(),
-          etag = 0      :: integer(),
-          start_pos = 0 :: integer(),
-          end_pos   = 0 :: integer(),
-          quorum        :: integer(),
-          req_id        :: integer()
+          ref            :: reference(),
+          addr_id        :: integer(),
+          key            :: binary(),
+          etag = 0       :: integer(),
+          start_pos = -1 :: integer(),
+          end_pos   = -1 :: integer(),
+          quorum         :: integer(),
+          req_id         :: integer()
          }).
 
 %% @doc Queue's Message.
