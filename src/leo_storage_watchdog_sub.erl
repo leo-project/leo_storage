@@ -70,9 +70,11 @@ start() ->
                  ok | {error, any()} when Id::atom(),
                                           Alarm::term(),
                                           Unixtime::non_neg_integer()).
-handle_notify(?WD_SUB_ID_1,_Alarm,_Unixtime) ->
+handle_notify(?WD_SUB_ID_1 = Id,_Alarm,_Unixtime) ->
     case is_active_watchdog() of
         true ->
+            ?info("handle_notify/3",
+                  "received an alart - id:~p, alarm:~p", [Id, _Alarm]),
             leo_compact_fsm_controller:decrease(),
             leo_mq_api:decrease(?QUEUE_ID_PER_OBJECT),
             leo_mq_api:decrease(?QUEUE_ID_SYNC_BY_VNODE_ID),
@@ -126,9 +128,12 @@ handle_notify(?WD_SUB_ID_2, #watchdog_alarm{state = #watchdog_state{
                                       State::[{atom(), any()}],
                                       SafeTimes::non_neg_integer(),
                                       Unixtime::non_neg_integer()).
-handle_notify(?WD_SUB_ID_1,_State,_SafeTimes,_Unixtime) ->
+handle_notify(?WD_SUB_ID_1 = Id,_State,_SafeTimes,_Unixtime) ->
     case is_active_watchdog() of
         true ->
+            ?info("handle_notify/3",
+                  "loosen_control_at_safe_count - id:~p, state:~p, times:~p",
+                  [Id,_State,_SafeTimes]),
             leo_compact_fsm_controller:increase(),
             leo_mq_api:increase(?QUEUE_ID_PER_OBJECT),
             leo_mq_api:increase(?QUEUE_ID_SYNC_BY_VNODE_ID),
