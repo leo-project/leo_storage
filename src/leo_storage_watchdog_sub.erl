@@ -73,8 +73,8 @@ start() ->
 handle_notify(?WD_SUB_ID_1 = Id,_Alarm,_Unixtime) ->
     case is_active_watchdog() of
         true ->
-            ?info("handle_notify/3",
-                  "received an alart - id:~p, alarm:~p", [Id, _Alarm]),
+            ?debug("handle_notify/3",
+                   "received an alart - id:~p, alarm:~p", [Id, _Alarm]),
             leo_compact_fsm_controller:decrease(),
             leo_mq_api:decrease(?QUEUE_ID_PER_OBJECT),
             leo_mq_api:decrease(?QUEUE_ID_SYNC_BY_VNODE_ID),
@@ -110,8 +110,8 @@ handle_notify(?WD_SUB_ID_2, #watchdog_alarm{state = #watchdog_state{
                            fun leo_redundant_manager_api:has_charge_of_node/2) of
                         ok ->
                             Ratio = leo_misc:get_value('ratio', Props),
-                            ?info("handle_notify/3",
-                                  "run-data-compaction - level:~w, ratio:~w%", [Level, Ratio]),
+                            ?debug("handle_notify/3",
+                                   "run-data-compaction - level:~w, ratio:~w%", [Level, Ratio]),
                             ok;
                         _ ->
                             ok
@@ -131,9 +131,9 @@ handle_notify(?WD_SUB_ID_2, #watchdog_alarm{state = #watchdog_state{
 handle_notify(?WD_SUB_ID_1 = Id,_State,_SafeTimes,_Unixtime) ->
     case is_active_watchdog() of
         true ->
-            ?info("handle_notify/3",
-                  "loosen_control_at_safe_count - id:~p, state:~p, times:~p",
-                  [Id,_State,_SafeTimes]),
+            ?debug("handle_notify/3",
+                   "loosen_control_at_safe_count - id:~p, state:~p, times:~p",
+                   [Id,_State,_SafeTimes]),
             leo_compact_fsm_controller:increase(),
             leo_mq_api:increase(?QUEUE_ID_PER_OBJECT),
             leo_mq_api:increase(?QUEUE_ID_SYNC_BY_VNODE_ID),
