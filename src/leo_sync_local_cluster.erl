@@ -151,7 +151,7 @@ stack_fun([Node|Rest] = NodeList, AddrId, Key, Metadata, Object, E) ->
                 ok ->
                     stack_fun(Rest, AddrId, Key, Metadata, Object, E);
                 {error, undefined} ->
-                    ok = start_link(Node, ?env_size_of_stacked_objs(), ?env_stacking_timeout()),
+                    _ = start_link(Node, ?env_size_of_stacked_objs(), ?env_stacking_timeout()),
                     stack_fun(NodeList, AddrId, Key, Metadata, Object, E);
                 {error, Cause} ->
                     stack_fun(Rest, AddrId, Key, Metadata, Object, [{Node, Cause}|E])
