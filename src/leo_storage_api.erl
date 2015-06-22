@@ -116,6 +116,7 @@ register_in_monitor_1([Node|Rest], Pid, RequestedTimes) ->
                               _ ->
                                   false
                           end;
+                      %% Not initialized a manager's mnesia:
                       {error,"Mnesia is not available"} ->
                           false;
                       Error ->
