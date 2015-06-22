@@ -635,7 +635,9 @@ replicate(DestNodes, AddrId, Key) ->
                             ok = leo_sync_remote_cluster:defer_stack(Object_2),
                             Ret;
                         {error, Ref, Cause} ->
-                            {error, Cause}
+                            {error, Cause};
+                        _Other ->
+                            {error, invalid_response}
                     end;
                 #?METADATA{del = ?DEL_TRUE} = Metadata ->
                     EmptyBin = <<>>,

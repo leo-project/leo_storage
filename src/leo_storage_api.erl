@@ -116,6 +116,8 @@ register_in_monitor_1([Node|Rest], Pid, RequestedTimes) ->
                               _ ->
                                   false
                           end;
+                      {error,"Mnesia is not available"} ->
+                          false;
                       Error ->
                           ?error("register_in_monitor/1",
                                  "manager:~w, cause:~p", [Node_1, Error]),
