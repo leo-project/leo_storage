@@ -77,7 +77,8 @@ defer_stack(#?OBJECT{addr_id = AddrId,
                   case leo_mdcr_tbl_cluster_stat:find_by_state(?STATE_RUNNING) of
                       {ok, _} ->
                           case stack(Object) of
-                              ok -> void;
+                              ok ->
+                                  void;
                               {error, Cause}->
                                   ?warn("defer_stack/1", "key:~s, cause:~p",
                                         [binary_to_list(Object#?OBJECT.key), Cause]),
