@@ -75,7 +75,8 @@ get({Ref, Key}) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_GET),
     case leo_redundant_manager_api:get_redundancies_by_key(get, Key) of
         {ok, #redundancies{id = AddrId}} ->
-            case get_fun(AddrId, Key) of
+            IsForcedCheck = true,
+            case get_fun(AddrId, Key, IsForcedCheck) of
                 {ok, Metadata, #?OBJECT{data = Bin}} ->
                     {ok, Ref, Metadata, Bin};
                 {error, Cause} ->
@@ -156,13 +157,16 @@ get(AddrId, Key, StartPos, EndPos, ReqId) ->
 
 %% @doc read data (common).
 %% @private
--spec(get_fun(AddrId, Key) ->
+%% @private
+-spec(get_fun(AddrId, Key, IsForcedCheck) ->
              {ok, #?METADATA{}, #?OBJECT{}} |
              {error, any()} when AddrId::integer(),
-                                 Key::binary()).
-get_fun(AddrId, Key) ->
-    get_fun(AddrId, Key, -1, -1).
+                                 Key::binary(),
+                                 IsForcedCheck::boolean()).
+get_fun(AddrId, Key, IsForcedCheck) ->
+    get_fun(AddrId, Key, ?DEF_POS_START, ?DEF_POS_END, IsForcedCheck).
 
+%% @private
 -spec(get_fun(AddrId, Key, StartPos, EndPos) ->
              {ok, #?METADATA{}, #?OBJECT{}} |
              {error, any()} when AddrId::integer(),
@@ -170,12 +174,23 @@ get_fun(AddrId, Key) ->
                                  StartPos::integer(),
                                  EndPos::integer()).
 get_fun(AddrId, Key, StartPos, EndPos) ->
+    get_fun(AddrId, Key, StartPos, EndPos, false).
+
+%% @private
+-spec(get_fun(AddrId, Key, StartPos, EndPos, IsForcedCheck) ->
+             {ok, #?METADATA{}, #?OBJECT{}} |
+             {error, any()} when AddrId::integer(),
+                                 Key::binary(),
+                                 StartPos::integer(),
+                                 EndPos::integer(),
+                                 IsForcedCheck::boolean()).
+get_fun(AddrId, Key, StartPos, EndPos, IsForcedCheck) ->
     %% Check state of the node
     case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
         not_found ->
             %% Retrieve the object
             case leo_object_storage_api:get(
-                   {AddrId, Key}, StartPos, EndPos) of
+                   {AddrId, Key}, StartPos, EndPos, IsForcedCheck) of
                 {ok, Metadata, Object} ->
                     {ok, Metadata, Object};
                 not_found = Cause ->

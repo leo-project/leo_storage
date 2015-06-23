@@ -111,6 +111,10 @@ get_a0_({Node0, Node1}) ->
                 fun(_Key, _StartPos, _EndPos) ->
                         not_found
                 end),
+    meck:expect(leo_object_storage_api, get,
+                fun(_Key, _StartPos, _EndPos, _IsForcedCheck) ->
+                        not_found
+                end),
 
     meck:new(leo_statistics_req_counter, [non_strict]),
     meck:expect(leo_statistics_req_counter, increment,
@@ -143,6 +147,10 @@ get_a1_({Node0, Node1}) ->
     meck:new(leo_object_storage_api, [non_strict]),
     meck:expect(leo_object_storage_api, get,
                 fun(_Key, _StartPos, _EndPos) ->
+                        {ok, ?TEST_META_0, #?OBJECT{}}
+                end),
+    meck:expect(leo_object_storage_api, get,
+                fun(_Key, _StartPos, _EndPos, _IsForcedCheck) ->
                         {ok, ?TEST_META_0, #?OBJECT{}}
                 end),
 
@@ -378,6 +386,10 @@ copy_({Node0, Node1}) ->
                 fun(_Key, _StartPos, _EndPos) ->
                         {ok, ?TEST_META_0, #?OBJECT{}}
                 end),
+    meck:expect(leo_object_storage_api, get,
+                fun(_Key, _StartPos, _EndPos, _IsForcedCheck) ->
+                        {ok, ?TEST_META_0, #?OBJECT{}}
+                end),
 
     %% Retrieve object from get-func
     meck:new(leo_redundant_manager_api, [non_strict]),
@@ -421,6 +433,10 @@ copy_({Node0, Node1}) ->
                 end),
     meck:expect(leo_object_storage_api, get,
                 fun(_Key, _StartPos, _EndPos) ->
+                        {ok, ?TEST_META_1, #?OBJECT{}}
+                end),
+    meck:expect(leo_object_storage_api, get,
+                fun(_Key, _StartPos, _EndPos, _IsForcedCheck) ->
                         {ok, ?TEST_META_1, #?OBJECT{}}
                 end),
 

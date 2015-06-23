@@ -159,7 +159,7 @@ check_cluster_state_2(Node, Pid, Ref) ->
 level_compaction(State) ->
     case leo_misc:get_value('status', State) of
         'running' ->
-            ?LEVEL_HIGH;
+            ?LEVEL_LOW;
         _ ->
             ?LEVEL_INACTIVE
     end.
