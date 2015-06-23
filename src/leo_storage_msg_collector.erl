@@ -19,13 +19,13 @@
 %% under the License.
 %%
 %% ---------------------------------------------------------------------
-%% Leo Storage - Message Receiver (error notification)
+%% Leo Storage - Message Collector (error notification)
 %%
 %% @doc Leo Storage's Message Receiver
-%% @reference https://github.com/leo-project/leo_storage/blob/master/src/leo_storage_msg_receiver.erl
+%% @reference https://github.com/leo-project/leo_storage/blob/master/src/leo_storage_msg_collector.erl
 %% @end
 %%======================================================================
--module(leo_storage_msg_receiver).
+-module(leo_storage_msg_collector).
 
 -author('Yosuke Hara').
 

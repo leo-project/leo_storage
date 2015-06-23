@@ -241,7 +241,7 @@ launch_object_storage(RefSup) ->
 
     ChildSpec = {leo_object_storage_sup,
                  {leo_object_storage_sup, start_link,
-                  [ObjStoageInfo, leo_storage_msg_receiver]},
+                  [ObjStoageInfo, leo_storage_msg_collector]},
                  permanent, 2000, supervisor, [leo_object_storage_sup]},
     {ok, _} = supervisor:start_child(RefSup, ChildSpec),
     ok.

@@ -185,7 +185,7 @@ handle_ratio_of_fragment(Id, WarningThreshold, AlartThreshold) ->
 %% @doc Handle a number of notified messages (timeout, slow-operation)
 %% @private
 handle_notified_messages(Id, WarningTimes, AlartTimes) ->
-    case leo_storage_msg_receiver:get() of
+    case leo_storage_msg_collector:get() of
         {ok, []} ->
             elarm:clear(Id, ?WD_ITEM_NOTIFIED_MSGS);
         {ok, Msgs} ->
@@ -218,6 +218,6 @@ handle_notified_messages(Id, WarningTimes, AlartTimes) ->
                 _:_ ->
                     ok
             after
-                ok
+                leo_storage_msg_collector:clear()
             end
     end.

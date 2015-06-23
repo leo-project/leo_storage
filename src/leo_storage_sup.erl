@@ -64,11 +64,11 @@ stop() ->
 %% @private
 init([]) ->
     ChildProcs = [
-                  {leo_storage_msg_receiver,
-                   {leo_storage_msg_receiver, start_link, []},
+                  {leo_storage_msg_collector,
+                   {leo_storage_msg_collector, start_link, []},
                    permanent,
                    ?SHUTDOWN_WAITING_TIME,
                    worker,
-                   [leo_storage_msg_receiver]}
+                   [leo_storage_msg_collector]}
                  ],
     {ok, {_SupFlags = {one_for_one, ?MAX_RESTART, ?MAX_TIME}, ChildProcs}}.
