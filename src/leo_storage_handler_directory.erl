@@ -34,6 +34,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -export([is_dir/1, ask_is_dir/1,
+         get/1, get/2,
          find_by_parent_dir/4,
          ask_to_find_by_parent_dir/3
         ]).
@@ -92,6 +93,57 @@ ask_is_dir(Dir) ->
             {ok, false};
         Error ->
             Error
+    end.
+
+
+%% @doc Retrieve a metadata of a dir
+get(Dir) ->
+    case leo_redundant_manager_api:get_redundancies_by_key(Dir) of
+        {ok, #redundancies{nodes = Nodes}} ->
+            get_1(Nodes, Dir, []);
+        Error ->
+            Error
+    end.
+
+%% @doc Requested from a remote storage-node
+get(Ref, Dir) ->
+    ParentDir = leo_directory_sync:get_directory_from_key(Dir),
+    Dir_1 = << ParentDir/binary, "\t", Dir/binary >>,
+    case leo_backend_db_api:get(?DIR_DB_ID, Dir_1) of
+        {ok, Metadata} ->
+            {ok, {Ref, Metadata}};
+        not_found = Cause ->
+            {error, {Ref, Cause}};
+        {error, Cause} ->
+            {error, {Ref, Cause}}
+    end.
+
+
+%% @private
+get_1([],_Dir,[]) ->
+    not_found;
+get_1([],_Dir, Errors) ->
+    hd(Errors);
+get_1([#redundant_node{available = false}|Rest], Dir, Errors) ->
+    get_1(Rest, Dir, Errors);
+get_1([#redundant_node{node = Node}|Rest], Dir, Errors) ->
+    Ref = make_ref(),
+    RPCKey = rpc:async_call(Node, ?MODULE, get, [Ref, Dir]),
+    Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
+              {value, {ok, {Ref, Metadata}}} ->
+                  {ok, Metadata};
+              {value, {error, {Ref,Cause}}} ->
+                  {error, Cause};
+              {badrpc, Cause} ->
+                  {error, Cause};
+              timeout = Cause ->
+                  {error, Cause}
+          end,
+    case Ret of
+        {ok,_} ->
+            Ret;
+        Error ->
+            get_1(Rest, Dir, [Error|Errors])
     end.
 
 
