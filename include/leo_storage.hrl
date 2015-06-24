@@ -404,14 +404,12 @@
 -ifdef(TEST).
 -define(DEF_WARN_ACTIVE_SIZE_RATIO,      95).
 -define(DEF_THRESHOLD_ACTIVE_SIZE_RATIO, 90).
--define(DEF_WARN_NOTIFIED_MSGS,       3).
--define(DEF_THRESHOLD_NOTIFIED_MSGS, 10).
+-define(DEF_THRESHOLD_NUM_OF_NOTIFIED_MSGS, 10).
 -define(DEF_STORAGE_WATCHDOG_INTERVAL, timer:seconds(3)).
 -else.
 -define(DEF_WARN_ACTIVE_SIZE_RATIO,      55).
 -define(DEF_THRESHOLD_ACTIVE_SIZE_RATIO, 50).
--define(DEF_WARN_NOTIFIED_MSGS,       3).
--define(DEF_THRESHOLD_NOTIFIED_MSGS, 10).
+-define(DEF_THRESHOLD_NUM_OF_NOTIFIED_MSGS, 10).
 -define(DEF_STORAGE_WATCHDOG_INTERVAL, timer:seconds(10)).
 -endif.
 
@@ -435,6 +433,14 @@
                 EnvThresholdActiveSizeRatio;
             _ ->
                 ?DEF_THRESHOLD_ACTIVE_SIZE_RATIO
+        end).
+
+-define(env_threshold_num_of_notified_msgs(),
+        case application:get_env(leo_storage, threshold_num_of_notified_msgs) of
+            {ok, EnvThresholdNumOfNotifiedMsgs} ->
+                EnvThresholdNumOfNotifiedMsgs;
+            _ ->
+                ?DEF_THRESHOLD_NUM_OF_NOTIFIED_MSGS
         end).
 
 -define(env_storage_watchdog_interval(),

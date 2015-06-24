@@ -172,6 +172,7 @@ after_proc_1(true, Pid, Managers) ->
                                                {leo_storage_watchdog, start_link,
                                                 [?env_warn_active_size_ratio(),
                                                  ?env_threshold_active_size_ratio(),
+                                                 ?env_threshold_num_of_notified_msgs(),
                                                  ?env_storage_watchdog_interval()
                                                 ]},
                                                permanent,
