@@ -75,16 +75,25 @@ stack(DestNodes, AddrId, Key, Metadata, Object) ->
 -spec(store(CompressedObjs) ->
              ok | {error, any()} when CompressedObjs::binary()).
 store(CompressedObjs) ->
-    case catch lz4:unpack(CompressedObjs) of
-        {ok, OriginalObjects} ->
-            case slice_and_replicate(OriginalObjects) of
-                ok ->
-                    ok;
-                {error, _Cause} ->
-                    {error, fail_storing_files}
+    %% check stress level of this node by the watchdog's status
+    case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
+        not_found ->
+            %% Unpack the compressed object,
+            %% then replicate them
+            case catch lz4:unpack(CompressedObjs) of
+                {ok, OriginalObjects} ->
+                    case slice_and_replicate(OriginalObjects) of
+                        ok ->
+                            ok;
+                        {error, _Cause} ->
+                            {error, fail_storing_files}
+                    end;
+                {_, Cause} ->
+                    {error, Cause}
             end;
-        {_, Cause} ->
-            {error, Cause}
+        {ok, ErrorItems}->
+            ?debug("store/1", "error-items:~p", [ErrorItems]),
+            {error, unavailable}
     end.
 
 
