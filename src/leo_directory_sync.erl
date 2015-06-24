@@ -391,10 +391,12 @@ append_dir_1(_,DirBin, #?METADATA{clock = Clock,
     case dict:is_key(DirBin, Acc) of
         true ->
             case dict:find(DirBin, Acc) of
+                {ok, {Clock_1, Timestamp_1}} when Clock < Clock_1 ->
+                    dict:store(DirBin, {Clock_1, Timestamp_1}, Acc);
                 error ->
                     dict:store(DirBin, Current, Acc);
-                {Clock_1, Timestamp_1} when Clock < Clock_1 ->
-                    dict:store(DirBin, {Clock_1, Timestamp_1}, Acc)
+                _ ->
+                    Acc
             end;
         false ->
             dict:store(DirBin, Current, Acc)
