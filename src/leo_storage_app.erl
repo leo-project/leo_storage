@@ -212,6 +212,7 @@ after_proc_1(true, Pid, Managers) ->
                                                {leo_storage_watchdog, start_link,
                                                 [?env_warn_active_size_ratio(),
                                                  ?env_threshold_active_size_ratio(),
+                                                 ?env_threshold_num_of_notified_msgs(),
                                                  ?env_storage_watchdog_interval()
                                                 ]},
                                                permanent,
@@ -291,7 +292,8 @@ launch_object_storage(RefSup) ->
         end,
 
     ChildSpec = {leo_object_storage_sup,
-                 {leo_object_storage_sup, start_link, [ObjStoageInfo]},
+                 {leo_object_storage_sup, start_link,
+                  [ObjStoageInfo, leo_storage_msg_collector]},
                  permanent, 2000, supervisor, [leo_object_storage_sup]},
     {ok, _} = supervisor:start_child(RefSup, ChildSpec),
     ok.

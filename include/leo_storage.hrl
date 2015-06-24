@@ -100,6 +100,12 @@
 -define(ERROR_NOT_SATISFY_QUORUM,       "Could not satisfy the quorum of the consistency level").
 
 
+%% @doc notified message items
+%%
+-define(MSG_ITEM_TIMEOUT, 'timeout').
+-define(MSG_ITEM_SLOW_OP, 'slow_op').
+
+
 %% @doc request parameter for READ
 %%
 -record(read_parameter, {
@@ -462,14 +468,17 @@
 -ifdef(TEST).
 -define(DEF_WARN_ACTIVE_SIZE_RATIO,      95).
 -define(DEF_THRESHOLD_ACTIVE_SIZE_RATIO, 90).
--define(DEF_STORAGE_WATHDOG_INTERVAL, timer:seconds(3)).
+-define(DEF_THRESHOLD_NUM_OF_NOTIFIED_MSGS, 10).
+-define(DEF_STORAGE_WATCHDOG_INTERVAL, timer:seconds(3)).
 -else.
 -define(DEF_WARN_ACTIVE_SIZE_RATIO,      55).
 -define(DEF_THRESHOLD_ACTIVE_SIZE_RATIO, 50).
--define(DEF_STORAGE_WATHDOG_INTERVAL, timer:seconds(10)).
+-define(DEF_THRESHOLD_NUM_OF_NOTIFIED_MSGS, 10).
+-define(DEF_STORAGE_WATCHDOG_INTERVAL, timer:seconds(10)).
 -endif.
 
 -define(WD_ITEM_ACTIVE_SIZE_RATIO, 'active_size_ratio').
+-define(WD_ITEM_NOTIFIED_MSGS, 'notified_msgs').
 -define(WD_EXCLUDE_ITEMS, ['leo_storage_watchdog', 'leo_watchdog_cluster']).
 -define(DEF_MAX_COMPACTION_PROCS, 1).
 -define(DEF_AUTOCOMPACTION_INTERVAL, 300). %% 5min/300sec
@@ -490,12 +499,20 @@
                 ?DEF_THRESHOLD_ACTIVE_SIZE_RATIO
         end).
 
+-define(env_threshold_num_of_notified_msgs(),
+        case application:get_env(leo_storage, threshold_num_of_notified_msgs) of
+            {ok, EnvThresholdNumOfNotifiedMsgs} ->
+                EnvThresholdNumOfNotifiedMsgs;
+            _ ->
+                ?DEF_THRESHOLD_NUM_OF_NOTIFIED_MSGS
+        end).
+
 -define(env_storage_watchdog_interval(),
         case application:get_env(leo_storage, storage_watchdog_interval) of
             {ok, EnvStorageWatchdogInterval} ->
                 EnvStorageWatchdogInterval;
             _ ->
-                ?DEF_STORAGE_WATHDOG_INTERVAL
+                ?DEF_STORAGE_WATCHDOG_INTERVAL
         end).
 
 %% For the autonomic-operation
