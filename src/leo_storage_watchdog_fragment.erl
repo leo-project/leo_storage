@@ -160,8 +160,7 @@ handle_ratio_of_fragment(Id, WarningThreshold, AlartThreshold) ->
                                         level = ?WD_LEVEL_ERROR,
                                         src   = ?WD_ITEM_ACTIVE_SIZE_RATIO,
                                         props = [{ratio, Ratio}
-                                                ]}),
-            ok;
+                                                ]});
         true ->
             %% raise warning
             elarm:raise(Id, ?WD_ITEM_ACTIVE_SIZE_RATIO,
@@ -169,9 +168,8 @@ handle_ratio_of_fragment(Id, WarningThreshold, AlartThreshold) ->
                                         level = ?WD_LEVEL_WARN,
                                         src   = ?WD_ITEM_ACTIVE_SIZE_RATIO,
                                         props = [{ratio, Ratio}
-                                                ]}),
-            ok;
+                                                ]});
         false ->
-            elarm:clear(Id, ?WD_ITEM_ACTIVE_SIZE_RATIO),
-            ok
-    end.
+            elarm:clear(Id, ?WD_ITEM_ACTIVE_SIZE_RATIO)
+    end,
+    ok.

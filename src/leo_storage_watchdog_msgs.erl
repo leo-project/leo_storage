@@ -144,8 +144,7 @@ handle_notified_messages(Id, NumOfNotifiedMsgs) ->
                                                     level = ?WD_LEVEL_ERROR,
                                                     src   = ?WD_ITEM_NOTIFIED_MSGS,
                                                     props = [{num_of_notified_msgs, Len}
-                                                            ]}),
-                        ok;
+                                                            ]});
                     false when Len >= WarnNumOfNotifiedMsgs ->
                         %% raise warning
                         elarm:raise(Id, ?WD_ITEM_ACTIVE_SIZE_RATIO,
@@ -153,8 +152,7 @@ handle_notified_messages(Id, NumOfNotifiedMsgs) ->
                                                     level = ?WD_LEVEL_WARN,
                                                     src   = ?WD_ITEM_NOTIFIED_MSGS,
                                                     props = [{num_of_notified_msgs, Len}
-                                                            ]}),
-                        ok;
+                                                            ]});
                     false ->
                         elarm:clear(Id, ?WD_ITEM_NOTIFIED_MSGS)
                 end
@@ -164,4 +162,5 @@ handle_notified_messages(Id, NumOfNotifiedMsgs) ->
             after
                 leo_storage_msg_collector:clear()
             end
-    end.
+    end,
+    ok.
