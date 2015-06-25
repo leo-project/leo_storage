@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012-2014 Rakuten, Inc.
+%% Copyright (c) 2012-2015 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -419,6 +419,14 @@
 -define(DEF_MAX_COMPACTION_PROCS, 1).
 -define(DEF_AUTOCOMPACTION_INTERVAL, 300). %% 5min/300sec
 
+%% @doc for auto-compaction:
+%%      <a number of data-compaction nodes at the same time>
+%%          = <a active number of nodes> x <coefficient>
+%%  -   high: 0.1
+%%  - middle: 0.075
+%%  -    low: 0.05
+-define(DEF_COMPACTION_COEFFICIENT_MID, 0.075).
+
 -define(env_warn_active_size_ratio(),
         case application:get_env(leo_storage, warn_active_size_ratio) of
             {ok, EnvWarnActiveSizeRatio} ->
@@ -475,4 +483,12 @@
                 EnvAutoCompactionInterval;
             _ ->
                 ?DEF_AUTOCOMPACTION_INTERVAL
+        end).
+
+-define(env_auto_compaction_coefficient(),
+        case application:get_env(leo_storage, auto_compaction_coefficient) of
+            {ok, EnvAutoCompactionCoefficient} ->
+                EnvAutoCompactionCoefficient;
+            _ ->
+                ?DEF_COMPACTION_COEFFICIENT_MID
         end).

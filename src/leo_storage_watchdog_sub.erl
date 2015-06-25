@@ -171,27 +171,17 @@ is_active_watchdog() ->
 
 %% @private
 can_start_compaction() ->
-    %% Judge
-    case leo_redundant_manager_api:get_options() of
-        {ok, SystemConf} ->
-            case leo_misc:get_value('n', SystemConf) of
-                undefined ->
-                    false;
-                NumOfReplicas ->
-                    case leo_redundant_manager_api:get_members_by_status(?STATE_RUNNING) of
-                        {ok, Members} ->
-                            AllowableNumOfNodes =
-                                case (erlang:round(erlang:length(Members) / NumOfReplicas) -1) of
-                                    N when N < 1 ->
-                                        1;
-                                    N ->
-                                        N
-                                end,
-                            can_start_compaction_1(Members, AllowableNumOfNodes, 0);
-                        _ ->
-                            false
-                    end
-            end;
+    case leo_redundant_manager_api:get_members_by_status(?STATE_RUNNING) of
+        {ok, Members} ->
+            AllowableNumOfNodes =
+                case (erlang:round(erlang:length(Members)
+                                   * ?env_auto_compaction_coefficient())) of
+                    N when N < 1 ->
+                        1;
+                    N ->
+                        N
+                end,
+            can_start_compaction_1(Members, AllowableNumOfNodes, 0);
         _ ->
             false
     end.
