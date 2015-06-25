@@ -50,7 +50,7 @@
           threshold_active_size_ratio = ?DEF_THRESHOLD_ACTIVE_SIZE_RATIO :: pos_integer(),
           interval = timer:seconds(1) :: pos_integer()
          }).
-
+-define(THRESHOLD_DIFFERENCE, 3).
 
 %%--------------------------------------------------------------------
 %% API
@@ -133,6 +133,9 @@ handle_fail(_Id,_Cause) ->
 %% @private
 handle_ratio_of_fragment(Id, WarningThreshold, AlartThreshold) ->
     {ok, Stats} = leo_object_storage_api:stats(),
+    AlartThreshold_1 = AlartThreshold + ((erlang:phash2(leo_date:clock())
+                                         rem (?THRESHOLD_DIFFERENCE * 2 + 1))
+                                         - ?THRESHOLD_DIFFERENCE),
     {TotalSize, ActiveSize} =
         lists:foldl(fun(#storage_stats{total_sizes  = TSize,
                                        active_sizes = ASize},
@@ -151,9 +154,9 @@ handle_ratio_of_fragment(Id, WarningThreshold, AlartThreshold) ->
             end,
 
 
-    case ((Ratio > 0.00 orelse (ActiveSize == 0 andalso TotalSize > 0))
+    case ((Ratio > 0 orelse (ActiveSize == 0 andalso TotalSize > 0))
           andalso Ratio =< WarningThreshold) of
-        true when Ratio =< AlartThreshold ->
+        true when Ratio =< AlartThreshold_1 ->
             %% raise error
             elarm:raise(Id, ?WD_ITEM_ACTIVE_SIZE_RATIO,
                         #watchdog_state{id = Id,

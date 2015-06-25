@@ -2,7 +2,7 @@
 %%
 %% Leo Storage
 %%
-%% Copyright (c) 2012-2014 Rakuten, Inc.
+%% Copyright (c) 2012-2015 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -32,6 +32,7 @@
 -include("leo_storage.hrl").
 -include_lib("leo_logger/include/leo_logger.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
+-include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("leo_watchdog/include/leo_watchdog.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
@@ -67,9 +68,9 @@ start() ->
 %% Callbacks
 %%--------------------------------------------------------------------
 -spec(handle_notify(Id, Alarm, Unixtime) ->
-                 ok | {error, any()} when Id::atom(),
-                                          Alarm::term(),
-                                          Unixtime::non_neg_integer()).
+             ok | {error, any()} when Id::atom(),
+                                      Alarm::term(),
+                                      Unixtime::non_neg_integer()).
 handle_notify(?WD_SUB_ID_1 = Id,_Alarm,_Unixtime) ->
     case is_active_watchdog() of
         true ->
@@ -93,30 +94,36 @@ handle_notify(?WD_SUB_ID_2, #watchdog_alarm{state = #watchdog_state{
                                                        props = Props}},_Unixtime) ->
     case (Level >= ?WD_LEVEL_ERROR) of
         true ->
-            timer:sleep(?DEF_WAIT_TIME),
-            ThisTime = leo_date:now(),
-            AutoCompactionInterval = ?env_auto_compaction_interval(),
+            case can_start_compaction() of
+                true ->
+                    %% Execute data-compaction
+                    timer:sleep(?DEF_WAIT_TIME),
+                    ThisTime = leo_date:now(),
+                    AutoCompactionInterval = ?env_auto_compaction_interval(),
 
-            case leo_compact_fsm_controller:state() of
-                {ok, #compaction_stats{status = ?ST_IDLING,
-                                       pending_targets = PendingTargets,
-                                       latest_exec_datetime = LastExecDataTime
-                                      }} when PendingTargets /= [] andalso
-                                              (ThisTime - LastExecDataTime) >= AutoCompactionInterval ->
-                    ProcsOfParallelProcessing = ?env_auto_compaction_parallel_procs(),
+                    case leo_compact_fsm_controller:state() of
+                        {ok, #compaction_stats{status = ?ST_IDLING,
+                                               pending_targets = PendingTargets,
+                                               latest_exec_datetime = LastExecDataTime
+                                              }} when PendingTargets /= [] andalso
+                                                      (ThisTime - LastExecDataTime) >= AutoCompactionInterval ->
+                            ProcsOfParallelProcessing = ?env_auto_compaction_parallel_procs(),
 
-                    case leo_object_storage_api:compact_data(
-                           PendingTargets, ProcsOfParallelProcessing,
-                           fun leo_redundant_manager_api:has_charge_of_node/2) of
-                        ok ->
-                            Ratio = leo_misc:get_value('ratio', Props),
-                            ?debug("handle_notify/3",
-                                   "run-data-compaction - level:~w, ratio:~w%", [Level, Ratio]),
-                            ok;
+                            case leo_object_storage_api:compact_data(
+                                   PendingTargets, ProcsOfParallelProcessing,
+                                   fun leo_redundant_manager_api:has_charge_of_node/2) of
+                                ok ->
+                                    Ratio = leo_misc:get_value('ratio', Props),
+                                    ?debug("handle_notify/3",
+                                           "run-data-compaction - level:~w, ratio:~w%", [Level, Ratio]),
+                                    ok;
+                                _ ->
+                                    ok
+                            end;
                         _ ->
                             ok
                     end;
-                _ ->
+                false ->
                     ok
             end;
         false ->
@@ -157,7 +164,48 @@ handle_notify(?WD_SUB_ID_2,_State,_SafeTimes,_Unixtime) ->
 %%--------------------------------------------------------------------
 %% Internal Function
 %%--------------------------------------------------------------------
+%% @private
 is_active_watchdog() ->
-     false == (?env_wd_cpu_enabled()  == false andalso
-               ?env_wd_disk_enabled() == false).
+    false == (?env_wd_cpu_enabled()  == false andalso
+              ?env_wd_disk_enabled() == false).
 
+%% @private
+can_start_compaction() ->
+    %% Judge
+    case leo_redundant_manager_api:get_options() of
+        {ok, SystemConf} ->
+            case leo_misc:get_value('n', SystemConf) of
+                undefined ->
+                    false;
+                NumOfReplicas ->
+                    case leo_redundant_manager_api:get_members_by_status(?STATE_RUNNING) of
+                        {ok, Members} ->
+                            AllowableNumOfNodes =
+                                case (erlang:round(erlang:length(Members) / NumOfReplicas) -1) of
+                                    N when N < 1 ->
+                                        1;
+                                    N ->
+                                        N
+                                end,
+                            can_start_compaction_1(Members, AllowableNumOfNodes, 0);
+                        _ ->
+                            false
+                    end
+            end;
+        _ ->
+            false
+    end.
+
+%% @private
+can_start_compaction_1([], AllowableNumOfNodes, CountRunningNode)
+  when AllowableNumOfNodes =< CountRunningNode ->
+    false;
+can_start_compaction_1([],_,_) ->
+    true;
+can_start_compaction_1([#member{node = Node}|Rest], AllowableNumOfNodes, CountRunningNode) ->
+    case rpc:call(Node, leo_storage_api, compact, [status], ?TIMEOUT) of
+        {ok, #compaction_stats{status = ?ST_RUNNING}} ->
+            can_start_compaction_1(Rest, AllowableNumOfNodes, CountRunningNode + 1);
+        _ ->
+            can_start_compaction_1(Rest, AllowableNumOfNodes, CountRunningNode)
+    end.
