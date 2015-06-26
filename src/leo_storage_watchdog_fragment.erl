@@ -116,7 +116,7 @@ update_property(_,_,_) ->
                                          State::#state{},
                                          Error::any()).
 handle_call(Id, #state{warn_active_size_ratio = WarningThreshold,
-                       threshold_active_size_ratio = AlartThreshold} = State) ->
+                       threshold_active_size_ratio = AlartThreshold} = State) ->    
     ok = handle_ratio_of_fragment(Id, WarningThreshold, AlartThreshold),
     {ok, State}.
 
@@ -136,6 +136,8 @@ handle_fail(_Id,_Cause) ->
 %% @doc Handle object-storage's fragment ratio for the data-compaction
 %% @private
 handle_ratio_of_fragment(Id, WarningThreshold, AlartThreshold) ->
+    Time = erlang:phash2(leo_date:clock(), timer:seconds(3)),
+    timer:sleep(Time),
     {ok, Stats} = leo_object_storage_api:stats(),
     {TotalSize, ActiveSize} =
         lists:foldl(fun(#storage_stats{total_sizes  = TSize,
