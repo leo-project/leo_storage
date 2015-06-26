@@ -415,7 +415,7 @@
 
 -define(WD_ITEM_ACTIVE_SIZE_RATIO, 'active_size_ratio').
 -define(WD_ITEM_NOTIFIED_MSGS, 'notified_msgs').
--define(WD_EXCLUDE_ITEMS, ['leo_storage_watchdog', 'leo_watchdog_cluster']).
+-define(WD_EXCLUDE_ITEMS, ['leo_storage_watchdog_fragment', 'leo_watchdog_cluster']).
 -define(DEF_MAX_COMPACTION_PROCS, 1).
 -define(DEF_AUTOCOMPACTION_INTERVAL, 300). %% 5min/300sec
 

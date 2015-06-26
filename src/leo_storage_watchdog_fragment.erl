@@ -65,8 +65,12 @@
                                 Pid::pid(),
                                 Error::{already_started,Pid} | term()).
 start_link(WarnActiveSizeRatio, ThresholdActiveSizeRatio, Interval) ->
+    ThresholdActiveSizeRatio_1 =
+        ThresholdActiveSizeRatio + ((erlang:phash2(leo_date:clock())
+                                     rem (?THRESHOLD_DIFFERENCE * 2 + 1))
+                                    - ?THRESHOLD_DIFFERENCE),
     State = #state{warn_active_size_ratio = WarnActiveSizeRatio,
-                   threshold_active_size_ratio = ThresholdActiveSizeRatio,
+                   threshold_active_size_ratio = ThresholdActiveSizeRatio_1,
                    interval = Interval},
     leo_watchdog:start_link(?MODULE, ?MODULE, State, Interval).
 
@@ -133,9 +137,6 @@ handle_fail(_Id,_Cause) ->
 %% @private
 handle_ratio_of_fragment(Id, WarningThreshold, AlartThreshold) ->
     {ok, Stats} = leo_object_storage_api:stats(),
-    AlartThreshold_1 = AlartThreshold + ((erlang:phash2(leo_date:clock())
-                                         rem (?THRESHOLD_DIFFERENCE * 2 + 1))
-                                         - ?THRESHOLD_DIFFERENCE),
     {TotalSize, ActiveSize} =
         lists:foldl(fun(#storage_stats{total_sizes  = TSize,
                                        active_sizes = ASize},
@@ -156,7 +157,7 @@ handle_ratio_of_fragment(Id, WarningThreshold, AlartThreshold) ->
 
     case ((Ratio > 0 orelse (ActiveSize == 0 andalso TotalSize > 0))
           andalso Ratio =< WarningThreshold) of
-        true when Ratio =< AlartThreshold_1 ->
+        true when Ratio =< AlartThreshold ->
             %% raise error
             elarm:raise(Id, ?WD_ITEM_ACTIVE_SIZE_RATIO,
                         #watchdog_state{id = Id,
