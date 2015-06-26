@@ -538,13 +538,13 @@
   {default, 1}
  ]}.
 
-%% @doc [compaction] number of parallel procs - default:500
+%% @doc [compaction] execution interval  - default:300
 {mapping,
  "autonomic_op.compaction.interval",
  "leo_storage.auto_compaction_interval",
  [
   {datatype, integer},
-  {default, 500}
+  {default, 300}
  ]}.
 
 %% @doc [compaction] warning ratio of active size - default:70%
