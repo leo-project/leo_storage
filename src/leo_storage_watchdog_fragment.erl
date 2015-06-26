@@ -116,7 +116,7 @@ update_property(_,_,_) ->
                                          State::#state{},
                                          Error::any()).
 handle_call(Id, #state{warn_active_size_ratio = WarningThreshold,
-                       threshold_active_size_ratio = AlartThreshold} = State) ->    
+                       threshold_active_size_ratio = AlartThreshold} = State) ->
     ok = handle_ratio_of_fragment(Id, WarningThreshold, AlartThreshold),
     {ok, State}.
 
