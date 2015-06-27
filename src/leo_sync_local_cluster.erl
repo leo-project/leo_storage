@@ -75,25 +75,18 @@ stack(DestNodes, AddrId, Key, Metadata, Object) ->
 -spec(store(CompressedObjs) ->
              ok | {error, any()} when CompressedObjs::binary()).
 store(CompressedObjs) ->
-    %% check stress level of this node by the watchdog's status
-    case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
-        not_found ->
-            %% Unpack the compressed object,
-            %% then replicate them
-            case catch lz4:unpack(CompressedObjs) of
-                {ok, OriginalObjects} ->
-                    case slice_and_replicate(OriginalObjects) of
-                        ok ->
-                            ok;
-                        {error, _Cause} ->
-                            {error, fail_storing_files}
-                    end;
-                {_, Cause} ->
-                    {error, Cause}
+    %% Unpack the compressed object,
+    %% then replicate them
+    case catch lz4:unpack(CompressedObjs) of
+        {ok, OriginalObjects} ->
+            case slice_and_replicate(OriginalObjects) of
+                ok ->
+                    ok;
+                {error, _Cause} ->
+                    {error, fail_storing_files}
             end;
-        {ok, ErrorItems}->
-            ?debug("store/1", "error-items:~p", [ErrorItems]),
-            {error, unavailable}
+        {_, Cause} ->
+            {error, Cause}
     end.
 
 
@@ -103,6 +96,27 @@ store(CompressedObjs) ->
 %% @doc Handle send object to a remote-node.
 %%
 handle_send(Node,_StackedInfo, CompressedObjs) ->
+    %% Check stress level of this node by the watchdog's status
+    RPCKey = rpc:async_call(Node, leo_watchdog_state,
+                            find_not_safe_items, [?WD_EXCLUDE_ITEMS]),
+    case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
+        {value, not_found} ->
+            %% Send a compressed objects to the remote-node
+            handle_send_1(Node, CompressedObjs);
+        {value, {ok, ErrorItems}} ->
+            ?debug("store/1", "node:~p, error-items:~p",
+                   [Node, ErrorItems]),
+            {error, {Node, unavailable}};
+        {value, {error, Cause}} ->
+            {error, Cause};
+        {value, {badrpc, Cause}} ->
+            {error, Cause};
+        timeout = Cause ->
+            {error, Cause}
+    end.
+
+%% @private
+handle_send_1(Node, CompressedObjs) ->
     RPCKey = rpc:async_call(Node, ?MODULE, store, [CompressedObjs]),
     case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
         {value, ok} ->
