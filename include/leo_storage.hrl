@@ -410,7 +410,7 @@
 -define(DEF_WARN_ACTIVE_SIZE_RATIO,      55).
 -define(DEF_THRESHOLD_ACTIVE_SIZE_RATIO, 50).
 -define(DEF_THRESHOLD_NUM_OF_NOTIFIED_MSGS, 10).
--define(DEF_STORAGE_WATCHDOG_INTERVAL, timer:seconds(10)).
+-define(DEF_STORAGE_WATCHDOG_INTERVAL, timer:seconds(180)).
 -endif.
 
 -define(WD_ITEM_ACTIVE_SIZE_RATIO, 'active_size_ratio').
@@ -452,11 +452,15 @@
         end).
 
 -define(env_storage_watchdog_interval(),
-        case application:get_env(leo_storage, storage_watchdog_interval) of
-            {ok, EnvStorageWatchdogInterval} ->
-                EnvStorageWatchdogInterval;
-            _ ->
-                ?DEF_STORAGE_WATCHDOG_INTERVAL
+        begin
+            _Time = erlang:phash2(erlang:node(), ?DEF_STORAGE_WATCHDOG_INTERVAL),
+            case (_Time < timer:seconds(60)) of
+                true ->
+                    ?DEF_STORAGE_WATCHDOG_INTERVAL
+                        - erlang:phash2(erlang:node(), timer:seconds(30));
+                false ->
+                    _Time
+            end
         end).
 
 %% Storage autonomic-operation related

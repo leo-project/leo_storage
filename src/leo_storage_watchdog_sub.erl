@@ -173,7 +173,7 @@ is_active_watchdog() ->
 can_start_compaction() ->
     case leo_redundant_manager_api:get_members_by_status(?STATE_RUNNING) of
         {ok, Members} ->
-            AllowableNumOfNodes =
+            MaxNumOfNodes =
                 case (erlang:round(erlang:length(Members)
                                    * ?env_auto_compaction_coefficient())) of
                     N when N < 1 ->
@@ -181,21 +181,54 @@ can_start_compaction() ->
                     N ->
                         N
                 end,
-            can_start_compaction_1(Members, AllowableNumOfNodes, 0);
+            case get_candidates(Members, MaxNumOfNodes, []) of
+                {ok, Candidates} ->
+                    lists:member(erlang:node(), Candidates);
+                not_found ->
+                    false
+            end;
         _ ->
             false
     end.
 
+
+%% @doc Retrieve candidate nodes of data-compaction
 %% @private
-can_start_compaction_1([], AllowableNumOfNodes, CountRunningNode)
-  when AllowableNumOfNodes =< CountRunningNode ->
-    false;
-can_start_compaction_1([],_,_) ->
-    true;
-can_start_compaction_1([#member{node = Node}|Rest], AllowableNumOfNodes, CountRunningNode) ->
-    case rpc:call(Node, leo_storage_api, compact, [status], ?TIMEOUT) of
-        {ok, #compaction_stats{status = ?ST_RUNNING}} ->
-            can_start_compaction_1(Rest, AllowableNumOfNodes, CountRunningNode + 1);
-        _ ->
-            can_start_compaction_1(Rest, AllowableNumOfNodes, CountRunningNode)
-    end.
+get_candidates([],_,[]) ->
+    not_found;
+get_candidates([],_,Acc) ->
+    {ok, lists:reverse(Acc)};
+get_candidates(_, MaxNumOfNodes, Acc) when MaxNumOfNodes == erlang:length(Acc) ->
+    {ok, lists:reverse(Acc)};
+get_candidates([#member{node = Node}|Rest], MaxNumOfNodes, Acc) ->
+    Acc_1 = case rpc:call(Node, leo_object_storage_api, stats, [], ?DEF_REQ_TIMEOUT) of
+                {ok, []} ->
+                    Acc;
+                {ok, RetL} ->
+                    {SumTotalSize, SumActiveSize} =
+                        lists:foldl(fun({T,A}, {SumT, SumA}) ->
+                                            {SumT + T, SumA + A}
+                                    end, {0,0},
+                                    [{TotalSize, ActiveSize} ||
+                                        #storage_stats{total_sizes = TotalSize,
+                                                       active_sizes = ActiveSize} <- RetL]),
+
+                    ActiveSizeRatio = erlang:round(SumActiveSize / SumTotalSize * 100),
+                    ThresholdActiveSizeRatio = ?env_threshold_active_size_ratio(),
+                    ActiveSizeRatioDiff = leo_math:floor(ThresholdActiveSizeRatio / 20),
+
+                    case (ActiveSizeRatio =< (ThresholdActiveSizeRatio + ActiveSizeRatioDiff)) of
+                        true ->
+                            [Node|Acc];
+                        false ->
+                            case rpc:call(Node, leo_storage_api, compact, [status], ?DEF_REQ_TIMEOUT) of
+                                {ok, #compaction_stats{status = ?ST_RUNNING}} ->
+                                    [Node|Acc];
+                                _ ->
+                                    Acc
+                            end
+                    end;
+                _ ->
+                    Acc
+            end,
+    get_candidates(Rest, MaxNumOfNodes, Acc_1).

@@ -48,7 +48,7 @@
 -record(state, {
           warn_active_size_ratio      = ?DEF_WARN_ACTIVE_SIZE_RATIO      :: pos_integer(),
           threshold_active_size_ratio = ?DEF_THRESHOLD_ACTIVE_SIZE_RATIO :: pos_integer(),
-          interval = timer:seconds(1) :: pos_integer()
+          interval = timer:seconds(60) :: pos_integer()
          }).
 -define(THRESHOLD_DIFFERENCE, 3).
 
@@ -65,12 +65,8 @@
                                 Pid::pid(),
                                 Error::{already_started,Pid} | term()).
 start_link(WarnActiveSizeRatio, ThresholdActiveSizeRatio, Interval) ->
-    ThresholdActiveSizeRatio_1 =
-        ThresholdActiveSizeRatio + ((erlang:phash2(leo_date:clock())
-                                     rem (?THRESHOLD_DIFFERENCE * 2 + 1))
-                                    - ?THRESHOLD_DIFFERENCE),
     State = #state{warn_active_size_ratio = WarnActiveSizeRatio,
-                   threshold_active_size_ratio = ThresholdActiveSizeRatio_1,
+                   threshold_active_size_ratio = ThresholdActiveSizeRatio,
                    interval = Interval},
     leo_watchdog:start_link(?MODULE, ?MODULE, State, Interval).
 
@@ -136,8 +132,6 @@ handle_fail(_Id,_Cause) ->
 %% @doc Handle object-storage's fragment ratio for the data-compaction
 %% @private
 handle_ratio_of_fragment(Id, WarningThreshold, AlartThreshold) ->
-    Time = erlang:phash2(leo_date:clock(), timer:seconds(3)),
-    timer:sleep(Time),
     {ok, Stats} = leo_object_storage_api:stats(),
     {TotalSize, ActiveSize} =
         lists:foldl(fun(#storage_stats{total_sizes  = TSize,
@@ -155,7 +149,6 @@ handle_ratio_of_fragment(Id, WarningThreshold, AlartThreshold) ->
                 false ->
                     0
             end,
-
 
     case ((Ratio > 0 orelse (ActiveSize == 0 andalso TotalSize > 0))
           andalso Ratio =< WarningThreshold) of
