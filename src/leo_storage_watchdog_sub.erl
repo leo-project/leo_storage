@@ -92,11 +92,13 @@ handle_notify(?WD_SUB_ID_1 = Id,_Alarm,_Unixtime) ->
 handle_notify(?WD_SUB_ID_2, #watchdog_alarm{state = #watchdog_state{
                                                        level = Level,
                                                        props = Props}},_Unixtime) ->
+    %% Clear the current status
+    _ = elarm:clear('leo_storage_watchdog_fragment', ?WD_ITEM_ACTIVE_SIZE_RATIO),
+    %% Execution data-compacion or not
     case (Level >= ?WD_LEVEL_ERROR) of
         true ->
             case can_start_compaction() of
                 true ->
-                    %% Execute data-compaction
                     timer:sleep(?DEF_WAIT_TIME),
                     ThisTime = leo_date:now(),
                     AutoCompactionInterval = ?env_auto_compaction_interval(),
@@ -181,12 +183,7 @@ can_start_compaction() ->
                     N ->
                         N
                 end,
-            case get_candidates(Members, MaxNumOfNodes, []) of
-                {ok, Candidates} ->
-                    lists:member(erlang:node(), Candidates);
-                not_found ->
-                    false
-            end;
+            is_candidates(Members, MaxNumOfNodes, []);
         _ ->
             false
     end.
@@ -194,13 +191,13 @@ can_start_compaction() ->
 
 %% @doc Retrieve candidate nodes of data-compaction
 %% @private
-get_candidates([],_,[]) ->
-    not_found;
-get_candidates([],_,Acc) ->
-    {ok, lists:reverse(Acc)};
-get_candidates(_, MaxNumOfNodes, Acc) when MaxNumOfNodes == erlang:length(Acc) ->
-    {ok, lists:reverse(Acc)};
-get_candidates([#member{node = Node}|Rest], MaxNumOfNodes, Acc) ->
+is_candidates([],_,[]) ->
+    false;
+is_candidates([],_,Acc) ->
+    is_candidates_1(lists:reverse(Acc));
+is_candidates(_, MaxNumOfNodes, Acc) when MaxNumOfNodes == erlang:length(Acc) ->
+    is_candidates_1(lists:reverse(Acc));
+is_candidates([#member{node = Node}|Rest], MaxNumOfNodes, Acc) ->
     Acc_1 = case rpc:call(Node, leo_object_storage_api, stats, [], ?DEF_REQ_TIMEOUT) of
                 {ok, []} ->
                     Acc;
@@ -219,11 +216,11 @@ get_candidates([#member{node = Node}|Rest], MaxNumOfNodes, Acc) ->
 
                     case (ActiveSizeRatio =< (ThresholdActiveSizeRatio + ActiveSizeRatioDiff)) of
                         true ->
-                            [Node|Acc];
+                            [{Node, ?ST_IDLING}|Acc];
                         false ->
                             case rpc:call(Node, leo_storage_api, compact, [status], ?DEF_REQ_TIMEOUT) of
                                 {ok, #compaction_stats{status = ?ST_RUNNING}} ->
-                                    [Node|Acc];
+                                    [{Node, ?ST_RUNNING}|Acc];
                                 _ ->
                                     Acc
                             end
@@ -231,4 +228,8 @@ get_candidates([#member{node = Node}|Rest], MaxNumOfNodes, Acc) ->
                 _ ->
                     Acc
             end,
-    get_candidates(Rest, MaxNumOfNodes, Acc_1).
+    is_candidates(Rest, MaxNumOfNodes, Acc_1).
+
+%% @private
+is_candidates_1(Candidates) ->
+    lists:member({erlang:node(), ?ST_IDLING}, Candidates).
