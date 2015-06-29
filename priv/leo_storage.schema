@@ -217,7 +217,7 @@
  "leo_object_storage.threshold_slow_processing",
  [
   {datatype, integer},
-  {default, 1000} %% 1000ms
+  {default, 1000} %% 1000ms/1sec
  ]}.
 
 
