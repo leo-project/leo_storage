@@ -142,14 +142,12 @@ check_cluster_state_1([Node|Rest], Pid, Ref) ->
 check_cluster_state_2(Node, Pid, Ref) ->
     Level = case rpc:call(Node, ?MODULE, get_node_stats, [], ?REQ_TIMEOUT) of
                 {ok, #state{compaction = CompactionState,
-                            mq   = MQState,
                             cpu  = CPUState,
                             disk = DiskState}} ->
-                    Level_1 = level_mq(MQState),
-                    Level_2 = level_compaction(CompactionState),
-                    Level_3 = level_cpu(CPUState),
-                    Level_4 = level_disk(DiskState),
-                    (Level_1 + erlang:round((Level_2 + Level_3 + Level_4) / 3));
+                    Level_1 = level_compaction(CompactionState),
+                    Level_2 = level_cpu(CPUState),
+                    Level_3 = level_disk(DiskState),
+                    erlang:round((Level_1 + Level_2 + Level_3) / 3);
                 _ ->
                     0
             end,
@@ -161,30 +159,10 @@ check_cluster_state_2(Node, Pid, Ref) ->
 level_compaction(State) ->
     case leo_misc:get_value('status', State) of
         'running' ->
-            ?LEVEL_HIGH;
+            ?LEVEL_LOW;
         _ ->
             ?LEVEL_INACTIVE
     end.
-
-%% @doc Retrieve level of mq
-%% @private
-level_mq([]) ->
-    ?LEVEL_INACTIVE;
-level_mq(MQStats) ->
-    SumLevel = level_mq_1(MQStats, 0),
-    erlang:round(SumLevel / erlang:length(MQStats)).
-
-%% @private
-level_mq_1([], SoFar) ->
-    SoFar;
-level_mq_1([#mq_state{state = State}|Rest], SoFar) ->
-    SoFar_1 = case leo_misc:get_value('consumer_status', State) of
-                  'running' ->
-                      SoFar + ?LEVEL_MID;
-                  _ ->
-                      SoFar
-              end,
-    level_mq_1(Rest, SoFar_1).
 
 %% @doc Retrieve level of cpu
 %% @private
@@ -216,11 +194,9 @@ level_disk(State) ->
              {ok, #state{}} | {error, Cause} when Cause::any()).
 get_node_stats() ->
     CompactionState = get_node_stats_1(compaction),
-    MQState   = get_node_stats_1(mq),
     CPUState  = get_node_stats_1(cpu),
     DiskState = get_node_stats_1(disk),
     {ok, #state{compaction = CompactionState,
-                mq   = MQState,
                 cpu  = CPUState,
                 disk = DiskState
                }}.
@@ -230,13 +206,6 @@ get_node_stats_1(compaction) ->
     case leo_compact_fsm_controller:state() of
         {ok, #compaction_stats{} = State} ->
             lists:zip(record_info(fields, compaction_stats), tl(tuple_to_list(State)));
-        _ ->
-            []
-    end;
-get_node_stats_1(mq) ->
-    case leo_storage_api:get_mq_consumer_state() of
-        {ok, Val} ->
-            Val;
         _ ->
             []
     end;

@@ -32,6 +32,7 @@
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
 -include_lib("leo_ordning_reda/include/leo_ordning_reda.hrl").
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
+-undef(MAX_RETRY_TIMES).
 -include_lib("leo_statistics/include/leo_statistics.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
@@ -74,7 +75,8 @@ get({Ref, Key}) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_GET),
     case leo_redundant_manager_api:get_redundancies_by_key(get, Key) of
         {ok, #redundancies{id = AddrId}} ->
-            case get_fun(AddrId, Key) of
+            IsForcedCheck = true,
+            case get_fun(AddrId, Key, IsForcedCheck) of
                 {ok, Metadata, #?OBJECT{data = Bin}} ->
                     {ok, Ref, Metadata, Bin};
                 {error, Cause} ->
@@ -155,13 +157,16 @@ get(AddrId, Key, StartPos, EndPos, ReqId) ->
 
 %% @doc read data (common).
 %% @private
--spec(get_fun(AddrId, Key) ->
+%% @private
+-spec(get_fun(AddrId, Key, IsForcedCheck) ->
              {ok, #?METADATA{}, #?OBJECT{}} |
              {error, any()} when AddrId::integer(),
-                                 Key::binary()).
-get_fun(AddrId, Key) ->
-    get_fun(AddrId, Key, 0, 0).
+                                 Key::binary(),
+                                 IsForcedCheck::boolean()).
+get_fun(AddrId, Key, IsForcedCheck) ->
+    get_fun(AddrId, Key, ?DEF_POS_START, ?DEF_POS_END, IsForcedCheck).
 
+%% @private
 -spec(get_fun(AddrId, Key, StartPos, EndPos) ->
              {ok, #?METADATA{}, #?OBJECT{}} |
              {error, any()} when AddrId::integer(),
@@ -169,12 +174,23 @@ get_fun(AddrId, Key) ->
                                  StartPos::integer(),
                                  EndPos::integer()).
 get_fun(AddrId, Key, StartPos, EndPos) ->
+    get_fun(AddrId, Key, StartPos, EndPos, false).
+
+%% @private
+-spec(get_fun(AddrId, Key, StartPos, EndPos, IsForcedCheck) ->
+             {ok, #?METADATA{}, #?OBJECT{}} |
+             {error, any()} when AddrId::integer(),
+                                 Key::binary(),
+                                 StartPos::integer(),
+                                 EndPos::integer(),
+                                 IsForcedCheck::boolean()).
+get_fun(AddrId, Key, StartPos, EndPos, IsForcedCheck) ->
     %% Check state of the node
     case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
         not_found ->
             %% Retrieve the object
             case leo_object_storage_api:get(
-                   {AddrId, Key}, StartPos, EndPos) of
+                   {AddrId, Key}, StartPos, EndPos, IsForcedCheck) of
                 {ok, Metadata, Object} ->
                     {ok, Metadata, Object};
                 not_found = Cause ->
@@ -329,10 +345,11 @@ delete_chunked_objects(CIndex, ParentKey) ->
     Key    = << ParentKey/binary, "\n", IndexBin/binary >>,
     AddrId = leo_redundant_manager_chash:vnode_id(Key),
 
-    case delete(#?OBJECT{addr_id  = AddrId,
-                         key      = Key,
-                         cindex   = CIndex,
-                         clock    = leo_date:clock(),
+    case delete(#?OBJECT{addr_id   = AddrId,
+                         key       = Key,
+                         cindex    = CIndex,
+                         clock     = leo_date:clock(),
+                         timestamp = leo_date:now(),
                          del       = ?DEL_TRUE
                         }, 0) of
         ok ->
@@ -633,7 +650,9 @@ replicate(DestNodes, AddrId, Key) ->
                             ok = leo_sync_remote_cluster:defer_stack(Object_2),
                             Ret;
                         {error, Ref, Cause} ->
-                            {error, Cause}
+                            {error, Cause};
+                        _Other ->
+                            {error, invalid_response}
                     end;
                 #?METADATA{del = ?DEL_TRUE} = Metadata ->
                     EmptyBin = <<>>,

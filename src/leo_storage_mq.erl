@@ -106,14 +106,10 @@ start_1([{Id, Path}|Rest], Sup, Root) ->
                              {?MQ_PROP_ROOT_PATH, Root ++ Path},
                              {?MQ_PROP_DB_NAME,   ?env_mq_backend_db()},
                              {?MQ_PROP_DB_PROCS,  ?env_num_of_mq_procs()},
-                             {?MQ_PROP_BATCH_MSGS_MIN,  ?env_mq_num_of_batch_process_min()},
                              {?MQ_PROP_BATCH_MSGS_MAX,  ?env_mq_num_of_batch_process_max()},
                              {?MQ_PROP_BATCH_MSGS_REG,  ?env_mq_num_of_batch_process_reg()},
-                             {?MQ_PROP_BATCH_MSGS_STEP, ?env_mq_num_of_batch_process_step()},
-                             {?MQ_PROP_INTERVAL_MIN,  ?env_mq_interval_between_batch_procs_min()},
                              {?MQ_PROP_INTERVAL_MAX,  ?env_mq_interval_between_batch_procs_max()},
-                             {?MQ_PROP_INTERVAL_REG,  ?env_mq_interval_between_batch_procs_reg()},
-                             {?MQ_PROP_INTERVAL_STEP, ?env_mq_interval_between_batch_procs_step()}
+                             {?MQ_PROP_INTERVAL_REG,  ?env_mq_interval_between_batch_procs_reg()}
                             ]),
     start_1(Rest, Sup, Root).
 
@@ -186,12 +182,12 @@ publish(_,_,_) ->
 publish(?QUEUE_TYPE_PER_OBJECT = Id, AddrId, Key, ErrorType) ->
     Clock = leo_date:clock(),
     KeyBin = term_to_binary({ErrorType, Key, Clock}),
-    MessageBin  = term_to_binary(
-                    #inconsistent_data_message{id        = Clock,
-                                               type      = ErrorType,
-                                               addr_id   = AddrId,
-                                               key       = Key,
-                                               timestamp = leo_date:now()}),
+    MessageBin = term_to_binary(
+                   #inconsistent_data_message{id        = Clock,
+                                              type      = ErrorType,
+                                              addr_id   = AddrId,
+                                              key       = Key,
+                                              timestamp = leo_date:now()}),
     leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
 
 publish(?QUEUE_TYPE_SYNC_OBJ_WITH_DC = Id, ClusterId, AddrId, Key) ->
@@ -213,7 +209,7 @@ publish(_,_,_,_) ->
              ok | {error, any()}).
 publish(?QUEUE_TYPE_REBALANCE = Id, Node, VNodeId, AddrId, Key) ->
     Clock = leo_date:clock(),
-    KeyBin     = term_to_binary({Node, AddrId, Key, Clock}),
+    KeyBin = term_to_binary({Node, AddrId, Key, Clock}),
     MessageBin = term_to_binary(
                    #rebalance_message{id        = Clock,
                                       vnode_id  = VNodeId,
@@ -223,8 +219,10 @@ publish(?QUEUE_TYPE_REBALANCE = Id, Node, VNodeId, AddrId, Key) ->
                                       timestamp = leo_date:now()}),
     Table = ?TBL_REBALANCE_COUNTER,
     case ets_lookup(Table, VNodeId) of
-        {ok, 0} -> ets:insert(Table, {VNodeId, 0});
-        _Other  -> void
+        {ok, 0} ->
+            ets:insert(Table, {VNodeId, 0});
+        _Other ->
+            void
     end,
     ok = increment_counter(Table, VNodeId),
     leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
@@ -304,7 +302,7 @@ handle_call({consume, ?QUEUE_ID_REBALANCE, MessageBin}) ->
             {error, Cause};
         #rebalance_message{} = Msg ->
             rebalance_1(Msg);
-        _ ->
+        _Cause ->
             {error, ?ERROR_COULD_NOT_MATCH}
     end;
 
@@ -499,7 +497,7 @@ sync_vnodes_callback(Node, FromAddrId, ToAddrId)->
 %% @private
 -spec(delete_node_from_redundancies(list(#redundant_node{}), atom(), list(#redundant_node{})) ->
              {ok, list(#redundant_node{})}).
-delete_node_from_redundancies([],_, Acc) ->
+delete_node_from_redundancies([],_,Acc) ->
     {ok, lists:reverse(Acc)};
 delete_node_from_redundancies([#redundant_node{node = Node}|Rest], Node, Acc) ->
     delete_node_from_redundancies(Rest, Node, Acc);
@@ -690,7 +688,7 @@ rebalance_2({ok,[]},_) ->
     ok;
 rebalance_2({ok, Redundancies}, #rebalance_message{node = Node,
                                                    addr_id = AddrId,
-                                                   key     = Key}) ->
+                                                   key = Key}) ->
     Redundancies_1 = get_redundancies_with_replicas(
                        AddrId, Key, Redundancies),
     case find_node_from_redundancies(Redundancies_1, erlang:node()) of

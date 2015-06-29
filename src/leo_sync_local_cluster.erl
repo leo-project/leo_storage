@@ -75,6 +75,8 @@ stack(DestNodes, AddrId, Key, Metadata, Object) ->
 -spec(store(CompressedObjs) ->
              ok | {error, any()} when CompressedObjs::binary()).
 store(CompressedObjs) ->
+    %% Unpack the compressed object,
+    %% then replicate them
     case catch lz4:unpack(CompressedObjs) of
         {ok, OriginalObjects} ->
             case slice_and_replicate(OriginalObjects) of
@@ -94,6 +96,27 @@ store(CompressedObjs) ->
 %% @doc Handle send object to a remote-node.
 %%
 handle_send(Node,_StackedInfo, CompressedObjs) ->
+    %% Check stress level of this node by the watchdog's status
+    RPCKey = rpc:async_call(Node, leo_watchdog_state,
+                            find_not_safe_items, [?WD_EXCLUDE_ITEMS]),
+    case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
+        {value, not_found} ->
+            %% Send a compressed objects to the remote-node
+            handle_send_1(Node, CompressedObjs);
+        {value, {ok, ErrorItems}} ->
+            ?debug("store/1", "node:~p, error-items:~p",
+                   [Node, ErrorItems]),
+            {error, {Node, unavailable}};
+        {value, {error, Cause}} ->
+            {error, Cause};
+        {value, {badrpc, Cause}} ->
+            {error, Cause};
+        timeout = Cause ->
+            {error, Cause}
+    end.
+
+%% @private
+handle_send_1(Node, CompressedObjs) ->
     RPCKey = rpc:async_call(Node, ?MODULE, store, [CompressedObjs]),
     case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
         {value, ok} ->
@@ -114,15 +137,8 @@ handle_send(Node,_StackedInfo, CompressedObjs) ->
 handle_fail(_, []) ->
     ok;
 handle_fail(Node, [{AddrId, Key}|Rest]) ->
-    ?warn("handle_fail/2","node:~w, addr-id:~w, key:~s", [Node, AddrId, Key]),
-    QId = ?QUEUE_TYPE_PER_OBJECT,
-    case leo_storage_mq:publish(QId, AddrId, Key, ?ERR_TYPE_REPLICATE_DATA) of
-        ok ->
-            void;
-        {error, Cause} ->
-            ?warn("handle_fail/2",
-                  "qid:~p, addr-id:~p, key:~p, cause:~p", [QId, AddrId, Key, Cause])
-    end,
+    _ = leo_storage_mq:publish(?QUEUE_TYPE_PER_OBJECT,
+                               AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
     handle_fail(Node, Rest).
 
 
@@ -151,7 +167,7 @@ stack_fun([Node|Rest] = NodeList, AddrId, Key, Metadata, Object, E) ->
                 ok ->
                     stack_fun(Rest, AddrId, Key, Metadata, Object, E);
                 {error, undefined} ->
-                    ok = start_link(Node, ?env_size_of_stacked_objs(), ?env_stacking_timeout()),
+                    _ = start_link(Node, ?env_size_of_stacked_objs(), ?env_stacking_timeout()),
                     stack_fun(NodeList, AddrId, Key, Metadata, Object, E);
                 {error, Cause} ->
                     stack_fun(Rest, AddrId, Key, Metadata, Object, [{Node, Cause}|E])

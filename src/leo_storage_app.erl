@@ -165,23 +165,36 @@ after_proc_1(true, Pid, Managers) ->
         ok = leo_rpc:start(),
 
         %% Watchdog for Storage in order to operate 'auto-compaction' automatically
+        WatchdogInterval = ?env_storage_watchdog_interval(),
         case ?env_auto_compaction_enabled() of
             true ->
                 {ok, _} = supervisor:start_child(
-                            leo_watchdog_sup, {leo_storage_watchdog,
-                                               {leo_storage_watchdog, start_link,
+                            leo_watchdog_sup, {leo_storage_watchdog_fragment,
+                                               {leo_storage_watchdog_fragment, start_link,
                                                 [?env_warn_active_size_ratio(),
                                                  ?env_threshold_active_size_ratio(),
-                                                 ?env_storage_watchdog_interval()
+                                                 WatchdogInterval
                                                 ]},
                                                permanent,
                                                2000,
                                                worker,
-                                               [leo_storage_watchdog]}),
-                ok = leo_storage_watchdog_sub:start();
+                                               [leo_storage_watchdog_fragment]});
             false ->
                 void
         end,
+
+        %% Watchdog for notified messages
+        {ok, _} = supervisor:start_child(
+                    leo_watchdog_sup, {leo_storage_watchdog_msgs,
+                                       {leo_storage_watchdog_msgs, start_link,
+                                        [?env_threshold_num_of_notified_msgs(),
+                                         WatchdogInterval
+                                        ]},
+                                       permanent,
+                                       2000,
+                                       worker,
+                                       [leo_storage_watchdog_msgs]}),
+        ok = leo_storage_watchdog_sub:start(),
 
         %% Launch statistics/mnesia-related processes
         ok = start_mnesia(),
@@ -240,7 +253,8 @@ launch_object_storage(RefSup) ->
         end,
 
     ChildSpec = {leo_object_storage_sup,
-                 {leo_object_storage_sup, start_link, [ObjStoageInfo]},
+                 {leo_object_storage_sup, start_link,
+                  [ObjStoageInfo, leo_storage_msg_collector]},
                  permanent, 2000, supervisor, [leo_object_storage_sup]},
     {ok, _} = supervisor:start_child(RefSup, ChildSpec),
     ok.
