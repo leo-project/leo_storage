@@ -199,10 +199,15 @@ is_candidates(_, MaxNumOfNodes, Acc) when MaxNumOfNodes == erlang:length(Acc) ->
     is_candidates_1(lists:reverse(Acc));
 is_candidates([#member{node = Node}|Rest], MaxNumOfNodes, Acc) ->
     Acc_1 =
-        case rpc:call(Node, leo_object_storage_api, stats, [], ?DEF_REQ_TIMEOUT) of
+        case rpc:call(Node, leo_object_storage_api,
+                      du_and_compaction_stats, [], ?DEF_REQ_TIMEOUT) of
             {ok, []} ->
                 Acc;
             {ok, RetL} ->
+                DUState = leo_misc:get_value('du', RetL, []),
+                CompactionState = leo_misc:get_value('compaction', RetL, []),
+
+                %% Check du-state of the node
                 {SumTotalSize, SumActiveSize, CompactionDate} =
                     lists:foldl(
                       fun({T,A,H}, {SumT, SumA, EndDataL}) ->
@@ -220,14 +225,13 @@ is_candidates([#member{node = Node}|Rest], MaxNumOfNodes, Acc) ->
                       [{TotalSize, ActiveSize, History} ||
                           #storage_stats{total_sizes = TotalSize,
                                          active_sizes = ActiveSize,
-                                         compaction_hist = History} <- RetL]),
+                                         compaction_hist = History} <- DUState]),
 
                 %% Check compaction status of the node
-                case rpc:call(Node, leo_storage_api, compact,
-                              [status], ?DEF_REQ_TIMEOUT) of
-                    {ok, #compaction_stats{status = ?ST_RUNNING}} ->
+                case CompactionState of
+                    #compaction_stats{status = ?ST_RUNNING} ->
                         [{Node, ?ST_RUNNING}|Acc];
-                    {ok, #compaction_stats{}} ->
+                    #compaction_stats{} ->
                         %% Check compaction's interval
                         MaxCompactionDate = lists:max(CompactionDate),
                         DiffCompactionDate_1 = leo_date:now() - MaxCompactionDate,
