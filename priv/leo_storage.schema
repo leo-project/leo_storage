@@ -538,13 +538,13 @@
   {default, 1}
  ]}.
 
-%% @doc [compaction] execution interval  - default:300
+%% @doc [compaction] execution interval  - default:3600(sec) (60min)
 {mapping,
  "autonomic_op.compaction.interval",
  "leo_storage.auto_compaction_interval",
  [
   {datatype, integer},
-  {default, 300}
+  {default, 3600}
  ]}.
 
 %% @doc [compaction] warning ratio of active size - default:70%
