@@ -234,10 +234,10 @@ is_candidates([#member{node = Node}|Rest], MaxNumOfNodes, Acc) ->
                     #compaction_stats{} ->
                         %% Check compaction's interval
                         MaxCompactionDate = lists:max(CompactionDate),
-                        DiffCompactionDate_1 = leo_date:now() - MaxCompactionDate,
+                        DiffCompactionDate = leo_date:now() - MaxCompactionDate,
                         CompactionInterval = ?env_auto_compaction_interval(),
 
-                        case (DiffCompactionDate_1 > CompactionInterval) of
+                        case (DiffCompactionDate >= CompactionInterval) of
                             true ->
                                 %% Check fragmentation ratio
                                 ActiveSizeRatio = erlang:round(SumActiveSize / SumTotalSize * 100),
