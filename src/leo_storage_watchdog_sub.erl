@@ -222,28 +222,34 @@ is_candidates([#member{node = Node}|Rest], MaxNumOfNodes, Acc) ->
                                          active_sizes = ActiveSize,
                                          compaction_hist = History} <- RetL]),
 
-                %% Check compaction's interval
-                DiffCompactionDate = leo_date:now() - lists:max(CompactionDate),
-                case (DiffCompactionDate > ?env_auto_compaction_interval()) of
-                    true ->
-                        %% Check fragmentation ratio
-                        ActiveSizeRatio = erlang:round(SumActiveSize / SumTotalSize * 100),
-                        ThresholdActiveSizeRatio = ?env_threshold_active_size_ratio(),
-                        ActiveSizeRatioDiff = leo_math:floor(ThresholdActiveSizeRatio / 20),
+                %% Check compaction status of the node
+                case rpc:call(Node, leo_storage_api, compact,
+                              [status], ?DEF_REQ_TIMEOUT) of
+                    {ok, #compaction_stats{status = ?ST_RUNNING}} ->
+                        [{Node, ?ST_RUNNING}|Acc];
+                    {ok, #compaction_stats{}} ->
+                        %% Check compaction's interval
+                        MaxCompactionDate = lists:max(CompactionDate),
+                        DiffCompactionDate_1 = leo_date:now() - MaxCompactionDate,
+                        CompactionInterval = ?env_auto_compaction_interval(),
 
-                        case (ActiveSizeRatio =< (ThresholdActiveSizeRatio + ActiveSizeRatioDiff)) of
+                        case (DiffCompactionDate_1 > CompactionInterval) of
                             true ->
-                                [{Node, ?ST_IDLING}|Acc];
-                            false ->
-                                case rpc:call(Node, leo_storage_api, compact,
-                                              [status], ?DEF_REQ_TIMEOUT) of
-                                    {ok, #compaction_stats{status = ?ST_RUNNING}} ->
-                                        [{Node, ?ST_RUNNING}|Acc];
-                                    _ ->
+                                %% Check fragmentation ratio
+                                ActiveSizeRatio = erlang:round(SumActiveSize / SumTotalSize * 100),
+                                ThresholdActiveSizeRatio = ?env_threshold_active_size_ratio(),
+                                ActiveSizeRatioDiff = leo_math:floor(ThresholdActiveSizeRatio / 20),
+
+                                case (ActiveSizeRatio =< (ThresholdActiveSizeRatio + ActiveSizeRatioDiff)) of
+                                    true ->
+                                        [{Node, ?ST_IDLING}|Acc];
+                                    false ->
                                         Acc
-                                end
+                                end;
+                            false ->
+                                Acc
                         end;
-                    false ->
+                    _ ->
                         Acc
                 end;
             _ ->
