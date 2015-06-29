@@ -198,36 +198,57 @@ is_candidates([],_,Acc) ->
 is_candidates(_, MaxNumOfNodes, Acc) when MaxNumOfNodes == erlang:length(Acc) ->
     is_candidates_1(lists:reverse(Acc));
 is_candidates([#member{node = Node}|Rest], MaxNumOfNodes, Acc) ->
-    Acc_1 = case rpc:call(Node, leo_object_storage_api, stats, [], ?DEF_REQ_TIMEOUT) of
-                {ok, []} ->
-                    Acc;
-                {ok, RetL} ->
-                    {SumTotalSize, SumActiveSize} =
-                        lists:foldl(fun({T,A}, {SumT, SumA}) ->
-                                            {SumT + T, SumA + A}
-                                    end, {0,0},
-                                    [{TotalSize, ActiveSize} ||
-                                        #storage_stats{total_sizes = TotalSize,
-                                                       active_sizes = ActiveSize} <- RetL]),
+    Acc_1 =
+        case rpc:call(Node, leo_object_storage_api, stats, [], ?DEF_REQ_TIMEOUT) of
+            {ok, []} ->
+                Acc;
+            {ok, RetL} ->
+                {SumTotalSize, SumActiveSize, CompactionDate} =
+                    lists:foldl(
+                      fun({T,A,H}, {SumT, SumA, EndDataL}) ->
+                              EndDate_1 = case H of
+                                              [] ->
+                                                  0;
+                                              _ ->
+                                                  lists:max([EndDate ||
+                                                                #compaction_hist{
+                                                                   end_datetime = EndDate}
+                                                                    <- H])
+                                          end,
+                              {SumT + T, SumA + A, [EndDate_1|EndDataL]}
+                      end, {0,0,[]},
+                      [{TotalSize, ActiveSize, History} ||
+                          #storage_stats{total_sizes = TotalSize,
+                                         active_sizes = ActiveSize,
+                                         compaction_hist = History} <- RetL]),
 
-                    ActiveSizeRatio = erlang:round(SumActiveSize / SumTotalSize * 100),
-                    ThresholdActiveSizeRatio = ?env_threshold_active_size_ratio(),
-                    ActiveSizeRatioDiff = leo_math:floor(ThresholdActiveSizeRatio / 20),
+                %% Check compaction's interval
+                DiffCompactionDate = leo_date:now() - lists:max(CompactionDate),
+                case (DiffCompactionDate > ?env_auto_compaction_interval()) of
+                    true ->
+                        %% Check fragmentation ratio
+                        ActiveSizeRatio = erlang:round(SumActiveSize / SumTotalSize * 100),
+                        ThresholdActiveSizeRatio = ?env_threshold_active_size_ratio(),
+                        ActiveSizeRatioDiff = leo_math:floor(ThresholdActiveSizeRatio / 20),
 
-                    case (ActiveSizeRatio =< (ThresholdActiveSizeRatio + ActiveSizeRatioDiff)) of
-                        true ->
-                            [{Node, ?ST_IDLING}|Acc];
-                        false ->
-                            case rpc:call(Node, leo_storage_api, compact, [status], ?DEF_REQ_TIMEOUT) of
-                                {ok, #compaction_stats{status = ?ST_RUNNING}} ->
-                                    [{Node, ?ST_RUNNING}|Acc];
-                                _ ->
-                                    Acc
-                            end
-                    end;
-                _ ->
-                    Acc
-            end,
+                        case (ActiveSizeRatio =< (ThresholdActiveSizeRatio + ActiveSizeRatioDiff)) of
+                            true ->
+                                [{Node, ?ST_IDLING}|Acc];
+                            false ->
+                                case rpc:call(Node, leo_storage_api, compact,
+                                              [status], ?DEF_REQ_TIMEOUT) of
+                                    {ok, #compaction_stats{status = ?ST_RUNNING}} ->
+                                        [{Node, ?ST_RUNNING}|Acc];
+                                    _ ->
+                                        Acc
+                                end
+                        end;
+                    false ->
+                        Acc
+                end;
+            _ ->
+                Acc
+        end,
     is_candidates(Rest, MaxNumOfNodes, Acc_1).
 
 %% @private
