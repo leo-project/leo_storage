@@ -194,73 +194,79 @@ can_start_compaction() ->
 is_candidates([],_,[]) ->
     false;
 is_candidates([],_,Acc) ->
-    is_candidates_1(lists:reverse(Acc));
+    is_candidates_2(lists:reverse(Acc));
 is_candidates(_, MaxNumOfNodes, Acc) when MaxNumOfNodes == erlang:length(Acc) ->
-    is_candidates_1(lists:reverse(Acc));
+    is_candidates_2(lists:reverse(Acc));
 is_candidates([#member{node = Node}|Rest], MaxNumOfNodes, Acc) ->
-    Acc_1 =
-        case rpc:call(Node, leo_object_storage_api,
-                      du_and_compaction_stats, [], ?DEF_REQ_TIMEOUT) of
-            {ok, []} ->
-                Acc;
-            {ok, RetL} ->
-                DUState = leo_misc:get_value('du', RetL, []),
-                CompactionState = leo_misc:get_value('compaction', RetL, []),
-
-                %% Check du-state of the node
-                {SumTotalSize, SumActiveSize, CompactionDate} =
-                    lists:foldl(
-                      fun({T,A,H}, {SumT, SumA, EndDataL}) ->
-                              EndDate_1 = case H of
-                                              [] ->
-                                                  0;
-                                              _ ->
-                                                  lists:max([EndDate ||
-                                                                #compaction_hist{
-                                                                   end_datetime = EndDate}
-                                                                    <- H])
-                                          end,
-                              {SumT + T, SumA + A, [EndDate_1|EndDataL]}
-                      end, {0,0,[]},
-                      [{TotalSize, ActiveSize, History} ||
-                          #storage_stats{total_sizes = TotalSize,
-                                         active_sizes = ActiveSize,
-                                         compaction_hist = History} <- DUState]),
-
-                %% Check compaction status of the node
-                case CompactionState of
-                    #compaction_stats{status = ?ST_RUNNING} ->
-                        [{Node, ?ST_RUNNING}|Acc];
-                    #compaction_stats{} ->
-                        %% Check compaction's interval
-                        MaxCompactionDate = lists:max(CompactionDate),
-                        DiffCompactionDate = leo_date:now() - MaxCompactionDate,
-                        CompactionInterval = ?env_auto_compaction_interval(),
-
-                        case (DiffCompactionDate >= CompactionInterval) of
-                            true ->
-                                %% Check fragmentation ratio
-                                ActiveSizeRatio = erlang:round(SumActiveSize / SumTotalSize * 100),
-                                ThresholdActiveSizeRatio = ?env_threshold_active_size_ratio(),
-                                ActiveSizeRatioDiff = leo_math:floor(ThresholdActiveSizeRatio / 20),
-
-                                case (ActiveSizeRatio =< (ThresholdActiveSizeRatio + ActiveSizeRatioDiff)) of
-                                    true ->
-                                        [{Node, ?ST_IDLING}|Acc];
-                                    false ->
-                                        Acc
-                                end;
-                            false ->
-                                Acc
-                        end;
-                    _ ->
-                        Acc
-                end;
-            _ ->
-                Acc
-        end,
+    Acc_1 = is_candidate_1(Node, Acc, 0),
     is_candidates(Rest, MaxNumOfNodes, Acc_1).
 
 %% @private
-is_candidates_1(Candidates) ->
+is_candidate_1(_, Acc, ?RETRY_TIMES) ->
+    Acc;
+is_candidate_1(Node, Acc, RetryTimes) ->
+    case rpc:call(Node, leo_object_storage_api,
+                  du_and_compaction_stats, [], ?DEF_REQ_TIMEOUT) of
+        {ok, []} ->
+            Acc;
+        {ok, RetL} ->
+            DUState = leo_misc:get_value('du', RetL, []),
+            CompactionState = leo_misc:get_value('compaction', RetL, []),
+
+            %% Check du-state of the node
+            {SumTotalSize, SumActiveSize, CompactionDate} =
+                lists:foldl(
+                  fun({T,A,H}, {SumT, SumA, EndDataL}) ->
+                          EndDate_1 = case H of
+                                          [] ->
+                                              0;
+                                          _ ->
+                                              lists:max([EndDate ||
+                                                            #compaction_hist{
+                                                               end_datetime = EndDate}
+                                                                <- H])
+                                      end,
+                          {SumT + T, SumA + A, [EndDate_1|EndDataL]}
+                  end, {0,0,[]},
+                  [{TotalSize, ActiveSize, History} ||
+                      #storage_stats{total_sizes = TotalSize,
+                                     active_sizes = ActiveSize,
+                                     compaction_hist = History} <- DUState]),
+
+            %% Check compaction status of the node
+            case CompactionState of
+                #compaction_stats{status = ?ST_RUNNING} ->
+                    [{Node, ?ST_RUNNING}|Acc];
+                #compaction_stats{status = ?ST_IDLING} ->
+                    %% Check compaction's interval
+                    MaxCompactionDate = lists:max(CompactionDate),
+                    DiffCompactionDate = leo_date:now() - MaxCompactionDate,
+                    CompactionInterval = ?env_auto_compaction_interval(),
+
+                    case (DiffCompactionDate >= CompactionInterval) of
+                        true ->
+                            %% Check fragmentation ratio
+                            ActiveSizeRatio = erlang:round(SumActiveSize / SumTotalSize * 100),
+                            ThresholdActiveSizeRatio = ?env_threshold_active_size_ratio(),
+                            ActiveSizeRatioDiff = leo_math:floor(ThresholdActiveSizeRatio / 20),
+
+                            case (ActiveSizeRatio =< (ThresholdActiveSizeRatio + ActiveSizeRatioDiff)) of
+                                true ->
+                                    [{Node, ?ST_IDLING}|Acc];
+                                false ->
+                                    Acc
+                            end;
+                        false ->
+                            Acc
+                    end;
+                _ ->
+                    Acc
+            end;
+        _ ->
+            timer:sleep(timer:seconds(1)),
+            is_candidate_1(Node, Acc, RetryTimes + 1)
+    end.
+
+%% @private
+is_candidates_2(Candidates) ->
     lists:member({erlang:node(), ?ST_IDLING}, Candidates).
