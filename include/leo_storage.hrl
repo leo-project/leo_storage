@@ -474,14 +474,22 @@
 -define(DEF_WARN_ACTIVE_SIZE_RATIO,      55).
 -define(DEF_THRESHOLD_ACTIVE_SIZE_RATIO, 50).
 -define(DEF_THRESHOLD_NUM_OF_NOTIFIED_MSGS, 10).
--define(DEF_STORAGE_WATCHDOG_INTERVAL, timer:seconds(10)).
+-define(DEF_STORAGE_WATCHDOG_INTERVAL, timer:seconds(180)).
 -endif.
 
 -define(WD_ITEM_ACTIVE_SIZE_RATIO, 'active_size_ratio').
 -define(WD_ITEM_NOTIFIED_MSGS, 'notified_msgs').
--define(WD_EXCLUDE_ITEMS, ['leo_storage_watchdog', 'leo_watchdog_cluster']).
+-define(WD_EXCLUDE_ITEMS, ['leo_storage_watchdog_fragment', 'leo_watchdog_cluster']).
 -define(DEF_MAX_COMPACTION_PROCS, 1).
--define(DEF_AUTOCOMPACTION_INTERVAL, 300). %% 5min/300sec
+-define(DEF_AUTOCOMPACTION_INTERVAL, 3600). %% 3600sec (60min)
+
+%% @doc for auto-compaction:
+%%      <a number of data-compaction nodes at the same time>
+%%          = <a active number of nodes> x <coefficient>
+%%  -   high: 0.1
+%%  - middle: 0.075
+%%  -    low: 0.05
+-define(DEF_COMPACTION_COEFFICIENT_MID, 0.075).
 
 -define(env_warn_active_size_ratio(),
         case application:get_env(leo_storage, warn_active_size_ratio) of
@@ -508,11 +516,15 @@
         end).
 
 -define(env_storage_watchdog_interval(),
-        case application:get_env(leo_storage, storage_watchdog_interval) of
-            {ok, EnvStorageWatchdogInterval} ->
-                EnvStorageWatchdogInterval;
-            _ ->
-                ?DEF_STORAGE_WATCHDOG_INTERVAL
+        begin
+            _Time = erlang:phash2(erlang:node(), ?DEF_STORAGE_WATCHDOG_INTERVAL),
+            case (_Time < timer:seconds(60)) of
+                true ->
+                    ?DEF_STORAGE_WATCHDOG_INTERVAL
+                        - erlang:phash2(erlang:node(), timer:seconds(30));
+                false ->
+                    _Time
+            end
         end).
 
 %% For the autonomic-operation
@@ -539,4 +551,12 @@
                 EnvAutoCompactionInterval;
             _ ->
                 ?DEF_AUTOCOMPACTION_INTERVAL
+        end).
+
+-define(env_auto_compaction_coefficient(),
+        case application:get_env(leo_storage, auto_compaction_coefficient) of
+            {ok, EnvAutoCompactionCoefficient} ->
+                EnvAutoCompactionCoefficient;
+            _ ->
+                ?DEF_COMPACTION_COEFFICIENT_MID
         end).

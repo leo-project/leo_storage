@@ -76,11 +76,19 @@ suite_regular_1_(Node) ->
                      fun(_Metadata, _Object) ->
                              ok
                      end),
+
     ok = meck:new(leo_misc, [non_strict]),
     ok = meck:expect(leo_misc, get_env,
                      fun(_,_) ->
                              {ok, 12345}
                      end),
+
+    ok = meck:new(leo_watchdog_state, [non_strict]),
+    ok = meck:expect(leo_watchdog_state, find_not_safe_items,
+                     fun(_) ->
+                             not_found
+                     end),
+
     stack(Node),
 
     History = meck:history(leo_object_storage_api),
@@ -102,6 +110,12 @@ suite_regular_2_(Node) ->
                      fun(_,_) ->
                              {ok, 12345}
                      end),
+
+    ok = meck:new(leo_watchdog_state, [non_strict]),
+    ok = meck:expect(leo_watchdog_state, find_not_safe_items,
+                     fun(_) ->
+                             not_found
+                     end),
     stack(Node),
 
     History = meck:history(leo_object_storage_api),
@@ -122,6 +136,12 @@ suite_error_(Node) ->
     ok = meck:expect(leo_misc, get_env,
                      fun(_,_) ->
                              {ok, 12345}
+                     end),
+
+    ok = meck:new(leo_watchdog_state, [non_strict]),
+    ok = meck:expect(leo_watchdog_state, find_not_safe_items,
+                     fun(_) ->                             
+                             not_found
                      end),
     stack(Node),
     ok.

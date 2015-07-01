@@ -147,7 +147,7 @@ check_cluster_state_2(Node, Pid, Ref) ->
                     Level_1 = level_compaction(CompactionState),
                     Level_2 = level_cpu(CPUState),
                     Level_3 = level_disk(DiskState),
-                    lists:max([Level_1, Level_2, Level_3]);
+                    erlang:round((Level_1 + Level_2 + Level_3) / 3);
                 _ ->
                     0
             end,

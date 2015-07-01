@@ -308,7 +308,6 @@ handle_send(UId, StackedInfo, CompressedObjs) ->
 handle_fail(_, []) ->
     ok;
 handle_fail(UId, [{AddrId, Key}|Rest] = _StackInfo) ->
-    ?warn("handle_fail/2", "uid:~w, addr-id:~w, key:~p", [UId, AddrId, Key]),
     case get_cluster_id_from_uid(UId) of
         undefined ->
             QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
