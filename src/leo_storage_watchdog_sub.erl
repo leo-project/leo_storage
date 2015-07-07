@@ -222,7 +222,8 @@ is_candidates_1(MaxNumOfNodes, Candidates) ->
     %% Count running nodes
     RunningNodes = length([_N || #compaction_info{
                                    node = _N,
-                                   state = ?ST_RUNNING} <- Candidates]),
+                                   state = #compaction_stats{status = ?ST_RUNNING}
+                                   } <- Candidates]),
     case (RunningNodes >= MaxNumOfNodes) of
         true ->
             false;
