@@ -103,7 +103,7 @@ handle_notify(?WD_SUB_ID_2, #watchdog_alarm{state = #watchdog_state{
                                                        level = Level,
                                                        props = Props}},_Unixtime) ->
     %% Clear the current status
-    _ = elarm:clear('leo_storage_watchdog_fragment', ?WD_ITEM_ACTIVE_SIZE_RATIO),
+    ok = leo_storage_watchdog_fragment:clear(),
     %% Execution data-compacion or not
     case (Level >= ?WD_LEVEL_ERROR) of
         true ->
@@ -240,11 +240,16 @@ is_candidates_1(MaxNumOfNodes, Candidates) ->
                                                   #compaction_info{node = Node,
                                                                    history = History}
                                                       <- Candidates_1]),
-                    lists:member(erlang:node(),
-                                 [Node_1 ||
-                                     {_History, Node_1}
-                                         <- lists:sublist(Candidates_2,
-                                                          MaxNumOfNodes_1)])
+                    Candidates_3 = [Node_1 || {_History, Node_1} <- Candidates_2],
+                    {Candidates_4, Others} = lists:split(MaxNumOfNodes_1, Candidates_3),
+                    case Others of
+                        [] ->
+                            void;
+                        _ ->
+                            _ = rpc:multicall(Others, leo_storage_watchdog_fragment,
+                                              clear, [], ?TIMEOUT)
+                    end,
+                    lists:member(erlang:node(), Candidates_4)
             end
     end.
 
