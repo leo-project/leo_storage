@@ -41,6 +41,7 @@
          append/1, append/2, append/3,
          append_metadatas/2,
          create_directories/1,
+         replicate/1, replicate/2,
          store/2,
          cache_dir_metadata/1,
          recover/1, recover/2
@@ -197,22 +198,98 @@ get_dir_and_metadata_bin(Dir, Metadata) ->
 %% @doc Create directories
 -spec(create_directories(Dir) ->
              ok when Dir::[binary()]).
-create_directories([]) ->
+create_directories(DirL) ->
+    create_directories(DirL, dict:new()).
+
+
+create_directories([], Dict) ->
+    case dict:to_list(Dict) of
+        [] ->
+            void;
+        RetL ->
+            [replicate(Node, MetadataL) || {Node, MetadataL} <- RetL]
+    end,
     ok;
-create_directories([Dir|Rest]) ->
+create_directories([Dir|Rest], Dict) ->
     Metadata = #?METADATA{key = Dir,
                           ksize = byte_size(Dir),
                           dsize = -1,
                           clock = leo_date:clock(),
                           timestamp = leo_date:now()},
-
     case leo_redundant_manager_api:get_redundancies_by_key(Dir) of
-        {ok, #redundancies{id = AddrId}} ->
-            append(Metadata#?METADATA{addr_id = AddrId});
+        {ok, #redundancies{id = AddrId,
+                           nodes = Nodes}} ->
+            Metadata_1 = Metadata#?METADATA{addr_id = AddrId},
+            Nodes_1 = [{N, A} || #redundant_node{node = N,
+                                                 available = A} <- Nodes],
+            Dict_1 = create_directories_1(Nodes_1, Metadata_1, Dict),
+            create_directories(Rest, Dict_1);
         _ ->
+            enqueue(Metadata),
+            create_directories(Rest, Dict)
+    end.
+
+%% @private
+create_directories_1([],_, Dict) ->
+    Dict;
+create_directories_1([{_Node, false}|Rest], Metadata, Dict) ->
+    %% @TODO: enqueue
+    create_directories_1(Rest, Metadata, Dict);
+create_directories_1([{Node, true}|Rest], Metadata, Dict) ->
+    Dict_1 = dict:append(Node, Metadata, Dict),
+    create_directories_1(Rest, Metadata, Dict_1).
+
+
+%% @doc Replicate a metadata
+%%
+-spec(replicate(MetadataL) ->
+             ok when MetadataL::[#?METADATA{}]).
+replicate(MetadataL) ->
+    replicate_1(MetadataL).
+
+-spec(replicate(Node, MetadataL) ->
+             ok when Node::atom(),
+                     MetadataL::[#?METADATA{}]).
+replicate(Node, MetadataL) ->
+    RPCKey = rpc:async_call(Node, ?MODULE, replicate, [MetadataL]),
+    Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
+              {value, ok} ->
+                  ok;
+              {value, {_, Cause}} ->
+                  {error, Cause};
+              timeout = Cause ->
+                  {error, Cause};
+              Other ->
+                  {error, Other}
+          end,
+    case Ret of
+        ok ->
+            ok;
+        {error,_} = Error ->
+            %% @TODO:enqueue
+            Error
+    end.
+
+%% @private
+-spec(replicate_1([#?METADATA{}]) ->
+             ok).
+replicate_1([]) ->
+    ok;
+replicate_1([#?METADATA{key = Key} = Metadata|Rest]) ->
+    Parent = get_directory_from_key(Key),
+    KeyBin = << Parent/binary, "\t", Key/binary >>,
+    case leo_backend_db_api:put(?DIR_DB_ID,
+                                KeyBin, term_to_binary(Metadata)) of
+        ok ->
+            ok;
+        {error, Cause} ->
+            error_logger:info_msg("~p,~p,~p,~p~n",
+                                  [{module, ?MODULE_STRING},
+                                   {function, "replicate_1/1"},
+                                   {line, ?LINE}, {body, Cause}]),
             enqueue(Metadata)
     end,
-    create_directories(Rest).
+    replicate_1(Rest).
 
 
 %% @doc Store received objects into the directory's db
@@ -238,8 +315,9 @@ restore_dir_metadata([]) ->
 restore_dir_metadata([{Dir, {Clock, Timestamp}}|Rest]) ->
     Parent = get_directory_from_key(Dir),
     KeyBin = << Parent/binary, "\t", Dir/binary >>,
-    Metadata = #?METADATA{key = KeyBin,
-                          ksize = byte_size(KeyBin),
+    Metadata = #?METADATA{key = Dir,
+                          ksize = byte_size(Dir),
+                          dsize = -1,
                           clock = Clock,
                           timestamp = Timestamp},
     case leo_backend_db_api:put(?DIR_DB_ID,
@@ -471,7 +549,8 @@ handle_send({_,DestNode}, StackedInfo, CompressedObjs) ->
         [] ->
             void;
         Dirs ->
-            ok = create_directories(Dirs)
+            ok = create_directories(Dirs),
+            ok
     end,
 
     %% Store and replicate directories into the cluster
@@ -547,7 +626,7 @@ get_directories(#?METADATA{key = Key} = Metadata) ->
         Tokens ->
             case binary:matches(Key, [BinSlash],[]) of
                 [] ->
-                    [Metadata];
+                    [];
                 RetL ->
                     Pos = byte_size(Key) - 1,
                     case lists:last(RetL) of
@@ -562,16 +641,14 @@ get_directories(#?METADATA{key = Key} = Metadata) ->
 
 %% @private
 get_directories_1([], Metadata,_IsDir, Acc,_Sofar) ->
-    Sets = ordsets:new(),
-    get_directories_2(Acc, Metadata, ordsets:add_element(Metadata, Sets));
-
+    get_directories_2(Acc, Metadata, ordsets:new());
 get_directories_1([H|T], Metadata, IsDir, Acc, Sofar) ->
     Bin = << Sofar/binary, H/binary, "/" >>,
     get_directories_1(T, Metadata, IsDir, [Bin|Acc], Bin).
 
 %% @private
-get_directories_2([], Metadata, []) ->
-    [Metadata];
+get_directories_2([],_Metadata, []) ->
+    [];
 get_directories_2([],_Metadata, Acc) ->
     ordsets:to_list(Acc);
 get_directories_2([H|T], #?METADATA{clock = Clock,
@@ -589,11 +666,23 @@ get_directories_2([H|T], #?METADATA{clock = Clock,
                              Acc::any()).
 get_directories_from_stacked_info([], Acc) ->
     ordsets:to_list(Acc);
-get_directories_from_stacked_info([{_AddrId, Dir, Dir}|Rest], Acc) ->
-    get_directories_from_stacked_info(Rest, Acc);
-get_directories_from_stacked_info([{_AddrId, Dir,_Key}|Rest], Acc) ->
-    get_directories_from_stacked_info(Rest, ordsets:add_element(Dir, Acc)).
+get_directories_from_stacked_info([{_AddrId,_Dir, Key}|Rest], Acc) ->
+    DirL = case get_directories(#?METADATA{key = Key,
+                                           ksize = byte_size(Key)}) of
+               [] ->
+                   [];
+               RetL ->
+                   [Key_1 || #?METADATA{key = Key_1} <- RetL]
+           end,
+    Acc_1 = get_directories_from_stacked_info_1(DirL, Acc),
+    get_directories_from_stacked_info(Rest, Acc_1).
 
+%% @private
+get_directories_from_stacked_info_1([], Acc) ->
+    Acc;
+get_directories_from_stacked_info_1([Dir|Rest], Acc) ->
+    Acc_1 = ordsets:add_element(Dir, Acc),
+    get_directories_from_stacked_info_1(Rest, Acc_1).
 
 %% @doc enqueue a message of a miss-replication into the queue
 %% @private

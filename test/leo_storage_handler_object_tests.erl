@@ -270,7 +270,6 @@ delete_({Node0, Node1}) ->
     meck:new(leo_object_storage_api, [non_strict]),
     meck:expect(leo_object_storage_api, fetch_by_key,
                 fun(_ParentDir,_) ->
-                        ?debugVal(_ParentDir),
                         {ok, []}
                 end),
 

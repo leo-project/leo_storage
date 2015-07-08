@@ -91,16 +91,16 @@ stack_(_) ->
     %% TEST: get_directories
     %%
     %% case-1
+    ?debugFmt("~n --- TEST#1", []),
     Key_1 = <<"a/b/c/d/e.png">>,
     Metadata_1 = #?METADATA{key = Key_1,
                             ksize = byte_size(Key_1)},
     Ret_1 = leo_directory_sync:get_directories(Metadata_1),
-    ?assertEqual(5, length(Ret_1)),
+    ?assertEqual(4, length(Ret_1)),
     ?assertEqual(<<"a/">>,            (lists:nth(1, Ret_1))#?METADATA.key),
     ?assertEqual(<<"a/b/">>,          (lists:nth(2, Ret_1))#?METADATA.key),
     ?assertEqual(<<"a/b/c/">>,        (lists:nth(3, Ret_1))#?METADATA.key),
     ?assertEqual(<<"a/b/c/d/">>,      (lists:nth(4, Ret_1))#?METADATA.key),
-    ?assertEqual(<<"a/b/c/d/e.png">>, (lists:nth(5, Ret_1))#?METADATA.key),
 
     %% case-2
     Key_2 = <<"a/b/c/d/">>,
@@ -118,8 +118,7 @@ stack_(_) ->
     Metadata_3 = #?METADATA{key = Key_3,
                             ksize = byte_size(Key_3)},
     Ret_3 = leo_directory_sync:get_directories(Metadata_3),
-    ?assertEqual(1, length(Ret_3)),
-    ?assertEqual(<<"a.png">>, (lists:nth(1, Ret_3))#?METADATA.key),
+    ?assertEqual(0, length(Ret_3)),
 
     %% case-4
     Key_4 = <<"a/">>,
