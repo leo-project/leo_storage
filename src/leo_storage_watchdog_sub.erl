@@ -205,8 +205,8 @@ is_candidates([],_,_,[]) ->
     false;
 is_candidates([],_,MaxNumOfNodes, Acc) ->
     is_candidates_1(MaxNumOfNodes, Acc);
-is_candidates(_, MaxNumOfNodes, MaxNumOfNodes, Acc) ->
-    is_candidates_1(MaxNumOfNodes, Acc);
+is_candidates(_, MaxNumOfNodes, MaxNumOfNodes,_Acc) ->
+    false;
 is_candidates([#member{node = Node}|Rest], CntRunningNode, MaxNumOfNodes, Acc) ->
     {IsRunning, Acc_1} = get_candidates(Node, Acc, 0),
     CntRunningNode_1 = case IsRunning of
