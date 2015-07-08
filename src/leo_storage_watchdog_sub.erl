@@ -48,6 +48,16 @@
 -define(WD_SUB_ID_2, 'leo_watchdog_sub_2').
 -define(DEF_WAIT_TIME, 100).
 
+
+-record(compaction_info, {
+          node = undefined  :: atom(),
+          total_size = 0    :: non_neg_integer(),
+          active_size = 0   :: non_neg_integer(),
+          history = []      :: [non_neg_integer()],
+          state = undefined :: atom()
+         }).
+
+
 %%--------------------------------------------------------------------
 %% API
 %%--------------------------------------------------------------------
@@ -93,7 +103,7 @@ handle_notify(?WD_SUB_ID_2, #watchdog_alarm{state = #watchdog_state{
                                                        level = Level,
                                                        props = Props}},_Unixtime) ->
     %% Clear the current status
-    _ = elarm:clear('leo_storage_watchdog_fragment', ?WD_ITEM_ACTIVE_SIZE_RATIO),
+    ok = leo_storage_watchdog_fragment:clear(),
     %% Execution data-compacion or not
     case (Level >= ?WD_LEVEL_ERROR) of
         true ->
@@ -183,7 +193,7 @@ can_start_compaction() ->
                     N ->
                         N
                 end,
-            is_candidates(Members, MaxNumOfNodes, []);
+            is_candidates(Members, 0, MaxNumOfNodes, []);
         _ ->
             false
     end.
@@ -191,20 +201,93 @@ can_start_compaction() ->
 
 %% @doc Retrieve candidate nodes of data-compaction
 %% @private
-is_candidates([],_,[]) ->
+is_candidates([],_,_,[]) ->
     false;
-is_candidates([],_,Acc) ->
-    is_candidates_2(lists:reverse(Acc));
-is_candidates(_, MaxNumOfNodes, Acc) when MaxNumOfNodes == erlang:length(Acc) ->
-    is_candidates_2(lists:reverse(Acc));
-is_candidates([#member{node = Node}|Rest], MaxNumOfNodes, Acc) ->
-    Acc_1 = is_candidate_1(Node, Acc, 0),
-    is_candidates(Rest, MaxNumOfNodes, Acc_1).
+is_candidates([],_,MaxNumOfNodes, Acc) ->
+    is_candidates_1(MaxNumOfNodes, Acc);
+is_candidates(_, MaxNumOfNodes, MaxNumOfNodes,_Acc) ->
+    false;
+is_candidates([#member{node = Node}|Rest], CntRunningNode, MaxNumOfNodes, Acc) ->
+    {IsRunning, Acc_1} = get_candidates(Node, Acc, 0),
+    CntRunningNode_1 = case IsRunning of
+                           true ->
+                               CntRunningNode + 1;
+                           false ->
+                               CntRunningNode
+                       end,
+    is_candidates(Rest, CntRunningNode_1, MaxNumOfNodes, Acc_1).
 
 %% @private
-is_candidate_1(_, Acc, ?RETRY_TIMES) ->
+is_candidates_1(MaxNumOfNodes, Candidates) ->
+    %% Count running nodes
+    RunningNodes = length([_N || #compaction_info{
+                                   node = _N,
+                                   state = #compaction_stats{status = ?ST_RUNNING}
+                                   } <- Candidates]),
+    case (RunningNodes >= MaxNumOfNodes) of
+        true ->
+            false;
+        false ->
+            %% Retrieve cadidates
+            case (MaxNumOfNodes - RunningNodes) of
+                0 ->
+                    false;
+                MaxNumOfNodes_1 when MaxNumOfNodes_1 < 0->
+                    false;
+                MaxNumOfNodes_1 ->
+                    Candidates_1 = is_candidates_2(Candidates, []),
+                    Candidates_2 = lists:sort([{History, Node} ||
+                                                  #compaction_info{node = Node,
+                                                                   history = History}
+                                                      <- Candidates_1]),
+                    Candidates_3 = [Node_1 || {_History, Node_1} <- Candidates_2],
+                    {Candidates_4, Others} = lists:split(MaxNumOfNodes_1, Candidates_3),
+                    case Others of
+                        [] ->
+                            void;
+                        _ ->
+                            _ = rpc:multicall(Others, leo_storage_watchdog_fragment,
+                                              clear, [], ?TIMEOUT)
+                    end,
+                    lists:member(erlang:node(), Candidates_4)
+            end
+    end.
+
+%% @private
+is_candidates_2([], Acc) ->
     Acc;
-is_candidate_1(Node, Acc, RetryTimes) ->
+is_candidates_2([#compaction_info{state = #compaction_stats{status = ?ST_RUNNING}}|Rest], Acc) ->
+    is_candidates_2(Rest, Acc);
+is_candidates_2([#compaction_info{total_size = SumTotalSize,
+                                  active_size = SumActiveSize,
+                                  history = CompactionDate,
+                                  state = #compaction_stats{status = ?ST_IDLING}
+                                 } = CompactionInfo|Rest], Acc) ->
+    %% Check a comapction-interval of the node
+    MaxCompactionDate = lists:max(CompactionDate),
+    DiffCompactionDate = leo_date:now() - MaxCompactionDate,
+    CompactionInterval = ?env_auto_compaction_interval(),
+    Acc_1 = case (DiffCompactionDate >= CompactionInterval) of
+                true ->
+                    %% Check a fragmentation ratio
+                    ActiveSizeRatio = erlang:round(SumActiveSize / SumTotalSize * 100),
+                    ThresholdActiveSizeRatio = ?env_threshold_active_size_ratio(),
+                    case (ActiveSizeRatio =< ThresholdActiveSizeRatio) of
+                        true ->
+                            [CompactionInfo|Acc];
+                        false ->
+                            Acc
+                    end;
+                false ->
+                    Acc
+            end,
+    is_candidates_2(Rest, Acc_1).
+
+
+%% @private
+get_candidates(_,Acc, ?RETRY_TIMES) ->
+    Acc;
+get_candidates(Node, Acc, RetryTimes) ->
     case rpc:call(Node, leo_object_storage_api,
                   du_and_compaction_stats, [], ?DEF_REQ_TIMEOUT) of
         {ok, []} ->
@@ -232,41 +315,13 @@ is_candidate_1(Node, Acc, RetryTimes) ->
                       #storage_stats{total_sizes = TotalSize,
                                      active_sizes = ActiveSize,
                                      compaction_hist = History} <- DUState]),
-
-            %% Check compaction status of the node
-            case CompactionState of
-                #compaction_stats{status = ?ST_RUNNING} ->
-                    [{Node, ?ST_RUNNING}|Acc];
-                #compaction_stats{status = ?ST_IDLING} ->
-                    %% Check compaction's interval
-                    MaxCompactionDate = lists:max(CompactionDate),
-                    DiffCompactionDate = leo_date:now() - MaxCompactionDate,
-                    CompactionInterval = ?env_auto_compaction_interval(),
-
-                    case (DiffCompactionDate >= CompactionInterval) of
-                        true ->
-                            %% Check fragmentation ratio
-                            ActiveSizeRatio = erlang:round(SumActiveSize / SumTotalSize * 100),
-                            ThresholdActiveSizeRatio = ?env_threshold_active_size_ratio(),
-                            ActiveSizeRatioDiff = leo_math:floor(ThresholdActiveSizeRatio / 20),
-
-                            case (ActiveSizeRatio =< (ThresholdActiveSizeRatio + ActiveSizeRatioDiff)) of
-                                true ->
-                                    [{Node, ?ST_IDLING}|Acc];
-                                false ->
-                                    Acc
-                            end;
-                        false ->
-                            Acc
-                    end;
-                _ ->
-                    Acc
-            end;
+            {CompactionState#compaction_stats.status == ?ST_RUNNING,
+             [#compaction_info{node = Node,
+                               total_size = SumTotalSize,
+                               active_size = SumActiveSize,
+                               history = CompactionDate,
+                               state = CompactionState}|Acc]};
         _ ->
             timer:sleep(timer:seconds(1)),
-            is_candidate_1(Node, Acc, RetryTimes + 1)
+            get_candidates(Node, Acc, RetryTimes + 1)
     end.
-
-%% @private
-is_candidates_2(Candidates) ->
-    lists:member({erlang:node(), ?ST_IDLING}, Candidates).

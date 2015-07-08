@@ -37,7 +37,8 @@
 -export([start_link/3,
          stop/0
         ]).
--export([state/0]).
+-export([clear/0,
+         state/0]).
 
 %% Callback
 -export([init/1,
@@ -76,6 +77,14 @@ start_link(WarnActiveSizeRatio, ThresholdActiveSizeRatio, Interval) ->
              ok).
 stop() ->
     leo_watchdog:stop(?MODULE).
+
+
+%% @doc Clear an alert
+-spec(clear() ->
+             ok).
+clear() ->
+    elarm:clear(?MODULE, ?WD_ITEM_ACTIVE_SIZE_RATIO),
+    ok.
 
 
 %% @doc Retrieve state of the watchdog
