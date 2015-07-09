@@ -611,7 +611,7 @@
  "leo_object_storage.batch_procs_max",
  [
   {datatype, integer},
-  {default, 10000}
+  {default, 1500}
  ]}.
 
 
