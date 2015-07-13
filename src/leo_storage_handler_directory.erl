@@ -34,6 +34,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -export([is_dir/1, ask_is_dir/1,
+         add/1, delete/1,
          get/1, get/2,
          find_by_parent_dir/4,
          ask_to_find_by_parent_dir/3
@@ -94,6 +95,21 @@ ask_is_dir(Dir) ->
         Error ->
             Error
     end.
+
+
+%% @doc Add a directory
+-spec(add(Dir) ->
+             ok | {error, any()} when Dir::binary()).
+add(Dir) ->
+    leo_directory_sync:create_directories([Dir]).
+
+
+%% @doc Remove a directory
+-spec(delete(Dir) ->
+             ok | {error, any()} when Dir::binary()).
+delete(_Dir) ->
+    %% @TODO:
+    ok.
 
 
 %% @doc Retrieve a metadata of a dir
