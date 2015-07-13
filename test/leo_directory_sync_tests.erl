@@ -103,10 +103,10 @@ stack_(_) ->
                             ksize = byte_size(Key_1)},
     Ret_1 = leo_directory_sync:get_directories(Metadata_1),
     ?assertEqual(4, length(Ret_1)),
-    ?assertEqual(<<"a/">>,            (lists:nth(1, Ret_1))#?METADATA.key),
-    ?assertEqual(<<"a/b/">>,          (lists:nth(2, Ret_1))#?METADATA.key),
-    ?assertEqual(<<"a/b/c/">>,        (lists:nth(3, Ret_1))#?METADATA.key),
-    ?assertEqual(<<"a/b/c/d/">>,      (lists:nth(4, Ret_1))#?METADATA.key),
+    ?assertEqual(<<"a/">>,       (lists:nth(1, Ret_1))#?METADATA.key),
+    ?assertEqual(<<"a/b/">>,     (lists:nth(2, Ret_1))#?METADATA.key),
+    ?assertEqual(<<"a/b/c/">>,   (lists:nth(3, Ret_1))#?METADATA.key),
+    ?assertEqual(<<"a/b/c/d/">>, (lists:nth(4, Ret_1))#?METADATA.key),
 
     %% case-2
     Key_2 = <<"a/b/c/d/">>,
@@ -114,10 +114,10 @@ stack_(_) ->
                             ksize = byte_size(Key_2)},
     Ret_2 = leo_directory_sync:get_directories(Metadata_2),
     ?assertEqual(4, length(Ret_2)),
-    ?assertEqual(<<"a/">>,            (lists:nth(1, Ret_2))#?METADATA.key),
-    ?assertEqual(<<"a/b/">>,          (lists:nth(2, Ret_2))#?METADATA.key),
-    ?assertEqual(<<"a/b/c/">>,        (lists:nth(3, Ret_2))#?METADATA.key),
-    ?assertEqual(<<"a/b/c/d/">>,      (lists:nth(4, Ret_2))#?METADATA.key),
+    ?assertEqual(<<"a/">>,       (lists:nth(1, Ret_2))#?METADATA.key),
+    ?assertEqual(<<"a/b/">>,     (lists:nth(2, Ret_2))#?METADATA.key),
+    ?assertEqual(<<"a/b/c/">>,   (lists:nth(3, Ret_2))#?METADATA.key),
+    ?assertEqual(<<"a/b/c/d/">>, (lists:nth(4, Ret_2))#?METADATA.key),
 
     %% case-3
     Key_3 = <<"a.png">>,
@@ -171,6 +171,23 @@ stack_(_) ->
     ok = leo_directory_sync:append(sync, Metadata_8),
     {ok, Bin_8} = leo_backend_db_api:get(?DIR_DB_ID, <<"a/", "\t", Key_8/binary >>),
     ?assertEqual(Metadata_8, binary_to_term(Bin_8)),
+
+
+    %%
+    %% TEST: Add directories w/sync
+    %%
+    Key_9 = <<"ab/bc/cd/de/">>,
+    ok = leo_directory_sync:create_directories([Key_9]),
+
+    ParentDir_9 = leo_directory_sync:get_directory_from_key(Key_9),
+    Dir_9 = << ParentDir_9/binary, "\t", Key_9/binary >>,
+    {ok, Metadata_9} = leo_backend_db_api:get(?DIR_DB_ID, Dir_9),
+    Metadata_9_1 = binary_to_term(Metadata_9),
+    ?assertEqual(Key_9, Metadata_9_1#?METADATA.key),
+    ?assertEqual(byte_size(Key_9), Metadata_9_1#?METADATA.ksize),
+    ?assertEqual(-1, Metadata_9_1#?METADATA.dsize),
+    ?assertEqual(true, (0 < Metadata_9_1#?METADATA.clock)),
+    ?assertEqual(true, (0 < Metadata_9_1#?METADATA.timestamp)),
     ok.
 
 -endif.
