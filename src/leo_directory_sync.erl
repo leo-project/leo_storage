@@ -201,15 +201,15 @@ get_dir_and_metadata_bin(Dir, Metadata) ->
 create_directories(DirL) ->
     create_directories(DirL, dict:new()).
 
-
+%% @private
 create_directories([], Dict) ->
     case dict:to_list(Dict) of
         [] ->
-            void;
+            ok;
         RetL ->
-            [replicate(Node, MetadataL) || {Node, MetadataL} <- RetL]
-    end,
-    ok;
+            [replicate(Node, MetadataL) || {Node, MetadataL} <- RetL],
+            ok
+    end;
 create_directories([Dir|Rest], Dict) ->
     Metadata = #?METADATA{key = Dir,
                           ksize = byte_size(Dir),
@@ -225,7 +225,7 @@ create_directories([Dir|Rest], Dict) ->
             Dict_1 = create_directories_1(Nodes_1, Metadata_1, Dict),
             create_directories(Rest, Dict_1);
         _ ->
-            enqueue(Metadata),
+            ok = enqueue(Metadata),
             create_directories(Rest, Dict)
     end.
 
@@ -233,7 +233,7 @@ create_directories([Dir|Rest], Dict) ->
 create_directories_1([],_, Dict) ->
     Dict;
 create_directories_1([{_Node, false}|Rest], Metadata, Dict) ->
-    %% @TODO: enqueue
+    ok = enqueue(Metadata),
     create_directories_1(Rest, Metadata, Dict);
 create_directories_1([{Node, true}|Rest], Metadata, Dict) ->
     Dict_1 = dict:append(Node, Metadata, Dict),
@@ -266,7 +266,7 @@ replicate(Node, MetadataL) ->
         ok ->
             ok;
         {error,_} = Error ->
-            %% @TODO:enqueue
+            [enqueue(M) || M <- MetadataL],
             Error
     end.
 
@@ -549,8 +549,7 @@ handle_send({_,DestNode}, StackedInfo, CompressedObjs) ->
         [] ->
             void;
         Dirs ->
-            ok = create_directories(Dirs),
-            ok
+            create_directories(Dirs)
     end,
 
     %% Store and replicate directories into the cluster
@@ -689,7 +688,14 @@ get_directories_from_stacked_info_1([Dir|Rest], Acc) ->
 enqueue(#?METADATA{key = Key} = Metadata) ->
     case leo_redundant_manager_api:get_redundancies_by_key(Key) of
         {ok, #redundancies{id = AddrId}} ->
-            leo_directory_mq:publish(Metadata#?METADATA{addr_id = AddrId});
+            case catch leo_directory_mq:publish(Metadata#?METADATA{addr_id = AddrId}) of
+                {'EXIT', Cause} ->
+                    ?error("enqueue/1",
+                           "key:~p, cause:~p", [Key, Cause]);
+                _ ->
+                    void
+            end,
+            ok;
         {error, Cause} ->
             ?error("enqueue/1",
                    "key:~p, cause:~p", [Key, Cause]),

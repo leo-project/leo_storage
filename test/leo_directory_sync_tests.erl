@@ -87,6 +87,12 @@ stack_(_) ->
                              not_found
                      end),
 
+    ok = meck:new(leo_directory_mq, [non_strict]),
+    ok = meck:expect(leo_directory_mq, publish,
+                     fun(_) ->
+                             ok
+                     end),
+
     %%
     %% TEST: get_directories
     %%

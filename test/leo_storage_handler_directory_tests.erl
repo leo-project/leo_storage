@@ -116,6 +116,12 @@ find_by_parent_dir_([Node0, Node1]) ->
                                                 0
                                         end]),
 
+    ok = meck:new(leo_directory_mq, [non_strict]),
+    ok = meck:expect(leo_directory_mq, publish,
+                     fun(_) ->
+                             ok
+                     end),
+
     {ok, Res} = leo_storage_handler_directory:find_by_parent_dir(<<"air/on/g/">>, <<>>, <<>>, 1000),
     ?debugVal(Res),
     ?assertEqual(2, length(Res)),
