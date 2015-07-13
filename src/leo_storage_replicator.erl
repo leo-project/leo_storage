@@ -255,7 +255,7 @@ enqueue('put', ?ERR_TYPE_REPLICATE_DATA = Type,  AddrId, Key) ->
                   [QId, AddrId, Key, Type, Cause])
     end;
 enqueue('delete', _Type,  AddrId, Key) ->
-    QId = ?QUEUE_TYPE_ASYNC_DELETION,
+    QId = ?QUEUE_TYPE_ASYNC_DELETE_OBJ,
     case leo_storage_mq:publish(QId, AddrId, Key) of
         ok ->
             ok;

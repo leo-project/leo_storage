@@ -49,8 +49,8 @@
 -define(MSG_PATH_RECOVERY_NODE,     "5").
 -define(MSG_PATH_SYNC_OBJ_WITH_DC,  "6").
 -define(MSG_PATH_COMP_META_WITH_DC, "7").
--define(MSG_PATH_DEL_DIR,           "8").
--define(MSG_PATH_ASYNC_DIR_META,    "9").
+-define(MSG_PATH_ASYNC_DELETE_DIR,  "8").
+-define(MSG_PATH_ASYNC_RECOVER_DIR, "9").
 
 
 %%--------------------------------------------------------------------
@@ -92,12 +92,12 @@ start(RefSup, RootPath) ->
     start_1([{?QUEUE_ID_PER_OBJECT,        ?MSG_PATH_PER_OBJECT},
              {?QUEUE_ID_SYNC_BY_VNODE_ID,  ?MSG_PATH_SYNC_VNODE_ID},
              {?QUEUE_ID_REBALANCE,         ?MSG_PATH_REBALANCE},
-             {?QUEUE_ID_ASYNC_DELETION,    ?MSG_PATH_ASYNC_DELETION},
+             {?QUEUE_ID_ASYNC_DELETE_OBJ,  ?MSG_PATH_ASYNC_DELETION},
              {?QUEUE_ID_RECOVERY_NODE,     ?MSG_PATH_RECOVERY_NODE},
              {?QUEUE_ID_SYNC_OBJ_WITH_DC,  ?MSG_PATH_SYNC_OBJ_WITH_DC},
              {?QUEUE_ID_COMP_META_WITH_DC, ?MSG_PATH_COMP_META_WITH_DC},
-             {?QUEUE_ID_DEL_DIR,           ?MSG_PATH_DEL_DIR},
-             {?QUEUE_ID_ASYNC_DIR_META,    ?MSG_PATH_ASYNC_DIR_META}
+             {?QUEUE_ID_ASYNC_DELETE_DIR,  ?MSG_PATH_ASYNC_DELETE_DIR},
+             {?QUEUE_ID_ASYNC_RECOVER_DIR, ?MSG_PATH_ASYNC_RECOVER_DIR}
             ], RefMQSup, RootPath_1).
 
 %% @private
@@ -130,12 +130,20 @@ publish(?QUEUE_TYPE_RECOVERY_NODE = Id, Node) ->
                                       timestamp = leo_date:now()}),
     leo_mq_api:publish(queue_id(Id), KeyBin, MsgBin);
 
-publish(?QUEUE_TYPE_ASYNC_DIR_META = Id, #?METADATA{addr_id = AddrId,
-                                                    key = Key} = Metadata) ->
+publish(?QUEUE_TYPE_ASYNC_RECOVER_DIR = Id, #?METADATA{addr_id = AddrId,
+                                                       key = Key} = Metadata) ->
     Clock = leo_date:clock(),
     KeyBin = term_to_binary({AddrId, Key, Clock}),
     MsgBin = term_to_binary(Metadata),
     leo_mq_api:publish(queue_id(Id), KeyBin, MsgBin);
+
+publish(?QUEUE_TYPE_ASYNC_DELETE_DIR = Id, #?METADATA{addr_id = AddrId,
+                                                      key = Key} = Metadata) ->
+    Clock = leo_date:clock(),
+    KeyBin = term_to_binary({AddrId, Key, Clock}),
+    MsgBin = term_to_binary(Metadata),
+    leo_mq_api:publish(queue_id(Id), KeyBin, MsgBin);
+
 publish(_,_) ->
     {error, badarg}.
 
@@ -151,7 +159,7 @@ publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID = Id, VNodeId, Node) ->
                                                timestamp = leo_date:now()}),
     leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
 
-publish(?QUEUE_TYPE_ASYNC_DELETION = Id, AddrId, Key) ->
+publish(?QUEUE_TYPE_ASYNC_DELETE_OBJ = Id, AddrId, Key) ->
     Clock = leo_date:clock(),
     KeyBin     = term_to_binary({AddrId, Key, Clock}),
     MessageBin = term_to_binary(
@@ -174,7 +182,7 @@ publish(?QUEUE_TYPE_COMP_META_WITH_DC = Id, ClusterId, AddrAndKeyList) ->
                                                 timestamp = leo_date:now()}),
     leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
 
-publish(?QUEUE_TYPE_DEL_DIR = Id, Node, Keys) ->
+publish(?QUEUE_TYPE_ASYNC_DELETE_DIR = Id, Node, Keys) ->
     Clock = leo_date:clock(),
     KeyBin = term_to_binary({Node, Keys, Clock}),
     MsgBin = term_to_binary(
@@ -315,10 +323,10 @@ handle_call({consume, ?QUEUE_ID_REBALANCE, MessageBin}) ->
             {error, ?ERROR_COULD_NOT_MATCH}
     end;
 
-handle_call({consume, ?QUEUE_ID_ASYNC_DELETION, MessageBin}) ->
+handle_call({consume, ?QUEUE_ID_ASYNC_DELETE_OBJ, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
-            ?error("handle_call/1 - QUEUE_ID_ASYNC_DELETION",
+            ?error("handle_call/1 - QUEUE_ID_ASYNC_DELETE_OBJ",
                    "cause:~p", [Cause]),
             {error, Cause};
         #async_deletion_message{addr_id  = AddrId,
@@ -333,7 +341,7 @@ handle_call({consume, ?QUEUE_ID_ASYNC_DELETION, MessageBin}) ->
                 ok ->
                     ok;
                 {_,_Cause} ->
-                    publish(?QUEUE_TYPE_ASYNC_DELETION, AddrId, Key)
+                    publish(?QUEUE_TYPE_ASYNC_DELETE_OBJ, AddrId, Key)
             end;
         _ ->
             {error, ?ERROR_COULD_NOT_MATCH}
@@ -385,10 +393,10 @@ handle_call({consume, ?QUEUE_ID_COMP_META_WITH_DC, MessageBin}) ->
             {error, ?ERROR_COULD_NOT_MATCH}
     end;
 
-handle_call({consume, ?QUEUE_ID_DEL_DIR, MessageBin}) ->
+handle_call({consume, ?QUEUE_ID_ASYNC_DELETE_DIR, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
-            ?error("handle_call/1 - QUEUE_ID_DEL_DIR",
+            ?error("handle_call/1 - QUEUE_ID_ASYNC_DELETE_DIR",
                    "cause:~p", [Cause]),
             {error, Cause};
         #delete_dir{keys  = Keys,
@@ -397,10 +405,10 @@ handle_call({consume, ?QUEUE_ID_DEL_DIR, MessageBin}) ->
             leo_storage_handler_object:delete_objects_under_dir([Node], Ref, Keys)
     end;
 
-handle_call({consume, ?QUEUE_ID_ASYNC_DIR_META, MessageBin}) ->
+handle_call({consume, ?QUEUE_ID_ASYNC_RECOVER_DIR, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
-            ?error("handle_call/1 - QUEUE_ID_ASYNC_DIR_META",
+            ?error("handle_call/1 - QUEUE_ID_ASYNC_RECOVER_DIR",
                    "cause:~p", [Cause]),
             {error, Cause};
         #?METADATA{addr_id = AddrId,
@@ -412,7 +420,7 @@ handle_call({consume, ?QUEUE_ID_ASYNC_DIR_META, MessageBin}) ->
                 {error, not_found} ->
                     ok;
                 _ ->
-                    publish(?QUEUE_TYPE_ASYNC_DIR_META, Metadata)
+                    publish(?QUEUE_TYPE_ASYNC_RECOVER_DIR, Metadata)
             end;
         _ ->
             ok
@@ -521,7 +529,7 @@ sync_vnodes_callback(SyncTarget, Node, FromAddrId, ToAddrId)->
                                         true when SyncTarget == ?SYNC_TARGET_OBJ ->
                                             ?MODULE:publish(?QUEUE_TYPE_REBALANCE, Node, ToAddrId, AddrId, Key);
                                         true when SyncTarget == ?SYNC_TARGET_DIR ->
-                                            ?MODULE:publish(?QUEUE_TYPE_ASYNC_DIR_META, Metadata);
+                                            ?MODULE:publish(?QUEUE_TYPE_ASYNC_RECOVER_DIR, Metadata);
                                         false ->
                                             void
                                     end;
@@ -633,11 +641,13 @@ correct_redundancies_2(ListOfMetadata, ErrorNodes) ->
         lists:foldl(
           fun({Node,_Metadata}, {{DestNode, _Metadata} = Dest, C, R}) when Node =:= DestNode ->
                   {Dest, [Node|C], R};
-             ({Node, #?METADATA{clock = Clock}}, {{DestNode, #?METADATA{clock = DestClock}} = Dest, C, R}) when Node  =/= DestNode,
-                                                                                                                Clock =:= DestClock ->
+             ({Node, #?METADATA{clock = Clock}},
+              {{DestNode, #?METADATA{clock = DestClock}} = Dest, C, R}) when Node  =/= DestNode,
+                                                                             Clock =:= DestClock ->
                   {Dest, [Node|C], R};
-             ({Node, #?METADATA{clock = Clock}}, {{DestNode, #?METADATA{clock = DestClock}} = Dest, C, R}) when Node  =/= DestNode,
-                                                                                                                Clock =/= DestClock ->
+             ({Node, #?METADATA{clock = Clock}},
+              {{DestNode, #?METADATA{clock = DestClock}} = Dest, C, R}) when Node  =/= DestNode,
+                                                                             Clock =/= DestClock ->
                   {Dest, C, [Node|R]}
           end, {H, [], []}, ListOfMetadata),
     correct_redundancies_3(ErrorNodes ++ InconsistentNodes, CorrectNodes, Metadata).
@@ -846,8 +856,8 @@ decrement_counter(Table, Key) ->
              queue_id()).
 queue_id(?QUEUE_TYPE_SYNC_BY_VNODE_ID) ->
     ?QUEUE_ID_SYNC_BY_VNODE_ID;
-queue_id(?QUEUE_TYPE_ASYNC_DELETION) ->
-    ?QUEUE_ID_ASYNC_DELETION;
+queue_id(?QUEUE_TYPE_ASYNC_DELETE_OBJ) ->
+    ?QUEUE_ID_ASYNC_DELETE_OBJ;
 queue_id(?QUEUE_TYPE_PER_OBJECT) ->
     ?QUEUE_ID_PER_OBJECT;
 queue_id(?QUEUE_TYPE_REBALANCE) ->
@@ -858,7 +868,7 @@ queue_id(?QUEUE_TYPE_SYNC_OBJ_WITH_DC) ->
     ?QUEUE_ID_SYNC_OBJ_WITH_DC;
 queue_id(?QUEUE_TYPE_COMP_META_WITH_DC) ->
     ?QUEUE_ID_COMP_META_WITH_DC;
-queue_id(?QUEUE_TYPE_DEL_DIR) ->
-    ?QUEUE_ID_DEL_DIR;
-queue_id(?QUEUE_TYPE_ASYNC_DIR_META) ->
-    ?QUEUE_ID_ASYNC_DIR_META.
+queue_id(?QUEUE_TYPE_ASYNC_DELETE_DIR) ->
+    ?QUEUE_ID_ASYNC_DELETE_DIR;
+queue_id(?QUEUE_TYPE_ASYNC_RECOVER_DIR) ->
+    ?QUEUE_ID_ASYNC_RECOVER_DIR.

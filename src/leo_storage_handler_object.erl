@@ -508,7 +508,7 @@ delete_objects_under_dir([Node|Rest], Ref, Keys) ->
             ok;
         _Other ->
             %% enqueu a fail message into the mq
-            QId = ?QUEUE_TYPE_DEL_DIR,
+            QId = ?QUEUE_TYPE_ASYNC_DELETE_DIR,
             case leo_storage_mq:publish(QId, Node, Keys) of
                 ok ->
                     void;
@@ -691,7 +691,7 @@ prefix_search_and_remove_objects(ParentDir) ->
 
                   case (Pos_1 == 0) of
                       true when Metadata#?METADATA.del == ?DEL_FALSE ->
-                          QId = ?QUEUE_TYPE_ASYNC_DELETION,
+                          QId = ?QUEUE_TYPE_ASYNC_DELETE_OBJ,
                           case leo_storage_mq:publish(QId, AddrId, Key) of
                               ok ->
                                   void;

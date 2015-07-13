@@ -55,22 +55,22 @@
 -define(QUEUE_ID_SYNC_BY_VNODE_ID,  'leo_sync_by_vnode_id_queue').
 -define(QUEUE_ID_DIRECTORY,         'leo_directory_queue').
 -define(QUEUE_ID_REBALANCE,         'leo_rebalance_queue').
--define(QUEUE_ID_ASYNC_DELETION,    'leo_async_deletion_queue').
+-define(QUEUE_ID_ASYNC_DELETE_OBJ,  'leo_async_deletion_queue').
 -define(QUEUE_ID_RECOVERY_NODE,     'leo_recovery_node_queue').
 -define(QUEUE_ID_SYNC_OBJ_WITH_DC,  'leo_sync_obj_with_dc_queue').
 -define(QUEUE_ID_COMP_META_WITH_DC, 'leo_comp_meta_with_dc_queue').
--define(QUEUE_ID_DEL_DIR,           'leo_delete_dir_queue').
--define(QUEUE_ID_ASYNC_DIR_META,    'leo_async_metadata_queue').
+-define(QUEUE_ID_ASYNC_DELETE_DIR,  'leo_async_delete_dir_queue').
+-define(QUEUE_ID_ASYNC_RECOVER_DIR, 'leo_async_recover_dir_queue').
 
 -define(QUEUE_TYPE_PER_OBJECT,        'queue_type_per_object').
 -define(QUEUE_TYPE_SYNC_BY_VNODE_ID,  'queue_type_sync_by_vnode_id').
 -define(QUEUE_TYPE_REBALANCE,         'queue_type_rebalance').
--define(QUEUE_TYPE_ASYNC_DELETION,    'queue_type_async_deletion').
+-define(QUEUE_TYPE_ASYNC_DELETE_OBJ,  'queue_type_async_deletion').
 -define(QUEUE_TYPE_RECOVERY_NODE,     'queue_type_recovery_node').
 -define(QUEUE_TYPE_SYNC_OBJ_WITH_DC,  'queue_type_sync_obj_with_dc').
 -define(QUEUE_TYPE_COMP_META_WITH_DC, 'queue_type_comp_meta_with_dc').
--define(QUEUE_TYPE_DEL_DIR,           'queue_type_delete_dir').
--define(QUEUE_TYPE_ASYNC_DIR_META,    'queue_type_async_metadata').
+-define(QUEUE_TYPE_ASYNC_DELETE_DIR,  'queue_type_async_delete_dir').
+-define(QUEUE_TYPE_ASYNC_RECOVER_DIR, 'queue_type_async_recover_dir').
 
 -define(ERR_TYPE_REPLICATE_DATA,      'error_msg_replicate_data').
 -define(ERR_TYPE_RECOVER_DATA,        'error_msg_recover_data').
@@ -428,35 +428,35 @@
 -type(queue_type() :: ?QUEUE_TYPE_PER_OBJECT  |
                       ?QUEUE_TYPE_SYNC_BY_VNODE_ID  |
                       ?QUEUE_TYPE_REBALANCE |
-                      ?QUEUE_TYPE_ASYNC_DELETION |
+                      ?QUEUE_TYPE_ASYNC_DELETE_OBJ |
                       ?QUEUE_TYPE_RECOVERY_NODE |
                       ?QUEUE_TYPE_SYNC_OBJ_WITH_DC |
                       ?QUEUE_TYPE_COMP_META_WITH_DC |
-                      ?QUEUE_TYPE_DEL_DIR |
-                      ?QUEUE_TYPE_ASYNC_DIR_META
+                      ?QUEUE_TYPE_ASYNC_DELETE_DIR |
+                      ?QUEUE_TYPE_ASYNC_RECOVER_DIR
                       ).
 
 -type(queue_id()   :: ?QUEUE_ID_PER_OBJECT |
                       ?QUEUE_ID_SYNC_BY_VNODE_ID |
                       ?QUEUE_ID_REBALANCE |
-                      ?QUEUE_ID_ASYNC_DELETION |
+                      ?QUEUE_ID_ASYNC_DELETE_OBJ |
                       ?QUEUE_ID_RECOVERY_NODE |
                       ?QUEUE_ID_SYNC_OBJ_WITH_DC |
                       ?QUEUE_ID_COMP_META_WITH_DC |
-                      ?QUEUE_ID_DEL_DIR |
-                      ?QUEUE_ID_ASYNC_DIR_META
+                      ?QUEUE_ID_ASYNC_DELETE_DIR |
+                      ?QUEUE_ID_ASYNC_RECOVER_DIR
                       ).
 
 -define(mq_id_and_alias, [
                           {?QUEUE_ID_PER_OBJECT,        "recover inconsistent objs"},
                           {?QUEUE_ID_SYNC_BY_VNODE_ID,  "sync objs by vnode-id"},
                           {?QUEUE_ID_REBALANCE,         "rebalance objs"},
-                          {?QUEUE_ID_ASYNC_DELETION,    "async deletion of objs"},
+                          {?QUEUE_ID_ASYNC_DELETE_OBJ,  "async deletion of objs"},
                           {?QUEUE_ID_RECOVERY_NODE,     "recovery objs of node"},
                           {?QUEUE_ID_SYNC_OBJ_WITH_DC,  "sync objs w/remote-node"},
                           {?QUEUE_ID_COMP_META_WITH_DC, "compare metadata w/remote-node"},
-                          {?QUEUE_ID_DEL_DIR,           "delete directories"},
-                          {?QUEUE_ID_ASYNC_DIR_META,    "async metadata of directories recovery"}
+                          {?QUEUE_ID_ASYNC_DELETE_DIR,  "delete directories"},
+                          {?QUEUE_ID_ASYNC_RECOVER_DIR, "async metadata of directories recovery"}
                          ]).
 
 

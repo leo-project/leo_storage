@@ -90,11 +90,11 @@ handle_notify(?WD_SUB_ID_1 = Id,_Alarm,_Unixtime) ->
             leo_mq_api:decrease(?QUEUE_ID_PER_OBJECT),
             leo_mq_api:decrease(?QUEUE_ID_SYNC_BY_VNODE_ID),
             leo_mq_api:decrease(?QUEUE_ID_REBALANCE),
-            leo_mq_api:decrease(?QUEUE_ID_ASYNC_DELETION),
+            leo_mq_api:decrease(?QUEUE_ID_ASYNC_DELETE_OBJ),
             leo_mq_api:decrease(?QUEUE_ID_RECOVERY_NODE),
             leo_mq_api:decrease(?QUEUE_ID_SYNC_OBJ_WITH_DC),
             leo_mq_api:decrease(?QUEUE_ID_COMP_META_WITH_DC),
-            leo_mq_api:decrease(?QUEUE_ID_DEL_DIR),
+            leo_mq_api:decrease(?QUEUE_ID_ASYNC_DELETE_DIR),
             ok;
         false ->
             ok
@@ -160,11 +160,11 @@ handle_notify(?WD_SUB_ID_1 = Id,_State,_SafeTimes,_Unixtime) ->
             leo_mq_api:increase(?QUEUE_ID_PER_OBJECT),
             leo_mq_api:increase(?QUEUE_ID_SYNC_BY_VNODE_ID),
             leo_mq_api:increase(?QUEUE_ID_REBALANCE),
-            leo_mq_api:increase(?QUEUE_ID_ASYNC_DELETION),
+            leo_mq_api:increase(?QUEUE_ID_ASYNC_DELETE_OBJ),
             leo_mq_api:increase(?QUEUE_ID_RECOVERY_NODE),
             leo_mq_api:increase(?QUEUE_ID_SYNC_OBJ_WITH_DC),
             leo_mq_api:increase(?QUEUE_ID_COMP_META_WITH_DC),
-            leo_mq_api:increase(?QUEUE_ID_DEL_DIR),
+            leo_mq_api:increase(?QUEUE_ID_ASYNC_DELETE_DIR),
             ok;
         false ->
             ok
