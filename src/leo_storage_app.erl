@@ -192,7 +192,6 @@ after_proc_1(true, Pid, Managers) ->
         QueueDir = ?env_queue_dir(leo_storage),
         ok = launch_redundant_manager(Pid, Managers, QueueDir),
         ok = leo_storage_mq:start(Pid, QueueDir),
-        ok = leo_directory_mq:start(Pid, QueueDir),
 
         %% Launch directory-data's db
         ok = leo_directory_sync:start(),

@@ -403,11 +403,15 @@ handle_call({consume, ?QUEUE_ID_ASYNC_DIR_META, MessageBin}) ->
             ?error("handle_call/1 - QUEUE_ID_ASYNC_DIR_META",
                    "cause:~p", [Cause]),
             {error, Cause};
-        #?METADATA{} = Metadata ->
-            case leo_directory_sync:recover(Metadata) of
-                ok ->
+        #?METADATA{addr_id = AddrId,
+                   key = Key} = Metadata ->
+            %% Retrieve latest metadata of the object
+            case leo_storage_handler_object:head(AddrId, Key, true) of
+                {ok, Metadata_1} ->
+                    leo_directory_sync:append(Metadata_1);
+                {error, not_found} ->
                     ok;
-                {error,_Cause} ->
+                _ ->
                     publish(?QUEUE_TYPE_ASYNC_DIR_META, Metadata)
             end;
         _ ->

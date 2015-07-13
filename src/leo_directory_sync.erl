@@ -689,7 +689,8 @@ get_directories_from_stacked_info_1([Dir|Rest], Acc) ->
 enqueue(#?METADATA{key = Key} = Metadata) ->
     case leo_redundant_manager_api:get_redundancies_by_key(Key) of
         {ok, #redundancies{id = AddrId}} ->
-            case catch leo_directory_mq:publish(Metadata#?METADATA{addr_id = AddrId}) of
+            case catch leo_storage_mq:publish(?QUEUE_TYPE_ASYNC_DIR_META,
+                                              Metadata#?METADATA{addr_id = AddrId}) of
                 {'EXIT', Cause} ->
                     ?error("enqueue/1",
                            "key:~p, cause:~p", [Key, Cause]);
