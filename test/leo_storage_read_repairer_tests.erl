@@ -101,8 +101,8 @@ regular_({Test0Node, Test1Node}) ->
              #redundant_node{node = Test1Node, available = true}],
     F = fun(_) -> ok end,
     ok = leo_storage_read_repairer:repair(
-           #read_parameter{quorum = 1,
-                           req_id = 0}, Nodes, ?TEST_META_1, F),
+           #?READ_PARAMETER{quorum = 1,
+                            req_id = 0}, Nodes, ?TEST_META_1, F),
     ok.
 
 fail_1_({Test0Node, Test1Node}) ->
@@ -124,8 +124,8 @@ fail_1_({Test0Node, Test1Node}) ->
              #redundant_node{node = Test1Node, available = true}],
     F = fun(_) -> ok end,
     ok = leo_storage_read_repairer:repair(
-           #read_parameter{quorum = 1,
-                           req_id = 0}, Nodes, ?TEST_META_1, F),
+           #?READ_PARAMETER{quorum = 1,
+                            req_id = 0}, Nodes, ?TEST_META_1, F),
     ok.
 
 fail_2_({Test0Node, Test1Node}) ->
@@ -147,8 +147,8 @@ fail_2_({Test0Node, Test1Node}) ->
              #redundant_node{node = Test1Node, available = true}],
     F = fun(_) -> ok end,
     ok = leo_storage_read_repairer:repair(
-           #read_parameter{quorum = 1,
-                           req_id = 0}, Nodes, ?TEST_META_2, F),
+           #?READ_PARAMETER{quorum = 1,
+                            req_id = 0}, Nodes, ?TEST_META_2, F),
     ok.
 
 -endif.

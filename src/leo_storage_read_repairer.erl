@@ -51,12 +51,12 @@
 %% @doc Repair an object.
 %% @end
 -spec(repair(ReadParms, Redundancies, Metadata, Callback) ->
-             any() when ReadParms::#read_parameter{},
+             any() when ReadParms::#?READ_PARAMETER{},
                         Redundancies::[#redundant_node{}],
                         Metadata::#?METADATA{},
                         Callback::function()).
-repair(#read_parameter{quorum = ReadQuorum,
-                       req_id = ReqId}, Redundancies, Metadata, Callback) ->
+repair(#?READ_PARAMETER{quorum = ReadQuorum,
+                        req_id = ReqId}, Redundancies, Metadata, Callback) ->
     Ref    = make_ref(),
     From   = self(),
     AddrId = Metadata#?METADATA.addr_id,

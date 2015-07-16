@@ -109,15 +109,28 @@
 %% @doc request parameter for READ
 %%
 -record(read_parameter, {
-          ref            :: reference(),
-          addr_id        :: integer(),
-          key            :: binary(),
-          etag = 0       :: integer(),
-          start_pos = -1 :: integer(),
-          end_pos   = -1 :: integer(),
-          quorum         :: integer(),
-          req_id         :: integer()
+          ref             :: reference(),
+          addr_id         :: integer(),
+          key = <<>>      :: binary(),
+          etag = 0        :: non_neg_integer(),
+          start_pos = -1  :: integer(),
+          end_pos   = -1  :: integer(),
+          quorum = 0      :: non_neg_integer(),
+          req_id = 0      :: non_neg_integer()
          }).
+-record(read_parameter_1, {
+          ref             :: reference(),
+          addr_id         :: integer(),
+          key = <<>>      :: binary(),
+          etag = 0        :: non_neg_integer(),
+          start_pos = -1  :: integer(),
+          end_pos   = -1  :: integer(),
+          num_of_replicas :: pos_integer(),
+          quorum = 0      :: non_neg_integer(),
+          req_id = 0      :: non_neg_integer()
+         }).
+-define(READ_PARAMETER, 'read_parameter_1').
+
 
 %% @doc Queue's Message.
 %%
