@@ -108,7 +108,12 @@ get(#?READ_PARAMETER{addr_id = AddrId} = ReadParameter,_Redundancies) ->
                 Redundancies);
         _Error ->
             {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
-    end.
+    end;
+
+get(ReadParameter, Redundancies) ->
+    {ok, ReadParameter_1} = leo_storage_transformer:transform_read_parameter(ReadParameter),
+    get(ReadParameter_1, Redundancies).
+
 
 %% @doc Retrieve an object which is requested from gateway.
 %%
