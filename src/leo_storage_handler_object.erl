@@ -803,10 +803,16 @@ read_and_repair_2(#?READ_PARAMETER{addr_id   = AddrId,
                                    key       = Key,
                                    etag      = 0,
                                    start_pos = StartPos,
-                                   end_pos   = EndPos} = ReadParameter,
+                                   end_pos   = EndPos,
+                                   num_of_replicas = NumOfReplicas} = ReadParameter,
                   #redundant_node{node = Node}, Redundancies) when Node == erlang:node() ->
-    read_and_repair_3(
-      get_fun(AddrId, Key, StartPos, EndPos), ReadParameter, Redundancies);
+    case NumOfReplicas of
+        1 ->
+            get_fun(AddrId, Key, StartPos, EndPos);
+        _ ->
+            read_and_repair_3(
+              get_fun(AddrId, Key, StartPos, EndPos), ReadParameter, Redundancies)
+    end;
 
 read_and_repair_2(#?READ_PARAMETER{addr_id   = AddrId,
                                    key       = Key,
