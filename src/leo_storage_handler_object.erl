@@ -803,28 +803,15 @@ read_and_repair_2(#?READ_PARAMETER{addr_id   = AddrId,
                                    key       = Key,
                                    etag      = 0,
                                    start_pos = StartPos,
-                                   end_pos   = EndPos,
-                                   num_of_replicas = NumOfReplicas} = ReadParameter,
+                                   end_pos   = EndPos} = ReadParameter,
                   #redundant_node{node = Node}, Redundancies) when Node == erlang:node() ->
-    case NumOfReplicas of
-        1 ->
-            case get_fun(AddrId, Key, StartPos, EndPos) of
-                {ok, Metadata, #?OBJECT{data = Bin}} ->
-                    {ok, Metadata, Bin};
-                Error ->
-                    Error
-            end;
-        _ ->
-            read_and_repair_3(
-              get_fun(AddrId, Key, StartPos, EndPos), ReadParameter, Redundancies)
-    end;
+    read_and_repair_3(get_fun(AddrId, Key, StartPos, EndPos), ReadParameter, Redundancies);
 
 read_and_repair_2(#?READ_PARAMETER{addr_id   = AddrId,
                                    key       = Key,
                                    etag      = ETag,
                                    start_pos = StartPos,
-                                   end_pos   = EndPos,
-                                   num_of_replicas = NumOfReplicas} = ReadParameter,
+                                   end_pos   = EndPos} = ReadParameter,
                   #redundant_node{node = Node}, Redundancies) when Node == erlang:node() ->
     %% Retrieve an head of object,
     %%     then compare it with requested 'Etag'
@@ -847,13 +834,6 @@ read_and_repair_2(#?READ_PARAMETER{addr_id   = AddrId,
     case HeadRet of
         {ok, match} = Reply ->
             Reply;
-        _ when NumOfReplicas == 1 ->
-            case get_fun(AddrId, Key, StartPos, EndPos) of
-                {ok, Metadata2, #?OBJECT{data = Bin}} ->
-                    {ok, Metadata2, Bin};
-                Error ->
-                    Error
-            end;
         _ ->
             read_and_repair_3(
               get_fun(AddrId, Key, StartPos, EndPos), ReadParameter, Redundancies)
@@ -882,6 +862,8 @@ read_and_repair_2(ReadParameter, #redundant_node{node = Node}, Redundancies) ->
 
 %% @private
 read_and_repair_3({ok, Metadata, #?OBJECT{data = Bin}}, #?READ_PARAMETER{}, []) ->
+    {ok, Metadata, Bin};
+read_and_repair_3({ok, Metadata, #?OBJECT{data = Bin}}, #?READ_PARAMETER{num_of_replicas = 1},_Redundancies) ->
     {ok, Metadata, Bin};
 read_and_repair_3({ok, match} = Reply, #?READ_PARAMETER{},_Redundancies) ->
     Reply;
