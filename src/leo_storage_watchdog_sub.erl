@@ -123,7 +123,7 @@ handle_notify(?WD_SUB_ID_2, #watchdog_alarm{state = #watchdog_state{
 
                             case leo_object_storage_api:compact_data(
                                    PendingTargets, ProcsOfParallelProcessing,
-                                   fun leo_redundant_manager_api:has_charge_of_node/2) of
+                                   leo_storage_compaction) of
                                 ok ->
                                     Ratio = leo_misc:get_value('ratio', Props),
                                     ?debug("handle_notify/3",
