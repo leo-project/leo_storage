@@ -207,7 +207,6 @@ create_directories([], Dict) ->
         [] ->
             ok;
         RetL ->
-            ?debugVal(RetL),
             [replicate(Node, MetadataL) || {Node, MetadataL} <- RetL],
             ok
     end;
