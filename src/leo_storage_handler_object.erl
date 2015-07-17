@@ -808,7 +808,12 @@ read_and_repair_2(#?READ_PARAMETER{addr_id   = AddrId,
                   #redundant_node{node = Node}, Redundancies) when Node == erlang:node() ->
     case NumOfReplicas of
         1 ->
-            get_fun(AddrId, Key, StartPos, EndPos);
+            case get_fun(AddrId, Key, StartPos, EndPos) of
+                {ok, Metadata, #?OBJECT{data = Bin}} ->
+                    {ok, Metadata, Bin};
+                Error ->
+                    Error
+            end;
         _ ->
             read_and_repair_3(
               get_fun(AddrId, Key, StartPos, EndPos), ReadParameter, Redundancies)
@@ -843,7 +848,12 @@ read_and_repair_2(#?READ_PARAMETER{addr_id   = AddrId,
         {ok, match} = Reply ->
             Reply;
         _ when NumOfReplicas == 1 ->
-            get_fun(AddrId, Key, StartPos, EndPos);
+            case get_fun(AddrId, Key, StartPos, EndPos) of
+                {ok, Metadata2, #?OBJECT{data = Bin}} ->
+                    {ok, Metadata2, Bin};
+                Error ->
+                    Error
+            end;
         _ ->
             read_and_repair_3(
               get_fun(AddrId, Key, StartPos, EndPos), ReadParameter, Redundancies)
