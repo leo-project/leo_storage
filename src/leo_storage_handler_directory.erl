@@ -271,7 +271,7 @@ find_by_parent_dir_1([#redundant_node{node = Node}|Rest], AddrId, Dir, Marker, M
                             ask_to_find_by_parent_dir, [Dir, Marker, MaxKeys]),
     Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
               {value, {ok, RetL}} ->
-                  {ok, lists:sort(RetL)};
+                  {ok, lists:sublist(lists:sort(RetL), MaxKeys)};
               {value, not_found} ->
                   {ok, []};
               {value, {error, Cause}} ->
