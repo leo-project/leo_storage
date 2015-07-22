@@ -39,9 +39,6 @@
 -export([get/1, get/2, get/3, get/4, get/5,
          put/1, put/2, put/4,
          delete/1, delete/2, delete/3,
-         delete_objects_under_dir/1,
-         delete_objects_under_dir/2,
-         delete_objects_under_dir/3,
          head/2, head/3,
          head_with_calc_md5/3,
          replicate/1, replicate/3,
@@ -437,96 +434,8 @@ delete(Object, ReqId, CheckUnderDir) ->
 delete_1(Ret,_Object, false) ->
     Ret;
 delete_1(Ret, Object, true) ->
-    ok = delete_objects_under_dir(Object),
+    ok = leo_storage_handler_directory:delete_objects_under_dir(Object),
     Ret.
-
-
-%% Deletion object related constants
--define(BIN_SLASH, <<"/">>).
--define(BIN_NL,    <<"\n">>).
-
-%% @doc Remove objects of the under directory
--spec(delete_objects_under_dir(Object) ->
-             ok when Object::#?OBJECT{}).
-delete_objects_under_dir(Object) ->
-    Key   = Object#?OBJECT.key,
-    KSize = byte_size(Key),
-
-    case catch binary:part(Key, (KSize - 1), 1) of
-        {'EXIT',_} ->
-            ok;
-        ?BIN_SLASH = Bin ->
-            %% for metadata-layer
-            Dir = leo_directory_sync:get_directory_from_key(Key),
-            _ = leo_cache_api:delete(Dir),
-            _ = leo_directory_sync:append(sync, #?METADATA{key = Dir,
-                                                           ksize = byte_size(Dir),
-                                                           dsize = -1,
-                                                           clock = leo_date:clock(),
-                                                           timestamp = leo_date:now(),
-                                                           del = ?DEL_TRUE
-                                                          }),
-            %% for remote storage nodes
-            Targets =  [ Bin, undefined ],
-            Ref = make_ref(),
-            case leo_redundant_manager_api:get_members_by_status(?STATE_RUNNING) of
-                {ok, RetL} ->
-                    Nodes = [N||#member{node = N} <- RetL],
-                    spawn(
-                      fun() ->
-                              {ok, Ref} = delete_objects_under_dir(Nodes, Ref, Targets)
-                      end),
-                    ok;
-                _ ->
-                    void
-            end,
-            %% for local object storage
-            delete_objects_under_dir(Ref, Targets),
-            ok;
-        _ ->
-            ok
-    end.
-
-
-%% @doc Remove objects of the under directory for remote-nodes
-%%
--spec(delete_objects_under_dir(Ref, Keys) ->
-             {ok, Ref} when Ref::reference(),
-                            Keys::[binary()|undefined]).
-delete_objects_under_dir(Ref, []) ->
-    {ok, Ref};
-delete_objects_under_dir(Ref, [undefined|Rest]) ->
-    delete_objects_under_dir(Ref, Rest);
-delete_objects_under_dir(Ref, [Key|Rest]) ->
-    _ = prefix_search_and_remove_objects(Key),
-    delete_objects_under_dir(Ref, Rest).
-
-
--spec(delete_objects_under_dir(Nodes, Ref, Keys) ->
-             {ok, Ref} when Nodes::[atom()],
-                            Ref::reference(),
-                            Keys::[binary()|undefined]).
-delete_objects_under_dir([], Ref,_Keys) ->
-    {ok, Ref};
-delete_objects_under_dir([Node|Rest], Ref, Keys) ->
-    RPCKey = rpc:async_call(Node, ?MODULE,
-                            delete_objects_under_dir, [Ref, Keys]),
-    case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
-        {value, {ok, Ref}} ->
-            ok;
-        _Other ->
-            %% enqueu a fail message into the mq
-            QId = ?QUEUE_TYPE_ASYNC_DELETE_DIR,
-            case leo_storage_mq:publish(QId, Node, Keys) of
-                ok ->
-                    void;
-                {error, Cause} ->
-                    ?warn("delete_objects_under_dir/3",
-                          "qid:~p, node:~p, keys:~p, cause:~p",
-                          [QId, Node, Keys, Cause])
-            end
-    end,
-    delete_objects_under_dir(Rest, Ref, Keys).
 
 
 %%--------------------------------------------------------------------
@@ -688,16 +597,14 @@ prefix_search_and_remove_objects(undefined) ->
 prefix_search_and_remove_objects(ParentDir) ->
     Fun = fun(Key, V, Acc) ->
                   Metadata = binary_to_term(V),
-                  AddrId   = Metadata#?METADATA.addr_id,
-
-                  Pos_1 = case binary:match(Key, [ParentDir]) of
-                              nomatch ->
-                                  -1;
-                              {Pos, _} ->
-                                  Pos
-                          end,
-
-                  case (Pos_1 == 0) of
+                  AddrId = Metadata#?METADATA.addr_id,
+                  IsUnderDir = case binary:match(Key, [ParentDir]) of
+                                   {Pos, _} when Pos == 0->
+                                       true;
+                                   _ ->
+                                       false
+                               end,
+                  case IsUnderDir of
                       true when Metadata#?METADATA.del == ?DEL_FALSE ->
                           QId = ?QUEUE_TYPE_ASYNC_DELETE_OBJ,
                           case leo_storage_mq:publish(QId, AddrId, Key) of
@@ -709,7 +616,7 @@ prefix_search_and_remove_objects(ParentDir) ->
                                         [QId, AddrId, Key, Cause])
                           end;
                       _ ->
-                          Acc
+                          void
                   end,
                   Acc
           end,

@@ -34,7 +34,11 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -export([is_dir/1, ask_is_dir/1,
-         add/1, delete/1,
+         add/1,
+         delete/1,
+         delete_objects_under_dir/1,
+         delete_objects_under_dir/2,
+         delete_objects_under_dir/3,
          get/1, get/2,
          find_by_parent_dir/4,
          ask_to_find_by_parent_dir/3
@@ -110,6 +114,88 @@ add(Dir) ->
 delete(_Dir) ->
     %% @TODO:
     ok.
+
+%% Deletion object related constants
+-define(BIN_SLASH, <<"/">>).
+-define(BIN_NL,    <<"\n">>).
+
+%% @doc Remove objects of the under directory
+-spec(delete_objects_under_dir(Object) ->
+             ok when Object::#?OBJECT{}).
+delete_objects_under_dir(Object) ->
+    Key   = Object#?OBJECT.key,
+    KSize = byte_size(Key),
+
+    case catch binary:part(Key, (KSize - 1), 1) of
+        {'EXIT',_} ->
+            ok;
+        ?BIN_SLASH = Bin ->
+            %% for metadata-layer
+            Dir = leo_directory_sync:get_directory_from_key(Key),
+            ok = leo_directory_sync:append(sync, #?METADATA{key = Dir,
+                                                            ksize = byte_size(Dir),
+                                                            dsize = -1,
+                                                            clock = leo_date:clock(),
+                                                            timestamp = leo_date:now(),
+                                                            del = ?DEL_TRUE}),
+            _ = leo_cache_api:delete(Dir),
+            %% for remote storage nodes
+            Targets =  [Bin, undefined],
+            Ref = make_ref(),
+            case leo_redundant_manager_api:get_members_by_status(?STATE_RUNNING) of
+                {ok, RetL} ->
+                    Nodes = [N||#member{node = N} <- RetL],
+                    spawn(
+                      fun() ->
+                              {ok, Ref} = delete_objects_under_dir(Nodes, Ref, Targets)
+                      end),
+                    ok;
+                _ ->
+                    %% @TODO: enqueue
+                    ok
+            end;
+        _ ->
+            ok
+    end.
+
+%% @doc Remove objects of the under directory for remote-nodes
+-spec(delete_objects_under_dir(Ref, Keys) ->
+             {ok, Ref} when Ref::reference(),
+                            Keys::[binary()|undefined]).
+delete_objects_under_dir(Ref, []) ->
+    {ok, Ref};
+delete_objects_under_dir(Ref, [undefined|Rest]) ->
+    delete_objects_under_dir(Ref, Rest);
+delete_objects_under_dir(Ref, [_Key|Rest]) ->
+    %% @TODO
+    %% _ = prefix_search_and_remove_objects(Key),
+    delete_objects_under_dir(Ref, Rest).
+
+-spec(delete_objects_under_dir(Nodes, Ref, Keys) ->
+             {ok, Ref} when Nodes::[atom()],
+                            Ref::reference(),
+                            Keys::[binary()|undefined]).
+delete_objects_under_dir([], Ref,_Keys) ->
+    {ok, Ref};
+delete_objects_under_dir([Node|Rest], Ref, Keys) ->
+    RPCKey = rpc:async_call(Node, ?MODULE,
+                            delete_objects_under_dir, [Ref, Keys]),
+    case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
+        {value, {ok, Ref}} ->
+            ok;
+        _Other ->
+            %% enqueu a fail message into the mq
+            QId = ?QUEUE_TYPE_ASYNC_DELETE_DIR,
+            case leo_storage_mq:publish(QId, Node, Keys) of
+                ok ->
+                    void;
+                {error, Cause} ->
+                    ?warn("delete_objects_under_dir/3",
+                          "qid:~p, node:~p, keys:~p, cause:~p",
+                          [QId, Node, Keys, Cause])
+            end
+    end,
+    delete_objects_under_dir(Rest, Ref, Keys).
 
 
 %% @doc Retrieve a metadata of a dir

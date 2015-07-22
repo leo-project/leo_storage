@@ -402,7 +402,8 @@ handle_call({consume, ?QUEUE_ID_ASYNC_DELETE_DIR, MessageBin}) ->
         #delete_dir{keys  = Keys,
                     node = Node} ->
             Ref = make_ref(),
-            leo_storage_handler_object:delete_objects_under_dir([Node], Ref, Keys)
+            leo_storage_handler_directory:delete_objects_under_dir(
+              [Node], Ref, Keys)
     end;
 
 handle_call({consume, ?QUEUE_ID_ASYNC_RECOVER_DIR, MessageBin}) ->

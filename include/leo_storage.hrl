@@ -135,74 +135,74 @@
 %% @doc Queue's Message.
 %%
 -record(inconsistent_data_message, {
-          id = 0                :: integer(),
+          id = 0                :: non_neg_integer(),
           type                  :: atom(),
-          addr_id = 0           :: integer(),
+          addr_id = 0           :: non_neg_integer(),
           key                   :: any(),
           meta                  :: tuple(),
-          timestamp = 0         :: integer(),
-          times = 0             :: integer()}).
+          timestamp = 0         :: non_neg_integer(),
+          times = 0             :: non_neg_integer()}).
 
 -record(inconsistent_index_message, {
-          id = 0                :: integer(),
+          id = 0                :: non_neg_integer(),
           type                  :: atom(),
-          addr_id = 0           :: integer(),
+          addr_id = 0           :: non_neg_integer(),
           key                   :: any(),
-          timestamp = 0         :: integer(),
-          times = 0             :: integer()}).
+          timestamp = 0         :: non_neg_integer(),
+          times = 0             :: non_neg_integer()}).
 
 -record(sync_unit_of_vnode_message, {
-          id = 0                :: integer(),
-          vnode_id = 0          :: integer(),
+          id = 0                :: non_neg_integer(),
+          vnode_id = 0          :: non_neg_integer(),
           node                  :: atom(),
-          timestamp = 0         :: integer(),
-          times = 0             :: integer()
+          timestamp = 0         :: non_neg_integer(),
+          times = 0             :: non_neg_integer()
          }).
 
 -record(rebalance_message, {
-          id = 0                :: integer(),
-          vnode_id = 0          :: integer(),
-          addr_id = 0           :: integer(),
+          id = 0                :: non_neg_integer(),
+          vnode_id = 0          :: non_neg_integer(),
+          addr_id = 0           :: non_neg_integer(),
           key                   :: binary(),
           node                  :: atom(),
-          timestamp = 0         :: integer(),
-          times = 0             :: integer()
+          timestamp = 0         :: non_neg_integer(),
+          times = 0             :: non_neg_integer()
          }).
 
 -record(async_deletion_message, {
-          id = 0                :: integer(),
-          addr_id = 0           :: integer(),
+          id = 0                :: non_neg_integer(),
+          addr_id = 0           :: non_neg_integer(),
           key                   :: any(),
-          timestamp = 0         :: integer(),
-          times = 0             :: integer()}).
+          timestamp = 0         :: non_neg_integer(),
+          times = 0             :: non_neg_integer()}).
 
 -record(recovery_node_message, {
-          id = 0                :: integer(),
+          id = 0                :: non_neg_integer(),
           node                  :: atom(),
-          timestamp = 0         :: integer(),
-          times = 0             :: integer()}).
+          timestamp = 0         :: non_neg_integer(),
+          times = 0             :: non_neg_integer()}).
 
 -record(inconsistent_data_with_dc, {
-          id = 0                :: integer(),
+          id = 0                :: non_neg_integer(),
           cluster_id            :: atom(),
-          addr_id = 0           :: integer(),
+          addr_id = 0           :: non_neg_integer(),
           key                   :: binary(),
-          del = 0               :: integer(), %% del:[0:false, 1:true]
-          timestamp = 0         :: integer(),
-          times = 0             :: integer()}).
+          del = 0               :: non_neg_integer(), %% del:[0:false, 1:true]
+          timestamp = 0         :: non_neg_integer(),
+          times = 0             :: non_neg_integer()}).
 
 -record(comparison_metadata_with_dc, {
-          id = 0                 :: integer(),
+          id = 0                 :: non_neg_integer(),
           cluster_id             :: atom(),
           list_of_addrid_and_key :: list(),
-          timestamp = 0          :: integer()
+          timestamp = 0          :: non_neg_integer()
          }).
 
 -record(delete_dir, {
-          id = 0        :: integer(),
-          node          :: atom(),
-          keys = []     :: [binary()|undefined],
-          timestamp = 0 :: integer()
+          id = 0           :: non_neg_integer(),
+          node = undefined :: atom(),
+          keys = []        :: [binary()|undefined],
+          timestamp = 0    :: non_neg_integer()
          }).
 
 

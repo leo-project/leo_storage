@@ -288,6 +288,39 @@ delete_({Node0, Node1}) ->
     meck:new(leo_metrics_req, [non_strict]),
     meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
+    meck:new(leo_directory_sync, [non_strict]),
+    meck:expect(leo_directory_sync, append, fun(_,_) -> ok end),
+    meck:expect(leo_directory_sync, get_directory_from_key,
+                fun(_Key) ->
+                        BinSlash = <<"/">>,
+                        case catch binary:last(_Key) of
+                            {'EXIT',_Cause} ->
+                                <<>>;
+                            %% "/"
+                            16#2f ->
+                                case binary:matches(_Key, [BinSlash],[]) of
+                                    [] ->
+                                        <<>>;
+                                    RetMatches ->
+                                        case (length(RetMatches) > 1) of
+                                            true ->
+                                                [_,{Pos,_}|_] = lists:reverse(RetMatches),
+                                                binary:part(_Key, 0, Pos + 1);
+                                            false ->
+                                                <<>>
+                                        end
+                                end;
+                            _Other ->
+                                case binary:matches(_Key, [BinSlash],[]) of
+                                    [] ->
+                                        <<>>;
+                                    RetL ->
+                                        {Len,_} = lists:last(RetL),
+                                        Bin = binary:part(_Key, 0, Len),
+                                        << Bin/binary, BinSlash/binary >>
+                                end
+                        end
+                end),
     Object_1 = #?OBJECT{method    = ?CMD_DELETE,
                         addr_id   = AddrId,
                         key       = << Key/binary, "/" >>,
