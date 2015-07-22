@@ -137,13 +137,14 @@ publish(?QUEUE_TYPE_ASYNC_RECOVER_DIR = Id, #?METADATA{addr_id = AddrId,
     MsgBin = term_to_binary(Metadata),
     leo_mq_api:publish(queue_id(Id), KeyBin, MsgBin);
 
-publish(?QUEUE_TYPE_ASYNC_DELETE_DIR = Id, #?METADATA{addr_id = AddrId,
-                                                      key = Key} = Metadata) ->
-    Clock = leo_date:clock(),
-    KeyBin = term_to_binary({AddrId, Key, Clock}),
-    MsgBin = term_to_binary(Metadata),
-    leo_mq_api:publish(queue_id(Id), KeyBin, MsgBin);
-
+publish(?QUEUE_TYPE_ASYNC_DELETE_DIR, []) ->
+    ok;
+publish(?QUEUE_TYPE_ASYNC_DELETE_DIR = Id, [undefined|Rest]) ->
+    publish(Id, Rest);
+publish(?QUEUE_TYPE_ASYNC_DELETE_DIR = Id, [Dir|Rest]) ->
+    KeyBin = term_to_binary({Dir, leo_date:clock()}),
+    leo_mq_api:publish(queue_id(Id), KeyBin, Dir),
+    publish(Id, Rest);
 publish(_,_) ->
     {error, badarg}.
 
@@ -181,16 +182,6 @@ publish(?QUEUE_TYPE_COMP_META_WITH_DC = Id, ClusterId, AddrAndKeyList) ->
                                                 list_of_addrid_and_key = AddrAndKeyList,
                                                 timestamp = leo_date:now()}),
     leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
-
-publish(?QUEUE_TYPE_ASYNC_DELETE_DIR = Id, Node, Keys) ->
-    Clock = leo_date:clock(),
-    KeyBin = term_to_binary({Node, Keys, Clock}),
-    MsgBin = term_to_binary(
-               #delete_dir{id   = Clock,
-                           node = Node,
-                           keys = Keys,
-                           timestamp = leo_date:now()}),
-    leo_mq_api:publish(queue_id(Id), KeyBin, MsgBin);
 publish(_,_,_) ->
     {error, badarg}.
 
@@ -394,17 +385,8 @@ handle_call({consume, ?QUEUE_ID_COMP_META_WITH_DC, MessageBin}) ->
     end;
 
 handle_call({consume, ?QUEUE_ID_ASYNC_DELETE_DIR, MessageBin}) ->
-    case catch binary_to_term(MessageBin) of
-        {'EXIT', Cause} ->
-            ?error("handle_call/1 - QUEUE_ID_ASYNC_DELETE_DIR",
-                   "cause:~p", [Cause]),
-            {error, Cause};
-        #delete_dir{keys  = Keys,
-                    node = Node} ->
-            Ref = make_ref(),
-            leo_storage_handler_directory:delete_objects_under_dir(
-              [Node], Ref, Keys)
-    end;
+    Dir = MessageBin,
+    leo_storage_handler_directory:delete_objects_under_dir(#?OBJECT{key = Dir});
 
 handle_call({consume, ?QUEUE_ID_ASYNC_RECOVER_DIR, MessageBin}) ->
     case catch binary_to_term(MessageBin) of

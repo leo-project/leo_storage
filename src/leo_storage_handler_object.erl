@@ -41,9 +41,7 @@
          delete/1, delete/2, delete/3,
          head/2, head/3,
          head_with_calc_md5/3,
-         replicate/1, replicate/3,
-         prefix_search_and_remove_objects/1,
-         find_uploaded_objects_by_key/1
+         replicate/1, replicate/3
         ]).
 
 -define(REP_LOCAL,  'local').
@@ -582,72 +580,6 @@ replicate(DestNodes, AddrId, Key) ->
         Error ->
             Error
     end.
-
-
-%%--------------------------------------------------------------------
-%% API - Prefix Search (Fetch)
-%%--------------------------------------------------------------------
-%% @doc Retrieve object of deletion from object-storage by key
-%%
--spec(prefix_search_and_remove_objects(ParentDir) ->
-             {ok, [_]} |
-             not_found when ParentDir::undefined|binary()).
-prefix_search_and_remove_objects(undefined) ->
-    not_found;
-prefix_search_and_remove_objects(ParentDir) ->
-    Fun = fun(Key, V, Acc) ->
-                  Metadata = binary_to_term(V),
-                  AddrId = Metadata#?METADATA.addr_id,
-                  IsUnderDir = case binary:match(Key, [ParentDir]) of
-                                   {Pos, _} when Pos == 0->
-                                       true;
-                                   _ ->
-                                       false
-                               end,
-                  case IsUnderDir of
-                      true when Metadata#?METADATA.del == ?DEL_FALSE ->
-                          QId = ?QUEUE_TYPE_ASYNC_DELETE_OBJ,
-                          case leo_storage_mq:publish(QId, AddrId, Key) of
-                              ok ->
-                                  void;
-                              {error, Cause} ->
-                                  ?warn("prefix_search_and_remove_objects/1",
-                                        "qid:~p, addr-id:~p, key:~p, cause:~p",
-                                        [QId, AddrId, Key, Cause])
-                          end;
-                      _ ->
-                          void
-                  end,
-                  Acc
-          end,
-    leo_object_storage_api:fetch_by_key(ParentDir, Fun).
-
-
-%% @doc Find already uploaded objects by original-filename
-%%
--spec(find_uploaded_objects_by_key(OriginalKey) ->
-             {ok, list()} | not_found when OriginalKey::binary()).
-find_uploaded_objects_by_key(OriginalKey) ->
-    Fun = fun(Key, V, Acc) ->
-                  Metadata       = binary_to_term(V),
-
-                  case (nomatch /= binary:match(Key, <<"\n">>)) of
-                      true ->
-                          Pos_1 = case binary:match(Key, [OriginalKey]) of
-                                      nomatch   -> -1;
-                                      {Pos, _} -> Pos
-                                  end,
-                          case (Pos_1 == 0) of
-                              true ->
-                                  [Metadata|Acc];
-                              false ->
-                                  Acc
-                          end;
-                      false ->
-                          Acc
-                  end
-          end,
-    leo_object_storage_api:fetch_by_key(OriginalKey, Fun).
 
 
 %%--------------------------------------------------------------------

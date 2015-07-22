@@ -39,6 +39,8 @@
          delete_objects_under_dir/1,
          delete_objects_under_dir/2,
          delete_objects_under_dir/3,
+         prefix_search_and_remove_objects/1,
+         find_uploaded_objects_by_key/1,
          get/1, get/2,
          find_by_parent_dir/4,
          ask_to_find_by_parent_dir/3
@@ -111,9 +113,9 @@ add(Dir) ->
 %% @doc Remove a directory
 -spec(delete(Dir) ->
              ok | {error, any()} when Dir::binary()).
-delete(_Dir) ->
-    %% @TODO:
-    ok.
+delete(Dir) ->
+    delete_objects_under_dir(#?OBJECT{key = Dir}).
+
 
 %% Deletion object related constants
 -define(BIN_SLASH, <<"/">>).
@@ -123,7 +125,7 @@ delete(_Dir) ->
 -spec(delete_objects_under_dir(Object) ->
              ok when Object::#?OBJECT{}).
 delete_objects_under_dir(Object) ->
-    Key   = Object#?OBJECT.key,
+    Key = Object#?OBJECT.key,
     KSize = byte_size(Key),
 
     case catch binary:part(Key, (KSize - 1), 1) of
@@ -131,28 +133,29 @@ delete_objects_under_dir(Object) ->
             ok;
         ?BIN_SLASH = Bin ->
             %% for metadata-layer
-            Dir = leo_directory_sync:get_directory_from_key(Key),
-            ok = leo_directory_sync:append(sync, #?METADATA{key = Dir,
-                                                            ksize = byte_size(Dir),
+            ok = leo_directory_sync:append(sync, #?METADATA{key = Key,
+                                                            ksize = KSize,
                                                             dsize = -1,
                                                             clock = leo_date:clock(),
                                                             timestamp = leo_date:now(),
                                                             del = ?DEL_TRUE}),
-            _ = leo_cache_api:delete(Dir),
+            _ = leo_cache_api:delete(Key),
+
             %% for remote storage nodes
-            Targets =  [Bin, undefined],
+            Targets = [Bin, undefined],
             Ref = make_ref(),
             case leo_redundant_manager_api:get_members_by_status(?STATE_RUNNING) of
                 {ok, RetL} ->
                     Nodes = [N||#member{node = N} <- RetL],
                     spawn(
                       fun() ->
-                              {ok, Ref} = delete_objects_under_dir(Nodes, Ref, Targets)
+                              {ok, Ref} = delete_objects_under_dir(
+                                            Nodes, Ref, Targets)
                       end),
                     ok;
                 _ ->
-                    %% @TODO: enqueue
-                    ok
+                    leo_storage_mq:publish(
+                      ?QUEUE_TYPE_ASYNC_DELETE_DIR, [Key])
             end;
         _ ->
             ok
@@ -166,9 +169,8 @@ delete_objects_under_dir(Ref, []) ->
     {ok, Ref};
 delete_objects_under_dir(Ref, [undefined|Rest]) ->
     delete_objects_under_dir(Ref, Rest);
-delete_objects_under_dir(Ref, [_Key|Rest]) ->
-    %% @TODO
-    %% _ = prefix_search_and_remove_objects(Key),
+delete_objects_under_dir(Ref, [Key|Rest]) ->
+    ok = prefix_search_and_remove_objects(Key),
     delete_objects_under_dir(Ref, Rest).
 
 -spec(delete_objects_under_dir(Nodes, Ref, Keys) ->
@@ -184,18 +186,89 @@ delete_objects_under_dir([Node|Rest], Ref, Keys) ->
         {value, {ok, Ref}} ->
             ok;
         _Other ->
-            %% enqueu a fail message into the mq
-            QId = ?QUEUE_TYPE_ASYNC_DELETE_DIR,
-            case leo_storage_mq:publish(QId, Node, Keys) of
-                ok ->
-                    void;
-                {error, Cause} ->
-                    ?warn("delete_objects_under_dir/3",
-                          "qid:~p, node:~p, keys:~p, cause:~p",
-                          [QId, Node, Keys, Cause])
-            end
+            %% Enqueue a failed message into the mq
+            ok = leo_storage_mq:publish(
+                   ?QUEUE_TYPE_ASYNC_DELETE_DIR, Keys)
     end,
     delete_objects_under_dir(Rest, Ref, Keys).
+
+
+%% @doc Retrieve object of deletion from object-storage by key
+-spec(prefix_search_and_remove_objects(ParentDir) ->
+             ok when ParentDir::undefined|binary()).
+prefix_search_and_remove_objects(undefined) ->
+    ok;
+prefix_search_and_remove_objects(ParentDir) ->
+    Fun = fun(Key, V, Acc) ->
+                  Metadata = binary_to_term(V),
+                  AddrId = Metadata#?METADATA.addr_id,
+                  IsUnderDir = case binary:match(Key, [ParentDir]) of
+                                   {Pos, _} when Pos == 0->
+                                       true;
+                                   _ ->
+                                       false
+                               end,
+                  case IsUnderDir of
+                      true when Metadata#?METADATA.del == ?DEL_FALSE ->
+                          %% Remove the dir's info from the metdata-layer
+                          KSize = byte_size(Key),
+                          case catch binary:part(Key, (KSize - 1), 1) of
+                              ?BIN_SLASH ->
+                                  ok = leo_directory_sync:append(
+                                         sync, #?METADATA{key = Key,
+                                                          ksize = KSize,
+                                                          dsize = -1,
+                                                          clock = leo_date:clock(),
+                                                          timestamp = leo_date:now(),
+                                                          del = ?DEL_TRUE}),
+                                  _ = leo_cache_api:delete(Key);
+                              _ ->
+                                  void
+                          end,
+
+                          %% Remove the metadata info from the object-storage
+                          QId = ?QUEUE_TYPE_ASYNC_DELETE_OBJ,
+                          case leo_storage_mq:publish(QId, AddrId, Key) of
+                              ok ->
+                                  void;
+                              {error, Cause} ->
+                                  ?warn("prefix_search_and_remove_objects/1",
+                                        "qid:~p, addr-id:~p, key:~p, cause:~p",
+                                        [QId, AddrId, Key, Cause])
+                          end;
+                      _ ->
+                          void
+                  end,
+                  Acc
+          end,
+    leo_object_storage_api:fetch_by_key(ParentDir, Fun),
+    ok.
+
+
+%% @doc Find already uploaded objects by original-filename
+-spec(find_uploaded_objects_by_key(OriginalKey) ->
+             {ok, list()} | not_found when OriginalKey::binary()).
+find_uploaded_objects_by_key(OriginalKey) ->
+    Fun = fun(Key, V, Acc) ->
+                  Metadata       = binary_to_term(V),
+
+                  case (nomatch /= binary:match(Key, <<"\n">>)) of
+                      true ->
+                          Pos_1 = case binary:match(Key, [OriginalKey]) of
+                                      nomatch   -> -1;
+                                      {Pos, _} -> Pos
+                                  end,
+                          case (Pos_1 == 0) of
+                              true ->
+                                  [Metadata|Acc];
+                              false ->
+                                  Acc
+                          end;
+                      false ->
+                          Acc
+                  end
+          end,
+    leo_object_storage_api:fetch_by_key(OriginalKey, Fun).
 
 
 %% @doc Retrieve a metadata of a dir

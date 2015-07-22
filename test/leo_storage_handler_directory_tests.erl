@@ -39,7 +39,8 @@
 
 object_handler_test_() ->
     {foreach, fun setup/0, fun teardown/1,
-     [{with, [T]} || T <- [fun find_by_parent_dir_/1
+     [{with, [T]} || T <- [fun find_by_parent_dir_/1,
+                           fun prefix_search_and_remove_objects_/1
                           ]]}.
 
 setup() ->
@@ -127,6 +128,34 @@ find_by_parent_dir_([Node0, Node1]) ->
     ?assertEqual(2, length(Res)),
 
     meck:unload(),
+    ok.
+
+-define(TEST_BUCKET, <<"air">>).
+-define(TEST_DIR_0,  <<"air/on/g/">>).
+-define(TEST_KEY_0,  <<"air/on/g/string">>).
+-define(TEST_KEY_1,  <<"air/on/g/bach/music">>).
+
+prefix_search_and_remove_objects_(_) ->
+    meck:new(leo_object_storage_api, [non_strict]),
+    meck:expect(leo_object_storage_api, fetch_by_key,
+                fun(_ParentDir, Fun) ->
+                        Fun(?TEST_KEY_0, term_to_binary(#?METADATA{}), []),
+                        Fun(?TEST_DIR_0, term_to_binary(#?METADATA{}), [#?METADATA{key=?TEST_KEY_0}]),
+                        Fun(?TEST_KEY_1, term_to_binary(#?METADATA{}), [#?METADATA{key=?TEST_KEY_0}]),
+                        Fun(<< "_", ?TEST_KEY_1/binary >>,
+                            term_to_binary(#?METADATA{}), [#?METADATA{key=?TEST_KEY_0}])
+                end),
+
+    meck:new(leo_mq_api, [non_strict]),
+    meck:expect(leo_mq_api, publish, fun(_,_,_) -> ok end),
+
+    meck:new(leo_directory_sync, [non_strict]),
+    meck:expect(leo_directory_sync, append, fun(_,_) -> ok end),
+
+    meck:new(leo_cache_api, [non_strict]),
+    meck:expect(leo_cache_api, delete, fun(_) -> ok end),
+
+    ok = leo_storage_handler_directory:prefix_search_and_remove_objects(?TEST_BUCKET),
     ok.
 
 -endif.

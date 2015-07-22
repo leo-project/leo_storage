@@ -60,8 +60,7 @@ object_handler_test_() ->
                            fun put_1_/1,
                            fun delete_/1,
                            fun head_/1,
-                           fun copy_/1,
-                           fun prefix_search_and_remove_objects_/1
+                           fun copy_/1
                           ]]}.
 
 setup() ->
@@ -290,37 +289,10 @@ delete_({Node0, Node1}) ->
 
     meck:new(leo_directory_sync, [non_strict]),
     meck:expect(leo_directory_sync, append, fun(_,_) -> ok end),
-    meck:expect(leo_directory_sync, get_directory_from_key,
-                fun(_Key) ->
-                        BinSlash = <<"/">>,
-                        case catch binary:last(_Key) of
-                            {'EXIT',_Cause} ->
-                                <<>>;
-                            %% "/"
-                            16#2f ->
-                                case binary:matches(_Key, [BinSlash],[]) of
-                                    [] ->
-                                        <<>>;
-                                    RetMatches ->
-                                        case (length(RetMatches) > 1) of
-                                            true ->
-                                                [_,{Pos,_}|_] = lists:reverse(RetMatches),
-                                                binary:part(_Key, 0, Pos + 1);
-                                            false ->
-                                                <<>>
-                                        end
-                                end;
-                            _Other ->
-                                case binary:matches(_Key, [BinSlash],[]) of
-                                    [] ->
-                                        <<>>;
-                                    RetL ->
-                                        {Len,_} = lists:last(RetL),
-                                        Bin = binary:part(_Key, 0, Len),
-                                        << Bin/binary, BinSlash/binary >>
-                                end
-                        end
-                end),
+
+    meck:new(leo_storage_mq, [non_strict]),
+    meck:expect(leo_storage_mq, publish, fun(_,_) -> ok end),
+
     Object_1 = #?OBJECT{method    = ?CMD_DELETE,
                         addr_id   = AddrId,
                         key       = << Key/binary, "/" >>,
@@ -488,23 +460,5 @@ copy_({Node0, Node1}) ->
     ?assertEqual(ok, Res2),
     ok.
 
-
-prefix_search_and_remove_objects_(_) ->
-    meck:new(leo_object_storage_api, [non_strict]),
-    meck:expect(leo_object_storage_api, fetch_by_key,
-                fun(_ParentDir, Fun) ->
-                        Fun(?TEST_KEY_0, term_to_binary(#?METADATA{}), []),
-                        Fun(?TEST_DIR_0, term_to_binary(#?METADATA{}), [#?METADATA{key=?TEST_KEY_0}]),
-                        Fun(?TEST_KEY_1, term_to_binary(#?METADATA{}), [#?METADATA{key=?TEST_KEY_0}]),
-                        Fun(<< "_", ?TEST_KEY_1/binary >>,
-                            term_to_binary(#?METADATA{}), [#?METADATA{key=?TEST_KEY_0}])
-                end),
-
-    meck:new(leo_mq_api, [non_strict]),
-    meck:expect(leo_mq_api, publish, fun(_,_,_) -> ok end),
-
-    Res = leo_storage_handler_object:prefix_search_and_remove_objects(?TEST_BUCKET),
-    ?assertEqual(true, is_list(Res)),
-    ok.
 
 -endif.
