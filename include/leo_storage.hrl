@@ -343,7 +343,7 @@
 -ifdef(TEST).
 -define(CONTAINER_TIMEOUT,  1).
 -else.
--define(CONTAINER_TIMEOUT,  timer:secomds(10)).
+-define(CONTAINER_TIMEOUT,  timer:seconds(10)).
 -endif.
 
 -define(DIR_DB_PROP_PROCS, 'dir_db_num_of_procs').
