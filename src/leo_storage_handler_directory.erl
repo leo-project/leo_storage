@@ -398,7 +398,8 @@ ask_to_find_by_parent_dir(Dir, <<>> = Marker, MaxKeys) ->
               _ ->
                   not_found
           end,
-
+    %% @TODO: If a number of results does not reach the maxkeys,
+    %%        need to retrieve remain keys
     case Ret of
         not_found ->
             case ask_to_find_by_parent_dir_1(Dir_1, Marker, MaxKeys) of
