@@ -142,7 +142,7 @@
 
 {translation, "leo_storage.obj_containers",
  fun(Conf) ->
-         %% retrieve pathes
+         %% retrieve paths
          Paths = cuttlefish_util:conf_get_value("obj_containers.path", Conf),
          Paths_1 = case string:tokens(Paths, "[ , ]") of
                        [] ->
@@ -468,7 +468,7 @@
 
 {translation, "leo_watchdog.disk_target_paths",
  fun(Conf) ->
-         %% retrieve pathes
+         %% retrieve paths
          Paths = cuttlefish_util:conf_get_value("obj_containers.path", Conf),
          Paths_1 = case string:tokens(Paths, "[ , ]") of
                        [] ->
