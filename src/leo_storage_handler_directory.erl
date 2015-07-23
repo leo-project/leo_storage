@@ -133,14 +133,13 @@ delete_objects_under_dir(Object) ->
             ok;
         ?BIN_SLASH = Bin ->
             %% for metadata-layer
+            _ = leo_cache_api:delete(Key),
             ok = leo_directory_sync:append(sync, #?METADATA{key = Key,
                                                             ksize = KSize,
                                                             dsize = -1,
                                                             clock = leo_date:clock(),
                                                             timestamp = leo_date:now(),
                                                             del = ?DEL_TRUE}),
-            _ = leo_cache_api:delete(Key),
-
             %% for remote storage nodes
             Targets = [Bin, undefined],
             Ref = make_ref(),
@@ -162,47 +161,47 @@ delete_objects_under_dir(Object) ->
     end.
 
 %% @doc Remove objects of the under directory for remote-nodes
--spec(delete_objects_under_dir(Ref, Keys) ->
+-spec(delete_objects_under_dir(Ref, Dirs) ->
              {ok, Ref} when Ref::reference(),
-                            Keys::[binary()|undefined]).
+                            Dirs::[binary()|undefined]).
 delete_objects_under_dir(Ref, []) ->
     {ok, Ref};
 delete_objects_under_dir(Ref, [undefined|Rest]) ->
     delete_objects_under_dir(Ref, Rest);
-delete_objects_under_dir(Ref, [Key|Rest]) ->
-    ok = prefix_search_and_remove_objects(Key),
+delete_objects_under_dir(Ref, [Dir|Rest]) ->
+    ok = prefix_search_and_remove_objects(Dir),
     delete_objects_under_dir(Ref, Rest).
 
--spec(delete_objects_under_dir(Nodes, Ref, Keys) ->
+-spec(delete_objects_under_dir(Nodes, Ref, Dirs) ->
              {ok, Ref} when Nodes::[atom()],
                             Ref::reference(),
-                            Keys::[binary()|undefined]).
-delete_objects_under_dir([], Ref,_Keys) ->
+                            Dirs::[binary()|undefined]).
+delete_objects_under_dir([], Ref,_Dirs) ->
     {ok, Ref};
-delete_objects_under_dir([Node|Rest], Ref, Keys) ->
+delete_objects_under_dir([Node|Rest], Ref, Dirs) ->
     RPCKey = rpc:async_call(Node, ?MODULE,
-                            delete_objects_under_dir, [Ref, Keys]),
+                            delete_objects_under_dir, [Ref, Dirs]),
     case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
         {value, {ok, Ref}} ->
             ok;
         _Other ->
             %% Enqueue a failed message into the mq
             ok = leo_storage_mq:publish(
-                   ?QUEUE_TYPE_ASYNC_DELETE_DIR, Keys)
+                   ?QUEUE_TYPE_ASYNC_DELETE_DIR, Dirs)
     end,
-    delete_objects_under_dir(Rest, Ref, Keys).
+    delete_objects_under_dir(Rest, Ref, Dirs).
 
 
 %% @doc Retrieve object of deletion from object-storage by key
--spec(prefix_search_and_remove_objects(ParentDir) ->
-             ok when ParentDir::undefined|binary()).
+-spec(prefix_search_and_remove_objects(Dir) ->
+             ok when Dir::undefined|binary()).
 prefix_search_and_remove_objects(undefined) ->
     ok;
-prefix_search_and_remove_objects(ParentDir) ->
+prefix_search_and_remove_objects(Dir) ->
     Fun = fun(Key, V, Acc) ->
                   Metadata = binary_to_term(V),
                   AddrId = Metadata#?METADATA.addr_id,
-                  IsUnderDir = case binary:match(Key, [ParentDir]) of
+                  IsUnderDir = case binary:match(Key, [Dir]) of
                                    {Pos, _} when Pos == 0->
                                        true;
                                    _ ->
@@ -214,14 +213,14 @@ prefix_search_and_remove_objects(ParentDir) ->
                           KSize = byte_size(Key),
                           case catch binary:part(Key, (KSize - 1), 1) of
                               ?BIN_SLASH ->
+                                  _ = leo_cache_api:delete(Key),
                                   ok = leo_directory_sync:append(
                                          sync, #?METADATA{key = Key,
                                                           ksize = KSize,
                                                           dsize = -1,
                                                           clock = leo_date:clock(),
                                                           timestamp = leo_date:now(),
-                                                          del = ?DEL_TRUE}),
-                                  _ = leo_cache_api:delete(Key);
+                                                          del = ?DEL_TRUE});
                               _ ->
                                   void
                           end,
@@ -241,7 +240,7 @@ prefix_search_and_remove_objects(ParentDir) ->
                   end,
                   Acc
           end,
-    leo_object_storage_api:fetch_by_key(ParentDir, Fun),
+    leo_object_storage_api:fetch_by_key(Dir, Fun),
     ok.
 
 
@@ -346,79 +345,6 @@ find_by_parent_dir(Dir, _Delimiter, Marker, MaxKeys) ->
             Error
     end.
 
-
-%% @doc Retrieve metadatas under the directory
-%% @TODO:
-%%    * Need to handle marker and maxkeys to respond the correct list
-%%    * Re-cache metadatas when the directory has many metadatas over maxkeys
--spec(ask_to_find_by_parent_dir(Dir, Marker, MaxKeys) ->
-             {ok, list()} |
-             {error, any()} when Dir::binary(),
-                                 Marker::binary()|null,
-                                 MaxKeys::integer()).
-ask_to_find_by_parent_dir(Dir, <<>> = Marker, MaxKeys) ->
-    Dir_1 = hd(leo_misc:binary_tokens(Dir, <<"\t">>)),
-    Ret = case leo_cache_api:get(Dir_1) of
-              {ok, MetaBin} ->
-                  case binary_to_term(MetaBin) of
-                      #metadata_cache{dir = Dir_1,
-                                      rows = _Rows,
-                                      metadatas = MetadataList} ->
-                          {ok, MetadataList};
-                      _ ->
-                          not_found
-                  end;
-              _ ->
-                  not_found
-          end,
-    case Ret of
-        not_found ->
-            case ask_to_find_by_parent_dir_1(Dir, Marker, MaxKeys) of
-                {ok, MetadataList_1} = Reply ->
-                    Rows = length(MetadataList_1),
-                    leo_cache_api:put(Dir_1,
-                                      term_to_binary(
-                                        #metadata_cache{dir = Dir_1,
-                                                        rows = Rows,
-                                                        metadatas = MetadataList_1,
-                                                        created_at = leo_date:now()
-                                                       })),
-                    Reply;
-                Error ->
-                    Error
-            end;
-        _ ->
-            Ret
-    end;
-ask_to_find_by_parent_dir(Dir, Marker, MaxKeys) ->
-    ask_to_find_by_parent_dir_1(Dir, Marker, MaxKeys).
-
-%% @private
-ask_to_find_by_parent_dir_1(Dir, Marker, MaxKeys) ->
-    Fun = fun(_K, V, Acc) ->
-                  case catch binary_to_term(V) of
-                      #?METADATA{key = Key,
-                                 del = ?DEL_FALSE} = Metadata ->
-                          case Marker of
-                              Key ->
-                                  Acc;
-                              <<>> ->
-                                  [Metadata|Acc];
-                              _ ->
-                                  case lists:sort([Marker, Key]) of
-                                      [Marker|_] ->
-                                          [Metadata|Acc];
-                                      _Other ->
-                                          Acc
-                                  end
-                          end;
-                      _ ->
-                          Acc
-                  end
-          end,
-    leo_backend_db_api:fetch(?DIR_DB_ID, Dir, Fun, MaxKeys).
-
-
 %% @doc Retrieve metadatas under the directory
 %% @private
 find_by_parent_dir_1([],_,_,_,_) ->
@@ -446,6 +372,86 @@ find_by_parent_dir_1([#redundant_node{node = Node}|Rest], AddrId, Dir, Marker, M
         {error,_} ->
             find_by_parent_dir_1(Rest, AddrId, Dir, Marker, MaxKeys)
     end.
+
+
+%% @doc Retrieve metadatas under the directory
+%% @TODO:
+%%    * Need to handle marker and maxkeys to respond the correct list
+%%    * Re-cache metadatas when the directory has many metadatas over maxkeys
+-spec(ask_to_find_by_parent_dir(Dir, Marker, MaxKeys) ->
+             {ok, list()} |
+             {error, any()} when Dir::binary(),
+                                 Marker::binary()|null,
+                                 MaxKeys::integer()).
+ask_to_find_by_parent_dir(Dir, <<>> = Marker, MaxKeys) ->
+    Dir_1 = hd(leo_misc:binary_tokens(Dir, <<"\t">>)),
+    Ret = case leo_cache_api:get(Dir_1) of
+              {ok, MetaBin} ->
+                  case binary_to_term(MetaBin) of
+                      #metadata_cache{dir = Dir_1,
+                                      rows = _Rows,
+                                      metadatas = MetadataList} ->
+                          {ok, MetadataList};
+                      _ ->
+                          not_found
+                  end;
+              _ ->
+                  not_found
+          end,
+
+    case Ret of
+        not_found ->
+            case ask_to_find_by_parent_dir_1(Dir_1, Marker, MaxKeys) of
+                {ok, MetadataList_1} = Reply ->
+                    Rows = length(MetadataList_1),
+                    leo_cache_api:put(Dir_1,
+                                      term_to_binary(
+                                        #metadata_cache{dir = Dir_1,
+                                                        rows = Rows,
+                                                        metadatas = MetadataList_1,
+                                                        created_at = leo_date:now()
+                                                       })),
+                    Reply;
+                Error ->
+                    Error
+            end;
+        _ ->
+            Ret
+    end;
+ask_to_find_by_parent_dir(Dir, Marker, MaxKeys) ->
+    Dir_1 = hd(leo_misc:binary_tokens(Dir, <<"\t">>)),
+    ask_to_find_by_parent_dir_1(Dir_1, Marker, MaxKeys).
+
+%% @private
+ask_to_find_by_parent_dir_1(Dir, Marker, MaxKeys) ->
+    Fun = fun(K, V, Acc) ->
+                  case catch binary_to_term(V) of
+                      #?METADATA{key = Key,
+                                 del = ?DEL_FALSE} = Metadata ->
+                          QBin = << Dir/binary, "\t" >>,
+                          case binary:match(K, [QBin],[]) of
+                              {0,_} ->
+                                  case Marker of
+                                      Key ->
+                                          Acc;
+                                      <<>> ->
+                                          [Metadata|Acc];
+                                      _ ->
+                                          case lists:sort([Marker, Key]) of
+                                              [Marker|_] ->
+                                                  [Metadata|Acc];
+                                              _Other ->
+                                                  Acc
+                                          end
+                                  end;
+                              _ ->
+                                  Acc
+                          end;
+                      _ ->
+                          Acc
+                  end
+          end,
+    leo_backend_db_api:fetch(?DIR_DB_ID, Dir, Fun, MaxKeys).
 
 
 %% @doc Retrieve a managed dir name from the actual dir's name
