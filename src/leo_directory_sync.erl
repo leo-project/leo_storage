@@ -90,7 +90,9 @@ add_container(DestNode) ->
       {metadata, DestNode}, [{?PROP_ORDRED_MOD,      ?MODULE},
                              {?PROP_ORDRED_BUF_SIZE, ?CONTAINER_BUF_SIZE},
                              {?PROP_ORDRED_IS_COMP,  false},
-                             {?PROP_ORDRED_TIMEOUT,  ?CONTAINER_TIMEOUT}]).
+                             {?PROP_ORDRED_TIMEOUT,  ?CONTAINER_TIMEOUT},
+                             {?PROP_REMOVED_COUNT,   128}
+                            ]).
 
 
 %% @doc Remove a container from the supervisor
@@ -388,6 +390,8 @@ cache_dir_metadata([{Dir,_}|Rest]) ->
     %% Re-cache metadatas under the directory
     case leo_cache_api:delete(Dir) of
         ok ->
+            %% @TODO: By this procesing, leo_backend_db's load will be high,
+            %%        need to control seeking metadata
             case leo_storage_handler_directory:find_by_parent_dir(
                    Dir, [], <<>>, ?DEF_MAX_CACHE_DIR_METADATA) of
                 {ok, MetadataList} when MetadataList /= [] ->
