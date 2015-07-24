@@ -44,7 +44,6 @@
          replicate/1, replicate/2,
          store/2,
          delete/1,
-         cache_dir_metadata/1,
          recover/1, recover/2
         ]).
 -export([handle_send/3,
@@ -323,7 +322,6 @@ replicate_1([#?METADATA{key = Key} = Metadata|Rest]) ->
 store(Ref, StackedBin) ->
     {Ret, DirL} = slice_and_store(StackedBin, dict:new()),
     ok = restore_dir_metadata(DirL),
-    ok = cache_dir_metadata(DirL),
     {Ret, Ref}.
 
 
@@ -369,6 +367,7 @@ restore_dir_metadata([{Dir, {Clock, Timestamp}}|Rest]) ->
     case leo_backend_db_api:put(?DIR_DB_ID,
                                 KeyBin, term_to_binary(Metadata)) of
         ok ->
+            ok = update_cache(Parent, Metadata),
             ok;
         {error, Cause} ->
             error_logger:info_msg("~p,~p,~p,~p~n",
@@ -378,39 +377,6 @@ restore_dir_metadata([{Dir, {Clock, Timestamp}}|Rest]) ->
             enqueue(Metadata)
     end,
     restore_dir_metadata(Rest).
-
-
-%% @doc Cache metadatas under the dir
-%% @private
--spec(cache_dir_metadata([{Dir, {Clock, Timestamp}}]) ->
-             ok when Dir::binary(),
-                     Clock::non_neg_integer(),
-                     Timestamp::non_neg_integer()).
-cache_dir_metadata([]) ->
-    ok;
-cache_dir_metadata([{Dir,_}|Rest]) ->
-    %% Re-cache metadatas under the directory
-    case leo_cache_api:delete(Dir) of
-        ok ->
-            %% @TODO: By this procesing, leo_backend_db's load will be high,
-            %%        need to control seeking metadata
-            case leo_storage_handler_directory:find_by_parent_dir(
-                   Dir, [], <<>>, ?DEF_MAX_CACHE_DIR_METADATA) of
-                {ok, MetadataList} when MetadataList /= [] ->
-                    leo_cache_api:put(Dir, term_to_binary(
-                                             #metadata_cache{dir = Dir,
-                                                             rows = length(MetadataList),
-                                                             metadatas = MetadataList,
-                                                             created_at = leo_date:now()
-                                                            }));
-                _ ->
-                    void
-            end;
-        {error, Cause} ->
-            ?error("cache_dir_metadata/1",
-                   "dir:~p, cause:~p", [Dir, Cause])
-    end,
-    cache_dir_metadata(Rest).
 
 
 %% @doc Retrieve values from a stacked-bin,
@@ -486,47 +452,73 @@ append_dir(DirBin, #?METADATA{key = Key} = Metadata, Acc) ->
     append_dir_1(binary:last(Key), DirBin, Metadata, Acc).
 
 %% @private
-append_dir_1(16#2f, DirBin, #?METADATA{key = Key} = Metadata, Acc) ->
+append_dir_1(TailBin, DirBin, #?METADATA{clock = Clock,
+                                         timestamp = Timestamp} = Metadata, Acc) ->
+    %% Seek and put the directory
+    Current = {Clock, Timestamp},
+    Acc_1 = case TailBin of
+                16#2f ->
+                    Acc;
+                _ ->
+                    case dict:is_key(DirBin, Acc) of
+                        true ->
+                            case dict:find(DirBin, Acc) of
+                                {ok, {Clock_1, Timestamp_1}} when Clock < Clock_1 ->
+                                    dict:store(DirBin, {Clock_1, Timestamp_1}, Acc);
+                                error ->
+                                    dict:store(DirBin, Current, Acc);
+                                _ ->
+                                    Acc
+                            end;
+                        false ->
+                            dict:store(DirBin, Current, Acc)
+                    end
+            end,
+
+    %% Re-cache metadatas under the directory
+    ok = update_cache(DirBin, Metadata),
+    Acc_1.
+
+
+%% @doc Update a cahce of the directory
+%% @private
+-spec(update_cache(DirBin, Metadata) ->
+             ok when DirBin::binary(),
+                     Metadata::#?METADATA{}).
+update_cache(DirBin, #?METADATA{key = Key,
+                                del = DelFlag} = Metadata) ->
     case leo_cache_api:get(DirBin) of
         {ok, CacheBin} ->
             case binary_to_term(CacheBin) of
-                #metadata_cache{
-                   metadatas = MetaList} = MetaCache ->
-                    case lists:keyfind(Key, 2, MetaList) of
-                        false ->
-                            OrdSets = ordsets:from_list(MetaList),
-                            MetaList_1 = ordsets:to_list(ordsets:add_element(Metadata, OrdSets)),
-                            leo_cache_api:put(
-                              DirBin, term_to_binary(MetaCache#metadata_cache{
-                                                       rows = length(MetaList_1),
-                                                       metadatas = MetaList_1,
-                                                       created_at = leo_date:now()}));
-                        _ ->
-                            void
-                    end;
+                #metadata_cache{metadatas = MetaList} = MetaCache ->
+                    MetaList_1 =
+                        case lists:keyfind(Key, 2, MetaList) of
+                            #?METADATA{} = TargetMetadata ->
+                                lists:delete(TargetMetadata, MetaList);
+                            _ ->
+                                MetaList
+                        end,
+                    NewMetaList =
+                        case DelFlag of
+                            ?DEL_TRUE ->
+                                MetaList_1;
+                            ?DEL_FALSE ->
+                                OrdSets = ordsets:from_list(MetaList_1),
+                                ordsets:to_list(ordsets:add_element(Metadata, OrdSets))
+                        end,
+                    leo_cache_api:put(
+                      DirBin, term_to_binary(MetaCache#metadata_cache{
+                                               rows = length(NewMetaList),
+                                               metadatas = NewMetaList,
+                                               created_at = leo_date:now()}));
                 _ ->
                     void
             end;
         _ ->
             void
     end,
-    Acc;
-append_dir_1(_,DirBin, #?METADATA{clock = Clock,
-                                  timestamp = Timestamp}, Acc) ->
-    Current = {Clock, Timestamp},
-    case dict:is_key(DirBin, Acc) of
-        true ->
-            case dict:find(DirBin, Acc) of
-                {ok, {Clock_1, Timestamp_1}} when Clock < Clock_1 ->
-                    dict:store(DirBin, {Clock_1, Timestamp_1}, Acc);
-                error ->
-                    dict:store(DirBin, Current, Acc);
-                _ ->
-                    Acc
-            end;
-        false ->
-            dict:store(DirBin, Current, Acc)
-    end.
+    ok.
+
 
 
 %% @doc Retrieve a value from a stacked-bin
