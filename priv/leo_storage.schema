@@ -254,6 +254,28 @@
  ]}.
 
 
+%% @doc Directory-db's container buffer size
+%%      default: 1024 (1kb)
+{mapping,
+ "directory.cont_buffer_size",
+ "leo_storage.dir_cont_buffer_size",
+ [
+  {datatype, integer},
+  {default, 1024}
+ ]}.
+
+
+%% @doc Directory-db's container expiration time
+%%      default: 1000ms (1sec)
+{mapping,
+ "directory.cont_expiration_time",
+ "leo_storage.dir_cont_expiration_time",
+ [
+  {datatype, integer},
+  {default, 1000}
+ ]}.
+
+
 %% --------------------------------------------------------------------
 %% CACHE for Directory's Metadata
 %% --------------------------------------------------------------------

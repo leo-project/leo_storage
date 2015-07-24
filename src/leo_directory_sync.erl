@@ -86,12 +86,14 @@ start() ->
 -spec(add_container(DestNode) ->
              ok | {error, any()} when DestNode::atom()).
 add_container(DestNode) ->
+    ContBufferSize = ?env_dir_cont_buffer_size(),
+    ContExpTime = ?env_dir_cont_expiration_time(),
     leo_ordning_reda_api:add_container(
       {metadata, DestNode}, [{?PROP_ORDRED_MOD,      ?MODULE},
-                             {?PROP_ORDRED_BUF_SIZE, ?CONTAINER_BUF_SIZE},
+                             {?PROP_ORDRED_BUF_SIZE, ContBufferSize},
                              {?PROP_ORDRED_IS_COMP,  false},
-                             {?PROP_ORDRED_TIMEOUT,  ?CONTAINER_TIMEOUT},
-                             {?PROP_REMOVED_COUNT,   128}
+                             {?PROP_ORDRED_TIMEOUT,  ContExpTime},
+                             {?PROP_REMOVED_COUNT,   ?CONTAINER_REMOVED_COUNT}
                             ]).
 
 

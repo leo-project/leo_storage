@@ -339,16 +339,20 @@
 
 
 %% For Directory
--define(CONTAINER_BUF_SIZE, 512). %% 256kb
+-define(CONTAINER_BUF_SIZE, 1024). %% 1kb
 -ifdef(TEST).
 -define(CONTAINER_TIMEOUT,  1).
+-define(CONTAINER_REMOVED_COUNT, 5).
 -else.
--define(CONTAINER_TIMEOUT,  timer:seconds(10)).
+-define(CONTAINER_TIMEOUT,  timer:seconds(5)).
+-define(CONTAINER_REMOVED_COUNT, 64).
 -endif.
 
 -define(DIR_DB_PROP_PROCS, 'dir_db_num_of_procs').
 -define(DIR_DB_PROP_NAME,  'dir_db_name').
 -define(DIR_DB_PROP_PATH,  'dir_db_path').
+-define(DIR_CONT_PROP_EXP_TIME, 'dir_cont_expiration_time').
+-define(DIR_CONT_PROP_BUF_SIZE, 'dir_cont_buffer_size').
 
 -define(DIR_DB_ID,   'leo_directory_db').
 -define(DIR_DB_PROCS, 8).
@@ -373,6 +377,18 @@
         case application:get_env(leo_storage, ?DIR_DB_PROP_PATH) of
             {ok, _EnvDirDBPath} -> _EnvDirDBPath;
             _ -> ?DIR_DB_PATH
+        end).
+
+-define(env_dir_cont_buffer_size(),
+        case application:get_env(leo_storage, ?DIR_CONT_PROP_BUF_SIZE) of
+            {ok, _EnvDirContBufSize} -> _EnvDirContBufSize;
+            _ -> ?CONTAINER_BUF_SIZE
+        end).
+
+-define(env_dir_cont_expiration_time(),
+        case application:get_env(leo_storage, ?DIR_CONT_PROP_EXP_TIME) of
+            {ok, _EnvDirContExpTime} -> _EnvDirContExpTime;
+            _ -> ?CONTAINER_TIMEOUT
         end).
 
 -record(metadata_cache, {
