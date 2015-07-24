@@ -485,6 +485,8 @@ append_dir_1(TailBin, DirBin, #?METADATA{clock = Clock,
 -spec(update_cache(DirBin, Metadata) ->
              ok when DirBin::binary(),
                      Metadata::#?METADATA{}).
+update_cache(<<>>,_) ->
+    ok;
 update_cache(DirBin, #?METADATA{key = Key,
                                 del = DelFlag} = Metadata) ->
     case leo_cache_api:get(DirBin) of
@@ -498,13 +500,20 @@ update_cache(DirBin, #?METADATA{key = Key,
                             _ ->
                                 MetaList
                         end,
-                    NewMetaList =
+                    MetaList_2 =
                         case DelFlag of
                             ?DEL_TRUE ->
                                 MetaList_1;
                             ?DEL_FALSE ->
                                 OrdSets = ordsets:from_list(MetaList_1),
                                 ordsets:to_list(ordsets:add_element(Metadata, OrdSets))
+                        end,
+                    NewMetaList =
+                        case (length(MetaList_2) > ?DEF_MAX_CACHE_DIR_METADATA) of
+                            true ->
+                                lists:sublist(?DEF_MAX_CACHE_DIR_METADATA, MetaList_2);
+                            false ->
+                                MetaList_2
                         end,
                     leo_cache_api:put(
                       DirBin, term_to_binary(MetaCache#metadata_cache{
