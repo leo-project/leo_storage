@@ -69,6 +69,13 @@ init([]) ->
                    permanent,
                    ?SHUTDOWN_WAITING_TIME,
                    worker,
-                   [leo_storage_msg_collector]}
+                   [leo_storage_msg_collector]},
+
+                  {leo_directory_cache,
+                   {leo_directory_cache, start_link, []},
+                   permanent,
+                   ?SHUTDOWN_WAITING_TIME,
+                   worker,
+                   [leo_directory_cache]}
                  ],
     {ok, {_SupFlags = {one_for_one, ?MAX_RESTART, ?MAX_TIME}, ChildProcs}}.
