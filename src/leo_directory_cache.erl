@@ -40,7 +40,7 @@
 -export([append/2,
          get/1,
          delete/1,
-         merge/0, merge/1
+         merge/0
         ]).
 
 %% gen_server callbacks
@@ -104,11 +104,6 @@ delete(Dir) ->
 merge() ->
     gen_server:call(?MODULE, merge, ?TIMEOUT).
 
--spec(merge(Dir) ->
-             ok | {error, any()} when Dir::binary()).
-merge(Dir) ->
-    gen_server:call(?MODULE, {merge, Dir}, ?TIMEOUT).
-
 
 %%====================================================================
 %% GEN_SERVER CALLBACKS
@@ -168,6 +163,7 @@ handle_call(merge, _From, #state{directories = DirL} = State) ->
                     [merge_fun(Dir, MetadataL) || {Dir, MetadataL}  <- DirL_1],
                     ok
             end,
+    erlang:garbage_collect(self()),
     {reply, Reply, State#state{directories = dict:new()}};
 
 handle_call(_Msg, _From, State) ->
@@ -210,6 +206,8 @@ code_change(_OldVsn, State, _Extra) ->
 -spec(merge_fun(Dir, MetadataL) ->
              ok when Dir::binary(),
                      MetadataL::[#?METADATA{}]).
+merge_fun(<<>>,_) ->
+    ok;
 merge_fun(Dir, MetadataL) ->
     case leo_cache_api:get(Dir) of
         {ok, CacheBin} ->
@@ -243,21 +241,27 @@ merge_fun(Dir, [], CachedMetadataL) ->
     leo_cache_api:put(Dir, term_to_binary(CachedMetadataL_1));
 
 merge_fun(Dir, [#?METADATA{key = Key,
+                           clock = Clock,
                            del = Del} = Metadata|Rest], CachedMetadataL) ->
-    CachedMetadataL_1 =
+    {CanUpdate, CachedMetadataL_2} =
         case lists:keyfind(Key, 2, CachedMetadataL) of
-            #?METADATA{} = TargetMetadata ->
-                lists:delete(TargetMetadata, CachedMetadataL);
+            #?METADATA{clock = Clock_1} = TargetMetadata
+              when Clock > Clock_1 orelse
+                   Del == ?DEL_TRUE ->
+                CachedMetadataL_1 = lists:delete(TargetMetadata, CachedMetadataL),
+                {(Del == ?DEL_FALSE), CachedMetadataL_1};
+            false when Del == ?DEL_FALSE ->
+                {true, CachedMetadataL};
             _ ->
-                CachedMetadataL
+                {false, CachedMetadataL}
         end,
 
-    CachedMetadataL_2 =
-        case Del of
-            ?DEL_TRUE ->
-                CachedMetadataL_1;
-            ?DEL_FALSE ->
-                OrdSets = ordsets:from_list(CachedMetadataL_1),
-                ordsets:to_list(ordsets:add_element(Metadata, OrdSets))
+    NewCachedMetadataL =
+        case CanUpdate of
+            true ->
+                OrdSets = ordsets:from_list(CachedMetadataL_2),
+                ordsets:to_list(ordsets:add_element(Metadata, OrdSets));
+            false ->
+                CachedMetadataL_2
         end,
-    merge_fun(Dir, Rest, CachedMetadataL_2).
+    merge_fun(Dir, Rest, NewCachedMetadataL).

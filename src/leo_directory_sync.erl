@@ -303,7 +303,7 @@ replicate_1([#?METADATA{key = Key} = Metadata|Rest]) ->
     case leo_backend_db_api:put(?DIR_DB_ID,
                                 KeyBin, term_to_binary(Metadata)) of
         ok ->
-            ok;
+            leo_directory_cache:append(Parent, Metadata);
         {error, Cause} ->
             error_logger:info_msg("~p,~p,~p,~p~n",
                                   [{module, ?MODULE_STRING},
@@ -368,7 +368,7 @@ restore_dir_metadata([{Dir, {Clock, Timestamp}}|Rest]) ->
     case leo_backend_db_api:put(?DIR_DB_ID,
                                 KeyBin, term_to_binary(Metadata)) of
         ok ->
-            ok = leo_directory_cache:append(Dir, Metadata),
+            ok = leo_directory_cache:append(Parent, Metadata),
             ok;
         {error, Cause} ->
             error_logger:info_msg("~p,~p,~p,~p~n",

@@ -385,19 +385,25 @@ find_by_parent_dir_1([#redundant_node{node = Node}|Rest], AddrId, Dir, Marker, M
                                  MaxKeys::integer()).
 ask_to_find_by_parent_dir(Dir, <<>> = Marker, MaxKeys) ->
     Dir_1 = hd(leo_misc:binary_tokens(Dir, <<"\t">>)),
-    Ret = case leo_cache_api:get(Dir_1) of
-              {ok, MetaBin} ->
-                  case binary_to_term(MetaBin) of
-                      #metadata_cache{dir = Dir_1,
-                                      rows = _Rows,
-                                      metadatas = MetadataList} ->
-                          {ok, MetadataList};
+    Ret = case Dir_1 of
+              <<>> ->
+                  not_found;
+              _ ->
+                  case leo_cache_api:get(Dir_1) of
+                      {ok, MetaBin} ->
+                          case binary_to_term(MetaBin) of
+                              #metadata_cache{dir = Dir_1,
+                                              rows = _Rows,
+                                              metadatas = MetadataList} ->
+                                  {ok, MetadataList};
+                              _ ->
+                                  not_found
+                          end;
                       _ ->
                           not_found
-                  end;
-              _ ->
-                  not_found
+                  end
           end,
+
     %% @TODO: If a number of results does not reach the maxkeys,
     %%        need to retrieve remain keys
     case Ret of
