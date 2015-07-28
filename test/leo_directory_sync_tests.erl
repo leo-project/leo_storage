@@ -73,6 +73,16 @@ teardown(_Node) ->
 
 %% @doc TEST leo_directory_sync:append/1
 stack_(_) ->
+    ok = meck:new(leo_directory_cache, [non_strict]),
+    ok = meck:expect(leo_directory_cache, append,
+                     fun(_,_) ->
+                             ok
+                     end),
+    ok = meck:expect(leo_directory_cache, delete,
+                     fun(_) ->
+                             ok
+                     end),
+
     ok = meck:new(leo_cache_api, [non_strict]),
     ok = meck:expect(leo_cache_api, put,
                      fun(_,_) ->

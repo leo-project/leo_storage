@@ -47,6 +47,8 @@
         ]).
 
 -define(DEF_MAX_KEYS, 1000).
+-define(BIN_SLASH, <<"/">>).
+-define(BIN_NL,    <<"\n">>).
 
 
 %%--------------------------------------------------------------------
@@ -118,9 +120,6 @@ delete(Dir) ->
 
 
 %% Deletion object related constants
--define(BIN_SLASH, <<"/">>).
--define(BIN_NL,    <<"\n">>).
-
 %% @doc Remove objects of the under directory
 -spec(delete_objects_under_dir(Object) ->
              ok when Object::#?OBJECT{}).
@@ -133,7 +132,13 @@ delete_objects_under_dir(Object) ->
             ok;
         ?BIN_SLASH = Bin ->
             %% for metadata-layer
-            _ = leo_cache_api:delete(Key),
+            case leo_directory_cache:delete(Key) of
+                ok ->
+                    ok;
+                {error, Cause} ->
+                    ?error("delete_objects_under_dir/1",
+                           "key:~p, cause:~p", [Key, Cause])
+            end,
             ok = leo_directory_sync:append(sync, #?METADATA{key = Key,
                                                             ksize = KSize,
                                                             dsize = -1,
@@ -213,7 +218,13 @@ prefix_search_and_remove_objects(Dir) ->
                           KSize = byte_size(Key),
                           case catch binary:part(Key, (KSize - 1), 1) of
                               ?BIN_SLASH ->
-                                  _ = leo_cache_api:delete(Key),
+                                  case leo_directory_cache:delete(Key) of
+                                      ok ->
+                                          ok;
+                                      {error, Cause} ->
+                                          ?error("delete_objects_under_dir/1",
+                                                 "key:~p, cause:~p", [Key, Cause])
+                                  end,
                                   ok = leo_directory_sync:append(
                                          sync, #?METADATA{key = Key,
                                                           ksize = KSize,
@@ -230,10 +241,10 @@ prefix_search_and_remove_objects(Dir) ->
                           case leo_storage_mq:publish(QId, AddrId, Key) of
                               ok ->
                                   void;
-                              {error, Cause} ->
+                              {error, Reason} ->
                                   ?warn("prefix_search_and_remove_objects/1",
                                         "qid:~p, addr-id:~p, key:~p, cause:~p",
-                                        [QId, AddrId, Key, Cause])
+                                        [QId, AddrId, Key, Reason])
                           end;
                       _ ->
                           void
@@ -395,6 +406,7 @@ ask_to_find_by_parent_dir(Dir, <<>> = Marker, MaxKeys) ->
                               #metadata_cache{dir = Dir_1,
                                               rows = _Rows,
                                               metadatas = MetadataList} ->
+
                                   {ok, MetadataList};
                               _ ->
                                   not_found
@@ -404,20 +416,32 @@ ask_to_find_by_parent_dir(Dir, <<>> = Marker, MaxKeys) ->
                   end
           end,
 
-    %% @TODO: If a number of results does not reach the maxkeys,
-    %%        need to retrieve remain keys
     case Ret of
+        {ok, MetadataL} when length(MetadataL) >= MaxKeys ->
+            {ok, MetadataL};
+        {ok, MetadataL} ->
+            %% If a number of results does not reach the maxkeys,
+            %% need to retrieve remain keys
+            LenMetadataL = length(MetadataL),
+            #?METADATA{key = KeyOfLastObj} = lists:last(MetadataL),
+
+            case find_by_parent_dir(Dir_1, ?BIN_SLASH,
+                                    KeyOfLastObj, MaxKeys - LenMetadataL) of
+                {ok, MetadataL_1} ->
+                    MetadataL_2 = lists:append([MetadataL, MetadataL_1]),
+                    OrdSets = ordsets:from_list(MetadataL_2),
+                    MetadataL_3 = ordsets:to_list(OrdSets),
+                    %% Merge retrieved metadatas with the current cache
+                    _ = leo_directory_cache:merge(Dir_1, MetadataL_1),
+                    {ok, MetadataL_3};
+                _ ->
+                    Ret
+            end;
         not_found ->
+            %% Retrieve metadatas under the directory from the dir-db
             case ask_to_find_by_parent_dir_1(Dir_1, Marker, MaxKeys) of
-                {ok, MetadataList_1} = Reply ->
-                    Rows = length(MetadataList_1),
-                    leo_cache_api:put(Dir_1,
-                                      term_to_binary(
-                                        #metadata_cache{dir = Dir_1,
-                                                        rows = Rows,
-                                                        metadatas = MetadataList_1,
-                                                        created_at = leo_date:now()
-                                                       })),
+                {ok, MetadataL_1} = Reply ->
+                    _ = leo_directory_cache:merge(Dir_1, MetadataL_1),
                     Reply;
                 Error ->
                     Error

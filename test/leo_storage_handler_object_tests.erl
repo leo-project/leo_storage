@@ -275,6 +275,9 @@ delete_({Node0, Node1}) ->
     meck:new(leo_watchdog_state, [non_strict]),
     meck:expect(leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end),
 
+    meck:new(leo_directory_cache, [non_strict]),
+    meck:expect(leo_directory_cache, delete, fun(_) -> ok end),
+
     meck:new(leo_cache_api, [non_strict]),
     meck:expect(leo_cache_api, delete, fun(_) -> ok end),
 

@@ -117,13 +117,20 @@ find_by_parent_dir_([Node0, Node1]) ->
                                                 0
                                         end]),
 
+    ok = rpc:call(Node1, meck, new,    [leo_directory_cache, [no_link, non_strict]]),
+    ok = rpc:call(Node1, meck, expect, [leo_directory_cache, merge,
+                                        fun(_,_) ->
+                                                ok
+                                        end]),
+
     ok = meck:new(leo_directory_mq, [non_strict]),
     ok = meck:expect(leo_directory_mq, publish,
                      fun(_) ->
                              ok
                      end),
 
-    {ok, Res} = leo_storage_handler_directory:find_by_parent_dir(<<"air/on/g/">>, <<>>, <<>>, 1000),
+    {ok, Res} = leo_storage_handler_directory:find_by_parent_dir(
+                  <<"air/on/g/">>, <<>>, <<>>, 1000),
     ?debugVal(Res),
     ?assertEqual(2, length(Res)),
 
@@ -151,6 +158,9 @@ prefix_search_and_remove_objects_(_) ->
 
     meck:new(leo_directory_sync, [non_strict]),
     meck:expect(leo_directory_sync, append, fun(_,_) -> ok end),
+
+    meck:new(leo_directory_cache, [non_strict]),
+    meck:expect(leo_directory_cache, delete, fun(_) -> ok end),
 
     meck:new(leo_cache_api, [non_strict]),
     meck:expect(leo_cache_api, delete, fun(_) -> ok end),

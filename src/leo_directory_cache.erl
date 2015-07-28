@@ -32,6 +32,7 @@
 -behaviour(gen_server).
 
 -include("leo_storage.hrl").
+-include_lib("leo_logger/include/leo_logger.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
@@ -40,7 +41,7 @@
 -export([append/2,
          get/1,
          delete/1,
-         merge/0
+         merge/0, merge/2
         ]).
 
 %% gen_server callbacks
@@ -104,6 +105,12 @@ delete(Dir) ->
 merge() ->
     gen_server:call(?MODULE, merge, ?TIMEOUT).
 
+-spec(merge(Dir, [Metadata]) ->
+             ok | {error, any()} when Dir::binary(),
+                                      Metadata::#?METADATA{}).
+merge(Dir, MetadataL) ->
+    gen_server:call(?MODULE, {merge, Dir, MetadataL}, ?TIMEOUT).
+
 
 %%====================================================================
 %% GEN_SERVER CALLBACKS
@@ -134,24 +141,29 @@ handle_call({get, Dir}, _From, #state{directories = DirL} = State) ->
                     error ->
                         not_found;
                     {_, Cause} ->
+                        ?error("handle_call/3 - get",
+                               "dir:~p, cause:~p", [Dir, Cause]),
                         {error, Cause}
                 end
         end,
     {reply, Reply, State};
 
 handle_call({delete, Dir}, _From, #state{directories = DirL} = State) ->
-    {Reply, NewState} =
+    NewState =
         case (dict:size(DirL) == 0) of
             true ->
-                {ok, State};
+                State;
             false ->
                 case catch dict:erase(Dir, DirL) of
                     {'EXIT', Cause}->
-                        {{error, Cause}, State};
+                        ?error("handle_call/3 - delete",
+                               "dir:~p, cause:~p", [Dir, Cause]),
+                        State;
                     DirL_1 ->
-                        {ok, State#state{directories = DirL_1}}
+                        State#state{directories = DirL_1}
                 end
         end,
+    Reply = leo_cache_api:delete(Dir),
     {reply, Reply, NewState};
 
 handle_call(merge, _From, #state{directories = DirL} = State) ->
@@ -165,6 +177,27 @@ handle_call(merge, _From, #state{directories = DirL} = State) ->
             end,
     erlang:garbage_collect(self()),
     {reply, Reply, State#state{directories = dict:new()}};
+
+handle_call({merge, Dir, MetadataL}, _From, #state{directories = DirL} = State) ->
+    Reply = case (dict:size(DirL) == 0) of
+                true ->
+                    merge_fun(Dir, MetadataL);
+                false ->
+                    case catch dict:find(Dir, DirL) of
+                        {ok, Value} ->
+                            merge_fun(Dir, lists:append([MetadataL, Value]));
+                        error ->
+                            merge_fun(Dir, MetadataL);
+                        {_, Cause} ->
+                            ?error("handle_call/3 - get",
+                                   "dir:~p, cause:~p", [Dir, Cause]),
+                            {error, Cause}
+                    end
+            end,
+
+    erlang:garbage_collect(self()),
+    DirL_1 = dict:erase(Dir, DirL),
+    {reply, Reply, State#state{directories = DirL_1}};
 
 handle_call(_Msg, _From, State) ->
     {reply, ok, State}.
