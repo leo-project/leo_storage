@@ -255,13 +255,13 @@
 
 
 %% @doc Directory-db's container buffer size
-%%      default: 1024 (1kb)
+%%      default: 524288 (512Kb)
 {mapping,
  "directory.cont_buffer_size",
  "leo_storage.dir_cont_buffer_size",
  [
   {datatype, integer},
-  {default, 1024}
+  {default, 524288}
  ]}.
 
 

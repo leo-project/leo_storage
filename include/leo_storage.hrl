@@ -339,12 +339,12 @@
 
 
 %% For Directory
--define(CONTAINER_BUF_SIZE, 1024). %% 1kb
+-define(CONTAINER_BUF_SIZE, 524288). %% 512kb
 -ifdef(TEST).
 -define(CONTAINER_TIMEOUT,  1).
 -define(CONTAINER_REMOVED_COUNT, 5).
 -else.
--define(CONTAINER_TIMEOUT,  timer:seconds(5)).
+-define(CONTAINER_TIMEOUT,  256).
 -define(CONTAINER_REMOVED_COUNT, 64).
 -endif.
 
