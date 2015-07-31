@@ -53,4 +53,4 @@ On the other hand, In case of READ of a large object, first, LeoFS Gateway retri
 
 ## Sponsors
 
-LeoProject/LeoFS is sponsored by [Rakuten, Inc.](http://global.rakuten.com/corp/) and suppoerted by [Rakuten Institute of Technology](http://rit.rakuten.co.jp/).
+LeoProject/LeoFS is sponsored by [Rakuten, Inc.](http://global.rakuten.com/corp/) and supported by [Rakuten Institute of Technology](http://rit.rakuten.co.jp/).
