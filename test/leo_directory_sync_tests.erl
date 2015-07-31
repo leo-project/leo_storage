@@ -162,7 +162,7 @@ stack_(_) ->
     ok = leo_directory_sync:append(Metadata_5),
     ok = leo_directory_sync:append(Metadata_6),
     ok = leo_directory_sync:append(Metadata_7),
-    timer:sleep(timer:seconds(4) + 500),
+    timer:sleep(timer:seconds(2) + 500),
 
     {ok, Bin_5} = leo_backend_db_api:get(?DIR_DB_ID, <<"a/b/c/d/", "\t", Key_5/binary >>),
     {ok, Bin_6} = leo_backend_db_api:get(?DIR_DB_ID, <<"a/b/c/",   "\t", Key_6/binary >>),
@@ -181,7 +181,6 @@ stack_(_) ->
     ok = leo_directory_sync:append(sync, Metadata_8),
     {ok, Bin_8} = leo_backend_db_api:get(?DIR_DB_ID, <<"a/", "\t", Key_8/binary >>),
     ?assertEqual(Metadata_8, binary_to_term(Bin_8)),
-
 
     %%
     %% TEST: Add directories w/sync
