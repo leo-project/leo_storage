@@ -87,7 +87,7 @@ replicate(Method, Quorum, Nodes, Object, Callback) ->
                    errors       = [],
                    is_reply     = false
                   },
-    case proc_lib:start_link(?MODULE, init_loop, [NumOfNodes, Quorum, Ref, Pid, State]) of
+    case proc_lib:start(?MODULE, init_loop, [NumOfNodes, Quorum, Ref, Pid, State]) of
         {ok, Ref, SubParent} ->
             replicate_1(Nodes, Ref, SubParent, State);
         _ ->
