@@ -99,17 +99,14 @@ init_loop(NumOfNodes, Quorum, Ref, Parent, State) ->
     loop(NumOfNodes, Quorum, [], Ref, Parent, State).
 
 %% @private
-replicate_1([], Ref,_From, #state{method   = Method,
-                                  addr_id  = AddrId,
-                                  key      = Key,
+replicate_1([], Ref,_From, #state{method = Method,
+                                  key = Key,
                                   callback = Callback}) ->
     receive
         {Ref, Reply} ->
             Callback(Reply)
     after
         (?DEF_REQ_TIMEOUT + timer:seconds(1)) ->
-            %% for recovering message of the repair-obj's MQ
-            enqueue(Method, ?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
             %% for watchdog
             ok = leo_storage_msg_collector:notify(?ERROR_MSG_TIMEOUT, Method, Key),
             %% reply error
