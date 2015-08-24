@@ -218,19 +218,21 @@ get_fun(AddrId, Key, StartPos, EndPos, IsForcedCheck) ->
              {ok, reference(), tuple()} |
              {error, reference(), any()} when ObjAndRef::{#?OBJECT{}, reference()}).
 put({Object, Ref}) ->
-    AddrId = Object#?OBJECT.addr_id,
-    Key    = Object#?OBJECT.key,
-    case Object#?OBJECT.del of
+    Object_1 = leo_object_storage_transformer:transform_object(Object),
+    AddrId = Object_1#?OBJECT.addr_id,
+    Key = Object_1#?OBJECT.key,
+
+    case Object_1#?OBJECT.del of
         ?DEL_TRUE->
             case leo_object_storage_api:head({AddrId, Key}) of
                 {ok, MetaBin} ->
                     case binary_to_term(MetaBin) of
                         #?METADATA{cnumber = 0} ->
-                            put_fun(Ref, AddrId, Key, Object);
+                            put_fun(Ref, AddrId, Key, Object_1);
                         #?METADATA{cnumber = CNumber} ->
                             case delete_chunked_objects(CNumber, Key) of
                                 ok ->
-                                    put_fun(Ref, AddrId, Key, Object);
+                                    put_fun(Ref, AddrId, Key, Object_1);
                                 {error, Cause} ->
                                     {error, Ref, Cause}
                             end;
@@ -244,7 +246,7 @@ put({Object, Ref}) ->
             end;
         %% FOR PUT
         ?DEL_FALSE ->
-            put_fun(Ref, AddrId, Key, Object)
+            put_fun(Ref, AddrId, Key, Object_1)
     end.
 
 
@@ -255,10 +257,11 @@ put({Object, Ref}) ->
                                       ReqId::integer()).
 put(Object, ReqId) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
-    replicate_fun(?REP_LOCAL, ?CMD_PUT, Object#?OBJECT.addr_id,
-                  Object#?OBJECT{method = ?CMD_PUT,
-                                 clock  = leo_date:clock(),
-                                 req_id = ReqId}).
+    Object_1 = leo_object_storage_transformer:transform_object(Object),
+    replicate_fun(?REP_LOCAL, ?CMD_PUT, Object_1#?OBJECT.addr_id,
+                  Object_1#?OBJECT{method = ?CMD_PUT,
+                                   clock  = leo_date:clock(),
+                                   req_id = ReqId}).
 
 
 %% @doc Insert an  object (request from remote-storage-nodes/replicator).
@@ -270,7 +273,8 @@ put(Object, ReqId) ->
                                  Object::#?OBJECT{},
                                  ReqId::integer()).
 put(Ref, From, Object, ReqId) ->
-    Method = case Object#?OBJECT.del of
+    Object_1 = leo_object_storage_transformer:transform_object(Object),
+    Method = case Object_1#?OBJECT.del of
                  ?DEL_TRUE ->
                      ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
                      ?CMD_DELETE;
@@ -279,7 +283,7 @@ put(Ref, From, Object, ReqId) ->
                      ?CMD_PUT
              end,
 
-    case replicate_fun(?REP_REMOTE, Method, Object) of
+    case replicate_fun(?REP_REMOTE, Method, Object_1) of
         {ok, ETag} ->
             erlang:send(From, {Ref, {ok, ETag}});
         %% not found an object (during rebalance and delete-operation)
