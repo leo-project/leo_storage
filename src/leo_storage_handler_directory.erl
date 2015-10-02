@@ -66,26 +66,28 @@ find_by_parent_dir(ParentDir, _Delimiter, Marker, MaxKeys) ->
                                 Acc
                         end, [], Members),
 
-    {ResL0, _BadNodes} = rpc:multicall(Nodes, leo_storage_handler_object, prefix_search,
-                                       [ParentDir, NewMarker, NewMaxKeys], ?DEF_REQ_TIMEOUT),
-
+    {ResL,_BadNodes} = rpc:multicall(Nodes, leo_storage_handler_object,
+                                     prefix_search,
+                                     [ParentDir, NewMarker, NewMaxKeys],
+                                     ?DEF_REQ_TIMEOUT),
     case lists:foldl(
-           fun({ok, List}, Acc0) ->
+           fun({ok, List}, Acc_1) ->
                    lists:foldl(
-                     fun(#?METADATA{key = Key} = Meta0, Acc1) ->
-                             case lists:keyfind(Key, 2, Acc1) of
+                     fun(#?METADATA{key = Key} = Metadata, Acc_2) ->
+                             case lists:keyfind(Key, 2, Acc_2) of
                                  false ->
-                                     [Meta0|Acc1];
-                                 #?METADATA{clock = Clock} when Meta0#?METADATA.clock > Clock ->
-                                     Acc2 = lists:keydelete(Key, 2, Acc1),
-                                     [Meta0|Acc2];
+                                     [Metadata|Acc_2];
+                                 #?METADATA{clock = Clock}
+                                   when Metadata#?METADATA.clock > Clock ->
+                                     Acc_3 = lists:keydelete(Key, 2, Acc_2),
+                                     [Metadata|Acc_3];
                                  _ ->
-                                     Acc1
+                                     Acc_2
                              end
-                     end, Acc0, List);
-              (_, Acc0) ->
-                   Acc0
-           end, [], ResL0) of
+                     end, Acc_1, List);
+              (_, Acc_1) ->
+                   Acc_1
+           end, [], ResL) of
         [] ->
             {ok, []};
         List ->

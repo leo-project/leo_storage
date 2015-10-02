@@ -699,12 +699,20 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
                       true ->
                           prefix_search_1(ParentDir, Marker, Key, V, Acc);
                       false ->
-                          {error, ?ERROR_SYSTEM_HIGH_LOAD}
+                          erlang:throw(?ERROR_SYSTEM_HIGH_LOAD)
                   end;
              (_, _, Acc) ->
                   Acc
           end,
-    leo_object_storage_api:fetch_by_key(ParentDir, Fun).
+
+    case catch leo_object_storage_api:fetch_by_key(
+                 ParentDir, Fun) of
+        {'EXIT', Cause} ->
+            {error, Cause};
+        Ret ->
+            Ret
+    end.
+
 
 %% @private
 prefix_search_1(ParentDir, Marker, Key, V, Acc) ->
