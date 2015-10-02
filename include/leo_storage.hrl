@@ -93,6 +93,7 @@
 -define(ERROR_COULD_NOT_MATCH,          "Could not match").
 -define(ERROR_COULD_SEND_OBJ,           "Could not send an object to a remote cluster").
 -define(ERROR_NOT_SATISFY_QUORUM,       "Could not satisfy the quorum of the consistency level").
+-define(ERROR_SYSTEM_HIGH_LOAD,         "System High load").
 
 
 %% @doc notified message items

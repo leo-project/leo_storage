@@ -198,6 +198,7 @@ get_fun(AddrId, Key, StartPos, EndPos, IsForcedCheck) ->
                 {error, ?ERROR_LOCKED_CONTAINER} ->
                     {error, unavailable};
                 {error, Cause} ->
+                    ok = leo_storage_watchdog_error:push(Cause),
                     {error, Cause}
             end;
         {ok, ErrorItems} ->
@@ -235,9 +236,10 @@ put({Object, Ref}) ->
                         _ ->
                             {error, Ref, 'invalid_data'}
                     end;
-                {error, Cause} ->
-                    {error, Ref, Cause};
                 not_found = Cause ->
+                    {error, Ref, Cause};
+                {error, Cause} ->
+                    ok = leo_storage_watchdog_error:push(Cause),
                     {error, Ref, Cause}
             end;
         %% FOR PUT
@@ -307,6 +309,7 @@ put_fun(Ref, AddrId, Key, #?OBJECT{del = ?DEL_TRUE} = Object) ->
                 {error, ?ERROR_LOCKED_CONTAINER} ->
                     {error, Ref, unavailable};
                 {error, Cause} ->
+                    ok = leo_storage_watchdog_error:push(Cause),
                     {error, Ref, Cause}
             end;
         {ok, ErrorItems} ->
@@ -324,6 +327,7 @@ put_fun(Ref, AddrId, Key, Object) ->
                 {error, ?ERROR_LOCKED_CONTAINER} ->
                     {error, Ref, unavailable};
                 {error, Cause} ->
+                    ok = leo_storage_watchdog_error:push(Cause),
                     {error, Ref, Cause}
             end;
         {ok, ErrorItems} ->
@@ -372,8 +376,6 @@ delete({Object, Ref}) ->
     Key    = Object#?OBJECT.key,
 
     case leo_object_storage_api:head({AddrId, Key}) of
-        not_found = Cause ->
-            {error, Ref, Cause};
         {ok, MetaBin} ->
             case catch binary_to_term(MetaBin) of
                 {'EXIT', Cause} ->
@@ -391,7 +393,10 @@ delete({Object, Ref}) ->
                             {error, Ref, Why}
                     end
             end;
-        {error, _Cause} ->
+        not_found = Cause ->
+            {error, Ref, Cause};
+        {error, Cause} ->
+            ok = leo_storage_watchdog_error:push(Cause),
             {error, Ref, ?ERROR_COULD_NOT_GET_META}
     end.
 
@@ -533,8 +538,11 @@ head(AddrId, Key, false) ->
     case leo_object_storage_api:head({AddrId, Key}) of
         {ok, MetaBin} ->
             {ok, binary_to_term(MetaBin)};
-        Error ->
-            Error
+        not_found = Error ->
+            Error;
+        {error, Cause} ->
+            ok = leo_storage_watchdog_error:push(Cause),
+            {error, Cause}
     end;
 head(AddrId, Key, true) ->
     case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
@@ -552,7 +560,13 @@ head_1([#redundant_node{node = Node,
     case leo_object_storage_api:head({AddrId, Key}) of
         {ok, MetaBin} ->
             {ok, binary_to_term(MetaBin)};
-        _Other ->
+        Other ->
+            case Other of
+                not_found ->
+                    void;
+                {error, Cause} ->
+                    ok = leo_storage_watchdog_error:push(Cause)
+            end,
             head_1(Rest, AddrId, Key)
     end;
 head_1([#redundant_node{node = Node,
@@ -667,8 +681,11 @@ replicate(DestNodes, AddrId, Key) ->
                 _ ->
                     {error, invalid_data_type}
             end;
-        Error ->
-            Error
+        not_found = Error ->
+            Error;
+        {error, Cause} ->
+            ok = leo_storage_watchdog_error:push(Cause),
+            {error, Cause}
     end.
 
 
@@ -677,88 +694,98 @@ replicate(DestNodes, AddrId, Key) ->
 %%--------------------------------------------------------------------
 prefix_search(ParentDir, Marker, MaxKeys) ->
     Fun = fun(Key, V, Acc) when length(Acc) =< MaxKeys ->
-                  Meta = binary_to_term(V),
-                  InRange = case Marker of
-                                [] -> true;
-                                Key -> false;
-                                _  ->
-                                    (Marker == hd(lists:sort([Marker, Key])))
-                            end,
-
-                  Token_1  = leo_misc:binary_tokens(ParentDir, ?DEF_DELIMITER),
-                  Token_2  = leo_misc:binary_tokens(Key,       ?DEF_DELIMITER),
-                  Length_1 = erlang:length(Token_1),
-                  Length_2 = Length_1 + 1,
-                  Length_3 = erlang:length(Token_2),
-                  IsChunkedObj = (nomatch /= binary:match(Key, <<"\n">>)),
-
-                  Pos_1 = case binary:match(Key, [ParentDir]) of
-                              nomatch ->
-                                  -1;
-                              {Pos, _} ->
-                                  Pos
-                          end,
-
-                  case (InRange == true
-                        andalso Pos_1 == 0) of
+                  case (not_found ==
+                            leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS)) of
                       true ->
-                          case (Length_3 - 1) of
-                              Length_1 when Meta#?METADATA.del == ?DEL_FALSE
-                                            andalso IsChunkedObj == false ->
-                                  KeyLen = byte_size(Key),
-
-                                  case (binary:part(Key, KeyLen - 1, 1) == ?DEF_DELIMITER
-                                        andalso KeyLen > 1) of
-                                      true  ->
-                                          case lists:keyfind(Key, 2, Acc) of
-                                              false ->
-                                                  ordsets:add_element(#?METADATA{key   = Key,
-                                                                                 dsize = -1}, Acc);
-                                              _ ->
-                                                  Acc
-                                          end;
-                                      false ->
-                                          case lists:keyfind(Key, 2, Acc) of
-                                              false ->
-                                                  ordsets:add_element(Meta#?METADATA{offset    = 0,
-                                                                                     ring_hash = 0}, Acc);
-                                              #?METADATA{clock = Clock} when Meta#?METADATA.clock > Clock ->
-                                                  Acc_1 = lists:keydelete(Key, 2, Acc),
-                                                  ordsets:add_element(Meta#?METADATA{offset    = 0,
-                                                                                     ring_hash = 0}, Acc_1);
-                                              _ ->
-                                                  Acc
-                                          end
-                                  end;
-
-                              _Any when Meta#?METADATA.del == ?DEL_FALSE
-                                        andalso IsChunkedObj == false ->
-                                  {Token2, _} = lists:split(Length_2, Token_2),
-                                  Dir = lists:foldl(fun(Bin_1, <<>>) ->
-                                                            << Bin_1/binary,
-                                                               ?DEF_DELIMITER/binary >>;
-                                                       (Bin_1, Bin_2) ->
-                                                            << Bin_2/binary,
-                                                               Bin_1/binary,
-                                                               ?DEF_DELIMITER/binary >>
-                                                    end, <<>>, Token2),
-                                  case lists:keyfind(Dir, 2, Acc) of
-                                      false ->
-                                          ordsets:add_element(#?METADATA{key   = Dir,
-                                                                         dsize = -1}, Acc);
-                                      _ ->
-                                          Acc
-                                  end;
-                              _ ->
-                                  Acc
-                          end;
+                          prefix_search_1(ParentDir, Marker, Key, V, Acc);
                       false ->
-                          Acc
+                          {error, ?ERROR_SYSTEM_HIGH_LOAD}
                   end;
              (_, _, Acc) ->
                   Acc
           end,
     leo_object_storage_api:fetch_by_key(ParentDir, Fun).
+
+%% @private
+prefix_search_1(ParentDir, Marker, Key, V, Acc) ->
+    Meta = binary_to_term(V),
+    InRange = case Marker of
+                  [] -> true;
+                  Key -> false;
+                  _  ->
+                      (Marker == hd(lists:sort([Marker, Key])))
+              end,
+
+    Token_1  = leo_misc:binary_tokens(ParentDir, ?DEF_DELIMITER),
+    Token_2  = leo_misc:binary_tokens(Key,       ?DEF_DELIMITER),
+    Length_1 = erlang:length(Token_1),
+    Length_2 = Length_1 + 1,
+    Length_3 = erlang:length(Token_2),
+    IsChunkedObj = (nomatch /= binary:match(Key, <<"\n">>)),
+
+    Pos_1 = case binary:match(Key, [ParentDir]) of
+                nomatch ->
+                    -1;
+                {Pos, _} ->
+                    Pos
+            end,
+
+    case (InRange == true
+          andalso Pos_1 == 0) of
+        true ->
+            case (Length_3 - 1) of
+                Length_1 when Meta#?METADATA.del == ?DEL_FALSE
+                              andalso IsChunkedObj == false ->
+                    KeyLen = byte_size(Key),
+
+                    case (binary:part(Key, KeyLen - 1, 1) == ?DEF_DELIMITER
+                          andalso KeyLen > 1) of
+                        true  ->
+                            case lists:keyfind(Key, 2, Acc) of
+                                false ->
+                                    ordsets:add_element(#?METADATA{key   = Key,
+                                                                   dsize = -1}, Acc);
+                                _ ->
+                                    Acc
+                            end;
+                        false ->
+                            case lists:keyfind(Key, 2, Acc) of
+                                false ->
+                                    ordsets:add_element(Meta#?METADATA{offset    = 0,
+                                                                       ring_hash = 0}, Acc);
+                                #?METADATA{clock = Clock} when Meta#?METADATA.clock > Clock ->
+                                    Acc_1 = lists:keydelete(Key, 2, Acc),
+                                    ordsets:add_element(Meta#?METADATA{offset    = 0,
+                                                                       ring_hash = 0}, Acc_1);
+                                _ ->
+                                    Acc
+                            end
+                    end;
+
+                _Any when Meta#?METADATA.del == ?DEL_FALSE
+                          andalso IsChunkedObj == false ->
+                    {Token2, _} = lists:split(Length_2, Token_2),
+                    Dir = lists:foldl(fun(Bin_1, <<>>) ->
+                                              << Bin_1/binary,
+                                                 ?DEF_DELIMITER/binary >>;
+                                         (Bin_1, Bin_2) ->
+                                              << Bin_2/binary,
+                                                 Bin_1/binary,
+                                                 ?DEF_DELIMITER/binary >>
+                                      end, <<>>, Token2),
+                    case lists:keyfind(Dir, 2, Acc) of
+                        false ->
+                            ordsets:add_element(#?METADATA{key   = Dir,
+                                                           dsize = -1}, Acc);
+                        _ ->
+                            Acc
+                    end;
+                _ ->
+                    Acc
+            end;
+        false ->
+            Acc
+    end.
 
 
 %% @doc Retrieve object of deletion from object-storage by key
@@ -899,19 +926,21 @@ read_and_repair_2(#read_parameter{addr_id   = AddrId,
                   #redundant_node{node = Node}, Redundancies) when Node == erlang:node() ->
     %% Retrieve an head of object,
     %%     then compare it with requested 'Etag'
-    HeadRet =
-        case leo_object_storage_api:head({AddrId, Key}) of
-            {ok, MetaBin} ->
-                Metadata = binary_to_term(MetaBin),
-                case Metadata#?METADATA.checksum of
-                    ETag ->
-                        {ok, match};
-                    _ ->
-                        []
-                end;
-            _ ->
-                []
-        end,
+    HeadRet = case leo_object_storage_api:head({AddrId, Key}) of
+                  {ok, MetaBin} ->
+                      Metadata = binary_to_term(MetaBin),
+                      case Metadata#?METADATA.checksum of
+                          ETag ->
+                              {ok, match};
+                          _ ->
+                              []
+                      end;
+                  not_found ->
+                      [];
+                  {error, Cause} ->
+                      ok = leo_storage_watchdog_error:push(Cause),
+                      []
+              end,
 
     %% If the result is 'match', then response it,
     %% not the case, retrieve an object by key

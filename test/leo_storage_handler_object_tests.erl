@@ -453,6 +453,9 @@ prefix_search_({_Node0, _Node1}) ->
                         Fun(?TEST_KEY_1, term_to_binary(#?METADATA{}), [#?METADATA{key=?TEST_KEY_0}])
                 end),
 
+    meck:new(leo_watchdog_state, [non_strict]),
+    meck:expect(leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end),
+
     Res = leo_storage_handler_object:prefix_search(?TEST_DIR_0, [], 1000),
     ?assertEqual(2, length(Res)),
     ok.
