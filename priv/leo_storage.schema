@@ -517,6 +517,37 @@
  end}.
 
 
+%%
+%%  Watchdog.ERROR
+%%
+%% @doc Error - Is enabled
+{mapping,
+ "watchdog.error.is_enabled",
+ "leo_watchdog.error_enabled",
+ [
+  {datatype, atom},
+  {default, false}
+ ]}.
+
+%% @doc Error - Interval
+{mapping,
+ "watchdog.error.interval",
+ "leo_watchdog.error_interval",
+ [
+  {datatype, integer},
+  {default, 60} %% 60sec
+ ]}.
+
+%% @doc Error - Threshold error count
+{mapping,
+ "watchdog.error.threshold_count",
+ "leo_watchdog.error_threshold_count",
+ [
+  {datatype, integer},
+  {default, 100}
+ ]}.
+
+
 %% --------------------------------------------------------------------
 %% STORAGE - Autonomic operation
 %% --------------------------------------------------------------------
