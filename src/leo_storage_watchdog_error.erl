@@ -32,11 +32,27 @@
 -spec(push(ErrorMsg) ->
              ok | {error, any()} when ErrorMsg::term()).
 push(ErrorMsg) ->
-    ?debugVal(ErrorMsg),
-    FormattedMsg = ErrorMsg,
-    push_1(FormattedMsg).
+    FormattedMsg = format(ErrorMsg),
+    leo_watchdog_collector:push(FormattedMsg).
+
+
+%% @doc Format a message
+%% @private
+format({error, Cause}) when is_tuple(Cause) ->
+    format_tuple_value(Cause);
+format({_, [Cause|_]}) when is_tuple(Cause) ->
+    format_tuple_value(Cause);
+format({_, Cause}) when is_tuple(Cause) ->
+    format_tuple_value(Cause);
+format(ErrorMsg) ->
+    ErrorMsg.
 
 %% @private
-push_1(FormattedMsg) ->
-    ?debugVal(FormattedMsg),
-    leo_watchdog_collector:push(FormattedMsg).
+format_tuple_value(Item) ->
+    case (erlang:size(Item) > 1) of
+        true ->
+            {erlang:element(1, Item),
+             erlang:element(2, Item)};
+        false ->
+            Item
+    end.
