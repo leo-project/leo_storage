@@ -693,11 +693,20 @@ replicate(DestNodes, AddrId, Key) ->
 %% API - Prefix Search (Fetch)
 %%--------------------------------------------------------------------
 prefix_search(ParentDir, Marker, MaxKeys) ->
+    StartDateTime = leo_date:now(),
+    Timeout = ?env_ls_command_timeout(),
+
     Fun = fun(Key, V, Acc) when length(Acc) =< MaxKeys ->
+                  Now = leo_date:now(),
                   case (not_found ==
                             leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS)) of
                       true ->
-                          prefix_search_1(ParentDir, Marker, Key, V, Acc);
+                          case ((Now - StartDateTime) >= Timeout) of
+                              true ->
+                                  erlang:throw(timeout);
+                              false ->
+                                  prefix_search_1(ParentDir, Marker, Key, V, Acc)
+                          end;
                       false ->
                           erlang:throw(?ERROR_SYSTEM_HIGH_LOAD)
                   end;

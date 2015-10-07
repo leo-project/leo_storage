@@ -66,10 +66,10 @@ find_by_parent_dir(ParentDir, _Delimiter, Marker, MaxKeys) ->
                                 Acc
                         end, [], Members),
 
+    Timeout = ?env_ls_command_timeout(),
     {ResL,_BadNodes} = rpc:multicall(Nodes, leo_storage_handler_object,
                                      prefix_search,
-                                     [ParentDir, NewMarker, NewMaxKeys],
-                                     ?DEF_REQ_TIMEOUT),
+                                     [ParentDir, NewMarker, NewMaxKeys], Timeout),
     case lists:foldl(
            fun({ok, List}, Acc_1) ->
                    lists:foldl(

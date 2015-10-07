@@ -189,7 +189,6 @@
          }).
 
 
-
 %% @doc macros.
 %%
 -define(env_storage_device(),
@@ -496,4 +495,15 @@
                 EnvAutoCompactionCoefficient;
             _ ->
                 ?DEF_COMPACTION_COEFFICIENT_MID
+        end).
+
+
+%% Misc.
+-define(DEF_LS_COMMAND_TIMEOUT, erlang:round(timer:minutes(1)/1000)).
+-define(env_ls_command_timeout(),
+        case application:get_env(leo_storage, ls_command_timeout) of
+            {ok, EnvLsCommandTimeout} ->
+                EnvLsCommandTimeout;
+            _ ->
+                ?DEF_LS_COMMAND_TIMEOUT
         end).

@@ -221,6 +221,17 @@
  ]}.
 
 
+%% @doc timeout(sec) of the ls command processing
+%% @deprecated (v1.2.16-)
+{mapping,
+ "ls_command_timeout",
+ "leo_storage.ls_command_timeout",
+ [
+  {datatype, integer},
+  {default, 60} %% 60sec (1min)
+ ]}.
+
+
 %% --------------------------------------------------------------------
 %% STORAGE - Watchdog
 %% --------------------------------------------------------------------
