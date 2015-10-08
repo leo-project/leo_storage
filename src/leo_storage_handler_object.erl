@@ -703,12 +703,12 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
                       true ->
                           case ((Now - StartDateTime) >= Timeout) of
                               true ->
-                                  erlang:throw(timeout);
+                                  erlang:error(timeout);
                               false ->
                                   prefix_search_1(ParentDir, Marker, Key, V, Acc)
                           end;
                       false ->
-                          erlang:throw(?ERROR_SYSTEM_HIGH_LOAD)
+                          erlang:error(?ERROR_SYSTEM_HIGH_LOAD)
                   end;
              (_, _, Acc) ->
                   Acc
@@ -840,6 +840,7 @@ prefix_search_and_remove_objects(ParentDir) ->
                   end,
                   Acc
           end,
+    %% @TODO
     leo_object_storage_api:fetch_by_key(ParentDir, Fun).
 
 
@@ -867,6 +868,7 @@ find_uploaded_objects_by_key(OriginalKey) ->
                           Acc
                   end
           end,
+    %% @TODO
     leo_object_storage_api:fetch_by_key(OriginalKey, Fun).
 
 
