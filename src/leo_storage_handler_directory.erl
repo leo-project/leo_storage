@@ -71,8 +71,15 @@ find_by_parent_dir(ParentDir, _Delimiter, Marker, MaxKeys) ->
                                      prefix_search,
                                      [ParentDir, NewMarker, NewMaxKeys],
                                      ?DEF_REQ_TIMEOUT),
-    case BadNodes of
-        [] ->
+    Errors = [Cause || {error, Cause} <- ResL],
+    HasBadNodes = (BadNodes /= []),
+    HasErrors = (Errors /= []),
+
+    case (HasErrors orelse HasBadNodes) of
+        true ->
+            ?warn("find_by_parent_dir/4", "errors:~p, error-nodes:~p", [Errors, BadNodes]),
+            {error, ?ERROR_COULD_NOT_GET_METADATAS};
+        false ->
             case lists:foldl(
                    fun({ok, List}, Acc_1) ->
                            lists:foldl(
@@ -97,10 +104,7 @@ find_by_parent_dir(ParentDir, _Delimiter, Marker, MaxKeys) ->
                     {ok, lists:sublist(
                            ordsets:from_list(
                              lists:flatten(List)), NewMaxKeys)}
-            end;
-        _ ->
-            ?warn("find_by_parent_dir/4", "error-nodes:~p", [BadNodes]),
-            {error, ?ERROR_COULD_NOT_GET_METADATAS}
+            end
     end.
 
 
