@@ -716,6 +716,8 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
 
     case catch leo_object_storage_api:fetch_by_key(
                  ParentDir, Fun) of
+        {'EXIT', Cause} when is_tuple(Cause) ->
+            {error, element(1, Cause)};
         {'EXIT', Cause} ->
             {error, Cause};
         Ret ->
