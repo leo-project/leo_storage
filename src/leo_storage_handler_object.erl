@@ -840,8 +840,15 @@ prefix_search_and_remove_objects(ParentDir) ->
                   end,
                   Acc
           end,
-    %% @TODO
-    leo_object_storage_api:fetch_by_key(ParentDir, Fun).
+    case catch leo_object_storage_api:fetch_by_key(
+                 ParentDir, Fun) of
+        {'EXIT', Cause} ->
+            {error, Cause};
+        Ret ->
+            Ret
+    end.
+
+
 
 
 %% @doc Find already uploaded objects by original-filename
@@ -868,8 +875,13 @@ find_uploaded_objects_by_key(OriginalKey) ->
                           Acc
                   end
           end,
-    %% @TODO
-    leo_object_storage_api:fetch_by_key(OriginalKey, Fun).
+    case catch leo_object_storage_api:fetch_by_key(
+                 OriginalKey, Fun) of
+        {'EXIT', Cause} ->
+            {error, Cause};
+        Ret ->
+            Ret
+    end.
 
 
 %%--------------------------------------------------------------------
