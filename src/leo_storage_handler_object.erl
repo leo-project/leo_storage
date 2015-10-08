@@ -694,7 +694,7 @@ replicate(DestNodes, AddrId, Key) ->
 %%--------------------------------------------------------------------
 prefix_search(ParentDir, Marker, MaxKeys) ->
     StartDateTime = leo_date:now(),
-    Timeout = ?env_ls_command_timeout(),
+    Timeout = ?env_seeking_timeout_per_metadata() * MaxKeys,
 
     Fun = fun(Key, V, Acc) when length(Acc) =< MaxKeys ->
                   Now = leo_date:now(),

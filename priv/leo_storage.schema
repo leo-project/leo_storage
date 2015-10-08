@@ -221,14 +221,14 @@
  ]}.
 
 
-%% @doc timeout(sec) of the ls command processing
+%% @doc Timeout of seeking metadatas per a metadata
 %% @deprecated (v1.2.16-)
 {mapping,
- "ls_command_timeout",
- "leo_storage.ls_command_timeout",
+ "seeking_timeout_per_metadata",
+ "leo_storage.seeking_timeout_per_metadata",
  [
   {datatype, integer},
-  {default, 60} %% 60sec (1min)
+  {default, 10} %% 10msec
  ]}.
 
 

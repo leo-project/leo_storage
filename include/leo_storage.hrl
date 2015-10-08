@@ -499,11 +499,11 @@
 
 
 %% Misc.
--define(DEF_LS_COMMAND_TIMEOUT, erlang:round(timer:minutes(1)/1000)).
--define(env_ls_command_timeout(),
-        case application:get_env(leo_storage, ls_command_timeout) of
-            {ok, EnvLsCommandTimeout} ->
-                EnvLsCommandTimeout;
+-define(DEF_SEEKING_METADATA_TIMEOUT, 10). %% default:50ms
+-define(env_seeking_timeout_per_metadata(),
+        case application:get_env(leo_storage, seeking_timeout_per_metadata) of
+            {ok, EnvSeekingMetadataTimeout} ->
+                EnvSeekingMetadataTimeout;
             _ ->
-                ?DEF_LS_COMMAND_TIMEOUT
+                ?DEF_SEEKING_METADATA_TIMEOUT
         end).

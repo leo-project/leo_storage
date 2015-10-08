@@ -66,7 +66,7 @@ find_by_parent_dir(ParentDir, _Delimiter, Marker, MaxKeys) ->
                                 Acc
                         end, [], Members),
 
-    Timeout = ?env_ls_command_timeout(),
+    Timeout = ?env_seeking_timeout_per_metadata() * MaxKeys,
     {ResL,_BadNodes} = rpc:multicall(Nodes, leo_storage_handler_object,
                                      prefix_search,
                                      [ParentDir, NewMarker, NewMaxKeys], Timeout),
