@@ -85,6 +85,7 @@
 %%
 -define(ERROR_COULD_NOT_GET_DATA,       "Could not get data").
 -define(ERROR_COULD_NOT_GET_META,       "Could not get a metadata").
+-define(ERROR_COULD_NOT_GET_METADATAS,  "Could not get metadatas").
 -define(ERROR_COULD_NOT_GET_SYSTEM_CONF,"Could not get the system configuration").
 -define(ERROR_RECOVER_FAILURE,          "Recover failure").
 -define(ERROR_REPLICATE_FAILURE,        "Replicate failure").
@@ -93,6 +94,7 @@
 -define(ERROR_COULD_NOT_MATCH,          "Could not match").
 -define(ERROR_COULD_SEND_OBJ,           "Could not send an object to a remote cluster").
 -define(ERROR_NOT_SATISFY_QUORUM,       "Could not satisfy the quorum of the consistency level").
+-define(ERROR_SYSTEM_HIGH_LOAD,         "System High load").
 
 
 %% @doc notified message items
@@ -186,7 +188,6 @@
           keys = []     :: [binary()|undefined],
           timestamp = 0 :: integer()
          }).
-
 
 
 %% @doc macros.
@@ -495,4 +496,15 @@
                 EnvAutoCompactionCoefficient;
             _ ->
                 ?DEF_COMPACTION_COEFFICIENT_MID
+        end).
+
+
+%% Misc.
+-define(DEF_SEEKING_METADATA_TIMEOUT, 10). %% default:50ms
+-define(env_seeking_timeout_per_metadata(),
+        case application:get_env(leo_storage, seeking_timeout_per_metadata) of
+            {ok, EnvSeekingMetadataTimeout} ->
+                EnvSeekingMetadataTimeout;
+            _ ->
+                ?DEF_SEEKING_METADATA_TIMEOUT
         end).

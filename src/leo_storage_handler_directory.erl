@@ -27,6 +27,7 @@
 -author('Yosuke Hara').
 
 -include("leo_storage.hrl").
+-include_lib("leo_logger/include/leo_logger.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("eunit/include/eunit.hrl").
@@ -66,30 +67,46 @@ find_by_parent_dir(ParentDir, _Delimiter, Marker, MaxKeys) ->
                                 Acc
                         end, [], Members),
 
-    {ResL0, _BadNodes} = rpc:multicall(Nodes, leo_storage_handler_object, prefix_search,
-                                       [ParentDir, NewMarker, NewMaxKeys], ?DEF_REQ_TIMEOUT),
+    {ResL, BadNodes} = rpc:multicall(Nodes, leo_storage_handler_object,
+                                     prefix_search,
+                                     [ParentDir, NewMarker, NewMaxKeys],
+                                     ?DEF_REQ_TIMEOUT),
+    Errors = [Cause || {error, Cause} <- ResL],
+    HasBadNodes = (BadNodes /= []),
+    HasErrors = (Errors /= []),
 
-    case lists:foldl(
-           fun({ok, List}, Acc0) ->
-                   lists:foldl(
-                     fun(#?METADATA{key = Key} = Meta0, Acc1) ->
-                             case lists:keyfind(Key, 2, Acc1) of
-                                 false ->
-                                     [Meta0|Acc1];
-                                 #?METADATA{clock = Clock} when Meta0#?METADATA.clock > Clock ->
-                                     Acc2 = lists:keydelete(Key, 2, Acc1),
-                                     [Meta0|Acc2];
-                                 _ ->
-                                     Acc1
-                             end
-                     end, Acc0, List);
-              (_, Acc0) ->
-                   Acc0
-           end, [], ResL0) of
-        [] ->
-            {ok, []};
-        List ->
-            {ok, lists:sublist(ordsets:from_list(lists:flatten(List)), NewMaxKeys)}
+    case (HasErrors orelse HasBadNodes) of
+        true ->
+            ?warn("find_by_parent_dir/4", "~p",
+                  [[{errors, Errors}, {bad_nodes, BadNodes},
+                   {cause, ?ERROR_COULD_NOT_GET_METADATAS}]]),
+            {error, unavailable};
+        false ->
+            case lists:foldl(
+                   fun({ok, List}, Acc_1) ->
+                           lists:foldl(
+                             fun(#?METADATA{key = Key} = Metadata, Acc_2) ->
+                                     case lists:keyfind(Key, 2, Acc_2) of
+                                         false ->
+                                             [Metadata|Acc_2];
+                                         #?METADATA{clock = Clock}
+                                           when Metadata#?METADATA.clock > Clock ->
+                                             Acc_3 = lists:keydelete(Key, 2, Acc_2),
+                                             [Metadata|Acc_3];
+                                         _ ->
+                                             Acc_2
+                                     end
+                             end, Acc_1, List);
+                      (_, Acc_1) ->
+                           Acc_1
+                   end, [], ResL) of
+                [] ->
+                    {ok, []};
+                List ->
+                    {ok, lists:sublist(
+                           ordsets:from_list(
+                             lists:flatten(List)), NewMaxKeys)}
+            end
     end.
 
 
