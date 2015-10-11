@@ -221,6 +221,17 @@
  ]}.
 
 
+%% @doc Timeout of seeking metadatas per a metadata
+%% @deprecated (v1.2.16-)
+{mapping,
+ "seeking_timeout_per_metadata",
+ "leo_storage.seeking_timeout_per_metadata",
+ [
+  {datatype, integer},
+  {default, 10} %% 10msec
+ ]}.
+
+
 %% --------------------------------------------------------------------
 %% STORAGE - Directory
 %% --------------------------------------------------------------------
@@ -610,6 +621,37 @@
  fun(_Conf) ->
          {leo_storage_cluster_monitor, check_cluster_state, []}
  end}.
+
+
+%%
+%%  Watchdog.ERROR
+%%
+%% @doc Error - Is enabled
+{mapping,
+ "watchdog.error.is_enabled",
+ "leo_watchdog.error_enabled",
+ [
+  {datatype, atom},
+  {default, false}
+ ]}.
+
+%% @doc Error - Interval
+{mapping,
+ "watchdog.error.interval",
+ "leo_watchdog.error_interval",
+ [
+  {datatype, integer},
+  {default, 60} %% 60sec
+ ]}.
+
+%% @doc Error - Threshold error count
+{mapping,
+ "watchdog.error.threshold_count",
+ "leo_watchdog.error_threshold_count",
+ [
+  {datatype, integer},
+  {default, 100}
+ ]}.
 
 
 %% --------------------------------------------------------------------

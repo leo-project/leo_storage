@@ -67,7 +67,8 @@ start() ->
     ok = leo_watchdog_sup:start_subscriber(?WD_SUB_ID_1, [leo_watchdog_cpu,
                                                           leo_watchdog_disk,
                                                           leo_watchdog_cluster,
-                                                          leo_storage_watchdog_msgs
+                                                          leo_storage_watchdog_msgs,
+                                                          leo_watchdog_error
                                                          ], ?MODULE),
     ok = leo_watchdog_sup:start_subscriber(?WD_SUB_ID_2, [leo_storage_watchdog_fragment
                                                          ], ?MODULE),
