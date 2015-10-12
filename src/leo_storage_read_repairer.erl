@@ -62,20 +62,22 @@ repair(#?READ_PARAMETER{quorum = ReadQuorum,
     AddrId = Metadata#?METADATA.addr_id,
     Key = Metadata#?METADATA.key,
 
-    IsExistMe = (lists:keyfind(erlang:node(), 2, Redundancies) /= false),
-    DiffNumOfNodes = case IsExistMe of
-                         true -> 1;
-                         false -> 0
-                     end,
-
-    Params = #state{read_quorum = ReadQuorum - DiffNumOfNodes,
-                    redundancies = Redundancies,
-                    metadata = Metadata,
-                    req_id = ReqId},
-    NumOfNodes = erlang:length([N || #redundant_node{node = N,
-                                                     can_read_repair = true}
-                                         <- Redundancies]
-                              ) - DiffNumOfNodes,
+    DiffNumOfNodes =
+        case (lists:keyfind(erlang:node(), 2, Redundancies) /= false) of
+            true ->
+                1;
+            false ->
+                0
+        end,
+    NumOfNodes = case erlang:length(
+                        [N || #redundant_node{node = N,
+                                              can_read_repair = true}
+                                  <- Redundancies]) of
+                     0 ->
+                         0;
+                     Len ->
+                         Len - DiffNumOfNodes
+                 end,
 
     lists:foreach(
       fun(#redundant_node{available = false}) ->
@@ -91,6 +93,10 @@ repair(#?READ_PARAMETER{quorum = ReadQuorum,
                             RPCKey = rpc:async_call(
                                        Node, leo_storage_handler_object,
                                        head, [AddrId, Key, false]),
+                            Params = #state{read_quorum = ReadQuorum - DiffNumOfNodes,
+                                            redundancies = Redundancies,
+                                            metadata = Metadata,
+                                            req_id = ReqId},
                             compare(Ref, From, RPCKey, Node, Params)
                     end);
          (_) ->
