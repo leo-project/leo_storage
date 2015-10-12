@@ -57,21 +57,32 @@
                         Callback::function()).
 repair(#?READ_PARAMETER{quorum = ReadQuorum,
                         req_id = ReqId}, Redundancies, Metadata, Callback) ->
-    Ref    = make_ref(),
-    From   = self(),
+    Ref = make_ref(),
+    From = self(),
     AddrId = Metadata#?METADATA.addr_id,
-    Key    = Metadata#?METADATA.key,
-    Params = #state{read_quorum  = ReadQuorum,
+    Key = Metadata#?METADATA.key,
+
+    IsExistMe = (lists:keyfind(erlang:node(), 2, Redundancies) /= false),
+    DiffNumOfNodes = case IsExistMe of
+                         true -> 1;
+                         false -> 0
+                     end,
+
+    Params = #state{read_quorum = ReadQuorum - DiffNumOfNodes,
                     redundancies = Redundancies,
-                    metadata     = Metadata,
-                    req_id       = ReqId},
+                    metadata = Metadata,
+                    req_id = ReqId},
     NumOfNodes = erlang:length([N || #redundant_node{node = N,
                                                      can_read_repair = true}
-                                         <- Redundancies]),
+                                         <- Redundancies]
+                              ) - DiffNumOfNodes,
+
     lists:foreach(
       fun(#redundant_node{available = false}) ->
               void;
          (#redundant_node{can_read_repair = false}) ->
+              void;
+         (#redundant_node{node = Node}) when Node == erlang:node() ->
               void;
          (#redundant_node{node = Node,
                           available = true,
