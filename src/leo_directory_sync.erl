@@ -401,7 +401,9 @@ delete(Dir) ->
 delete_1(_,[]) ->
     ok;
 delete_1(Dir, [#redundant_node{available = false}|Rest]) ->
-    %% @TODO: enqueue a message to fix an inconsistent dir
+    %% enqueue a message to fix an inconsistent dir
+    _ = leo_storage_mq:publish(
+          ?QUEUE_TYPE_ASYNC_DELETE_DIR, [Dir]),
     delete_1(Dir, Rest);
 delete_1(Dir, [#redundant_node{available = true,
                                node = Node}|Rest]) ->

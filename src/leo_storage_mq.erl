@@ -386,7 +386,7 @@ handle_call({consume, ?QUEUE_ID_COMP_META_WITH_DC, MessageBin}) ->
 
 handle_call({consume, ?QUEUE_ID_ASYNC_DELETE_DIR, MessageBin}) ->
     Dir = MessageBin,
-    leo_storage_handler_directory:delete_objects_under_dir(#?OBJECT{key = Dir});
+    leo_storage_handler_directory:delete(Dir);
 
 handle_call({consume, ?QUEUE_ID_ASYNC_RECOVER_DIR, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
