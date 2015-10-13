@@ -200,7 +200,7 @@
 
 
 %% @doc leo-object-storage.is_strict_check
-%% @deprecated (v1.2.2-)
+%% @since (v1.2.2-)
 {mapping,
  "object_storage.is_strict_check",
  "leo_object_storage.is_strict_check",
@@ -211,7 +211,7 @@
 
 
 %% @doc leo-object-storage.threshold_slow_processing
-%% @deprecated (v1.2.9-)
+%% @since (v1.2.9-)
 {mapping,
  "object_storage.threshold_of_slow_processing",
  "leo_object_storage.threshold_slow_processing",
@@ -222,13 +222,24 @@
 
 
 %% @doc Timeout of seeking metadatas per a metadata
-%% @deprecated (v1.2.16-)
+%% @since (v1.2.16-)
 {mapping,
  "seeking_timeout_per_metadata",
  "leo_storage.seeking_timeout_per_metadata",
  [
   {datatype, integer},
   {default, 10} %% 10msec
+ ]}.
+
+
+%% @doc Default coder of erasure-code
+%% @since (v1.4.0-pre2)
+{mapping,
+ "erasure_code.coder",
+ "leo_erasure.default_coder",
+ [
+  {datatype, atom},
+  {default, vandrs} %% [vandrs | cauchyrs | liberation | isars]
  ]}.
 
 
@@ -957,6 +968,7 @@
   {datatype, atom},
   {default, true}
  ]}.
+
 
 %% --------------------------------------------------------------------
 %% STORAGE - DIR
