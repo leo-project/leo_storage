@@ -178,7 +178,7 @@ stack_(_) ->
     Key_8 = <<"a/$$_dir_$$">>,
     Metadata_8 = #?METADATA{key = Key_8,
                             ksize = byte_size(Key_8)},
-    ok = leo_directory_sync:append(sync, Metadata_8),
+    ok = leo_directory_sync:append(Metadata_8, ?DIR_SYNC),
     {ok, Bin_8} = leo_backend_db_api:get(?DIR_DB_ID, <<"a/", "\t", Key_8/binary >>),
     ?assertEqual(Metadata_8, binary_to_term(Bin_8)),
 
@@ -197,6 +197,8 @@ stack_(_) ->
     ?assertEqual(-1, Metadata_9_1#?METADATA.dsize),
     ?assertEqual(true, (0 < Metadata_9_1#?METADATA.clock)),
     ?assertEqual(true, (0 < Metadata_9_1#?METADATA.timestamp)),
+
+    %% @TODO: Remove an directory w/sync
     ok.
 
 -endif.

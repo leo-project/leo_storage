@@ -50,7 +50,7 @@ init([]) ->
 
 handle_event({Method, Metadata}, State) when Method == put;
                                              Method == delete ->
-    _ = leo_directory_sync:append(async, Metadata),
+    _ = leo_directory_sync:append(Metadata, ?DIR_ASYNC),
     {ok, State};
 handle_event(_, State) ->
     {ok, State}.

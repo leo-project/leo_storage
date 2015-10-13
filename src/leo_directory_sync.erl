@@ -41,7 +41,8 @@
          append/1, append/2,
          append_metadatas/2,
          create_directories/1,
-         replicate/1, replicate/2,
+         replicate_metadatas/1, replicate_metadatas/2,
+         replicate_del_dir/1, replicate_del_dir/2,
          store/2,
          delete/1,
          recover/1, recover/2
@@ -110,8 +111,12 @@ remove_container(DestNode) ->
 append(#?METADATA{key = <<>>}) ->
     ok;
 append(Metadata) ->
-    append(async, Metadata).
-append(SyncMode, #?METADATA{key = Key} = Metadata) ->
+    append(Metadata, ?DIR_ASYNC).
+
+-spec(append(Metadata, SyncOption) ->
+             ok when Metadata::#?METADATA{},
+                     SyncOption::dir_sync_option()).
+append(#?METADATA{key = Key} = Metadata, SyncOption) ->
     %% Retrieve a directory from the key
     case get_directory_from_key(Key) of
         <<>> ->
@@ -121,28 +126,29 @@ append(SyncMode, #?METADATA{key = Key} = Metadata) ->
             case leo_redundant_manager_api:get_redundancies_by_key(Dir) of
                 {ok, #redundancies{nodes = RedundantNodes}} ->
                     %% Store/Remove the metadata into the metadata-cluster
-                    append_1(SyncMode, Dir, Metadata, RedundantNodes);
+                    append_1(Dir, Metadata, RedundantNodes, SyncOption);
                 {error,_Cause} ->
                     enqueue(Metadata)
             end
     end.
 
 %% @private
--spec(append_1(SyncMode, Dir, Metadata, RedundantNodes) ->
-             ok | {error, any()} when SyncMode::sync|async,
-                                      Dir::binary(),
+-spec(append_1(Dir, Metadata, RedundantNodes, SyncOption) ->
+             ok | {error, any()} when Dir::binary(),
                                       Metadata::#?METADATA{},
-                                      RedundantNodes::[#redundant_node{}]).
-append_1(_,_,_,[]) ->
+                                      RedundantNodes::[#redundant_node{}],
+                                      SyncOption::dir_sync_option()).
+append_1(_,_,[],_) ->
     ok;
-append_1(SyncMode, Dir, Metadata, [#redundant_node{available = false}|Rest]) ->
+append_1(Dir, Metadata, [#redundant_node{available = false}|Rest], SyncOption) ->
     ok = enqueue(Metadata),
-    append_1(SyncMode, Dir, Metadata, Rest);
-append_1(sync = SyncMode, Dir, Metadata, [#redundant_node{available = true,
-                                                          node = Node}|Rest]) ->
+    append_1(Dir, Metadata, Rest, SyncOption);
+append_1(Dir, Metadata, [#redundant_node{available = true,
+                                         node = Node}|Rest], ?DIR_SYNC = SyncOption) ->
     #?METADATA{addr_id = AddrId,
-               key = Key} = Metadata,
-    StackedInfo = [{AddrId, Dir, Key}],
+               key = Key,
+               del = Del} = Metadata,
+    StackedInfo = [{AddrId, Dir, Key, Del}],
     Bin = get_dir_and_metadata_bin(Dir, Metadata),
     case handle_send({metadata, Node}, StackedInfo, Bin) of
         ok ->
@@ -150,11 +156,11 @@ append_1(sync = SyncMode, Dir, Metadata, [#redundant_node{available = true,
         {error,_Cause} ->
             enqueue(Metadata)
     end,
-    append_1(SyncMode, Dir, Metadata, Rest);
-append_1(async = SyncMode, Dir, Metadata, [#redundant_node{available = true,
-                                                           node = Node}|Rest]) ->
+    append_1(Dir, Metadata, Rest, SyncOption);
+append_1(Dir, Metadata, [#redundant_node{available = true,
+                                         node = Node}|Rest], ?DIR_ASYNC = SyncOption) ->
     append_2(Node, Dir, Metadata),
-    append_1(SyncMode, Dir, Metadata, Rest).
+    append_1(Dir, Metadata, Rest, SyncOption).
 
 %% @private
 -spec(append_2(DestNodes, Dir, Metadata) ->
@@ -162,12 +168,13 @@ append_1(async = SyncMode, Dir, Metadata, [#redundant_node{available = true,
                                       Dir::binary(),
                                       Metadata::#?METADATA{}).
 append_2(DestNode, Dir, #?METADATA{addr_id = AddrId,
-                                   key = Key} = Metadata) ->
+                                   key = Key,
+                                   del = Del} = Metadata) ->
     case leo_ordning_reda_api:has_container({metadata, DestNode}) of
         true ->
             Data = get_dir_and_metadata_bin(Dir, Metadata),
             leo_ordning_reda_api:stack({metadata, DestNode},
-                                       {AddrId, Dir, Key}, Data);
+                                       {AddrId, Dir, Key, Del}, Data);
         false ->
             case add_container(DestNode) of
                 ok ->
@@ -183,30 +190,30 @@ append_2(DestNode, Dir, #?METADATA{addr_id = AddrId,
 
 
 %% @doc Append metadatas in bulk
--spec(append_metadatas(SyncMode, Metadatas) ->
-             [any()] when SyncMode::async|sync,
-                          Metadatas::[#?METADATA{}]).
-append_metadatas(SyncMode, Metadatas) ->
-    append_metadatas_1(SyncMode, Metadatas, {[],[]}).
+-spec(append_metadatas(Metadatas, SyncOption) ->
+             [any()] when Metadatas::[#?METADATA{}],
+                          SyncOption::dir_sync_option()).
+append_metadatas(Metadatas, SyncOption) ->
+    append_metadatas_1(Metadatas, SyncOption, {[],[]}).
 
 %% @private
-append_metadatas_1(_, [], SoFar) ->
+append_metadatas_1([],_, SoFar) ->
     SoFar;
-append_metadatas_1(SyncMode, [#?METADATA{key = Key} = Metadata|Rest], {ResL, Errors}) ->
-    Acc = case append(SyncMode, Metadata) of
+append_metadatas_1([#?METADATA{key = Key} = Metadata|Rest], SyncOption, {ResL, Errors}) ->
+    Acc = case append(Metadata, SyncOption) of
               ok ->
                   {[{ok, Key}|ResL], Errors};
               Error ->
                   {ResL, [{Key, Error}|Errors]}
           end,
-    append_metadatas_1(SyncMode, Rest, Acc).
+    append_metadatas_1(Rest, SyncOption, Acc).
 
 
 %% @doc Retrieve binary of a directory and a metadata
 %% @private
 get_dir_and_metadata_bin(Dir, Metadata) ->
-    DirSize  = byte_size(Dir),
-    MetaBin  = term_to_binary(Metadata),
+    DirSize = byte_size(Dir),
+    MetaBin = term_to_binary(Metadata),
     MetaSize = byte_size(MetaBin),
     << DirSize:?DEF_BIN_DIR_SIZE,
        Dir/binary,
@@ -227,7 +234,7 @@ create_directories([], Dict) ->
         [] ->
             ok;
         RetL ->
-            [replicate(Node, MetadataL) || {Node, MetadataL} <- RetL],
+            [replicate_metadatas(Node, MetadataL) || {Node, MetadataL} <- RetL],
             ok
     end;
 create_directories([Dir|Rest], Dict) ->
@@ -261,18 +268,18 @@ create_directories_1([{Node, true}|Rest], Metadata, Dict) ->
     create_directories_1(Rest, Metadata, Dict_1).
 
 
-%% @doc Replicate a metadata
+%% @doc Replicate metadata(s)
 %%
--spec(replicate(MetadataL) ->
+-spec(replicate_metadatas(MetadataL) ->
              ok when MetadataL::[#?METADATA{}]).
-replicate(MetadataL) ->
-    replicate_1(MetadataL).
+replicate_metadatas(MetadataL) ->
+    replicate_metadatas_1(MetadataL).
 
--spec(replicate(Node, MetadataL) ->
+-spec(replicate_metadatas(Node, MetadataL) ->
              ok when Node::atom(),
                      MetadataL::[#?METADATA{}]).
-replicate(Node, MetadataL) ->
-    RPCKey = rpc:async_call(Node, ?MODULE, replicate, [MetadataL]),
+replicate_metadatas(Node, MetadataL) ->
+    RPCKey = rpc:async_call(Node, ?MODULE, replicate_metadatas, [MetadataL]),
     Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
               {value, ok} ->
                   ok;
@@ -292,11 +299,11 @@ replicate(Node, MetadataL) ->
     end.
 
 %% @private
--spec(replicate_1([#?METADATA{}]) ->
+-spec(replicate_metadatas_1([#?METADATA{}]) ->
              ok).
-replicate_1([]) ->
+replicate_metadatas_1([]) ->
     ok;
-replicate_1([#?METADATA{key = Key} = Metadata|Rest]) ->
+replicate_metadatas_1([#?METADATA{key = Key} = Metadata|Rest]) ->
     Parent = get_directory_from_key(Key),
     KeyBin = << Parent/binary, "\t", Key/binary >>,
 
@@ -311,7 +318,59 @@ replicate_1([#?METADATA{key = Key} = Metadata|Rest]) ->
                                    {line, ?LINE}, {body, Cause}]),
             enqueue(Metadata)
     end,
-    replicate_1(Rest).
+    replicate_metadatas_1(Rest).
+
+
+%% @doc Replicate deletion of a dir
+%%
+-spec(replicate_del_dir(Dir) ->
+             ok when Dir::binary()).
+replicate_del_dir(Dir) ->
+    replicate_del_dir_1(Dir).
+
+-spec(replicate_del_dir(Node, Dir) ->
+             ok when Node::atom(),
+                     Dir::binary()).
+replicate_del_dir(Node, Dir) ->
+    RPCKey = rpc:async_call(Node, ?MODULE, replicate_del_dir, [Dir]),
+    Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
+              {value, ok} ->
+                  ok;
+              {value, {_, Cause}} ->
+                  {error, Cause};
+              timeout = Cause ->
+                  {error, Cause};
+              Other ->
+                  {error, Other}
+          end,
+    case Ret of
+        ok ->
+            ok;
+        {error,_} = Error ->
+            leo_storage_mq:publish(
+              ?QUEUE_TYPE_ASYNC_DELETE_DIR, [Dir]),
+            Error
+    end.
+
+%% @private
+-spec(replicate_del_dir_1(Dir) ->
+             ok when Dir::binary()).
+replicate_del_dir_1(Dir) ->
+    Parent = get_directory_from_key(Dir),
+    KeyBin = << Parent/binary, "\t", Dir/binary >>,
+
+    case leo_backend_db_api:delete(?DIR_DB_ID, KeyBin) of
+        ok ->
+            leo_directory_cache:delete(Dir);
+        {error, Cause} ->
+            error_logger:info_msg("~p,~p,~p,~p~n",
+                                  [{module, ?MODULE_STRING},
+                                   {function, "replicate_del_dir_1/1"},
+                                   {line, ?LINE}, {body, Cause}]),
+            leo_storage_mq:publish(
+              ?QUEUE_TYPE_ASYNC_DELETE_DIR, [Dir]),
+            ok
+    end.
 
 
 %% @doc Store received objects into the directory's db
@@ -334,9 +393,8 @@ delete(Dir) ->
     case leo_redundant_manager_api:get_redundancies_by_key(Dir) of
         {ok, #redundancies{nodes = RedundantNodes}} ->
             delete_1(Dir, RedundantNodes);
-        _ ->
-            %% @TODO
-            ok
+        Error ->
+            Error
     end.
 
 %% @private
@@ -345,7 +403,9 @@ delete_1(_,[]) ->
 delete_1(Dir, [#redundant_node{available = false}|Rest]) ->
     %% @TODO: enqueue a message to fix an inconsistent dir
     delete_1(Dir, Rest);
-delete_1(Dir, [#redundant_node{available = true}|Rest]) ->
+delete_1(Dir, [#redundant_node{available = true,
+                               node = Node}|Rest]) ->
+    _ = replicate_del_dir(Node, Dir),
     delete_1(Dir, Rest).
 
 
@@ -429,7 +489,7 @@ slice_and_store(StackedBin, Acc) ->
                     true when Del == ?DEL_TRUE ->
                         case leo_backend_db_api:delete(?DIR_DB_ID, KeyBin) of
                             ok ->
-                                append_dir(DirBin, Metadata, Acc);
+                                Acc;
                             {error, Cause} ->
                                 error_logger:info_msg("~p,~p,~p,~p~n",
                                                       [{module, ?MODULE_STRING},
@@ -443,7 +503,12 @@ slice_and_store(StackedBin, Acc) ->
                 end,
 
             %% Append a metadata into the cache-manager
-            ok = leo_directory_cache:append(DirBin, Metadata),
+            case (dict:size(Acc_1) > 0) of
+                true ->
+                    ok = leo_directory_cache:append(DirBin, Metadata);
+                false ->
+                    void
+            end,
             slice_and_store(StackedBin_1, Acc_1);
         _ ->
             {{error, invalid_format},[]}
@@ -663,14 +728,16 @@ get_directories_2([H|T], #?METADATA{clock = Clock,
                                                                   timestamp = Timestamp}, Acc)).
 
 
-%% @doc
+%% @doc Retrieve directories from the stacked info
 %% @private
 -spec(get_directories_from_stacked_info(StackedInfo, Acc) ->
-             [binary()] when StackedInfo::[{integer(), binary(), binary()}],
+             [binary()] when StackedInfo::[{integer(), binary(), binary(), integer()}],
                              Acc::any()).
 get_directories_from_stacked_info([], Acc) ->
     ordsets:to_list(Acc);
-get_directories_from_stacked_info([{_AddrId,_Dir, Key}|Rest], Acc) ->
+get_directories_from_stacked_info([{_AddrId,_Dir,_Key, ?DEL_TRUE}|Rest], Acc) ->
+    get_directories_from_stacked_info(Rest, Acc);
+get_directories_from_stacked_info([{_AddrId,_Dir, Key, ?DEL_FALSE}|Rest], Acc) ->
     DirL = case get_directories(#?METADATA{key = Key,
                                            ksize = byte_size(Key)}) of
                [] ->
@@ -687,6 +754,7 @@ get_directories_from_stacked_info_1([], Acc) ->
 get_directories_from_stacked_info_1([Dir|Rest], Acc) ->
     Acc_1 = ordsets:add_element(Dir, Acc),
     get_directories_from_stacked_info_1(Rest, Acc_1).
+
 
 %% @doc enqueue a message of a miss-replication into the queue
 %% @private

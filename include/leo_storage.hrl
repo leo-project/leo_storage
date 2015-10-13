@@ -81,9 +81,15 @@
 
 -define(TBL_REBALANCE_COUNTER,        'leo_rebalance_counter').
 
-
 -define(SYNC_TARGET_OBJ, 'object').
 -define(SYNC_TARGET_DIR, 'directory').
+-type(obj_sync() :: ?SYNC_TARGET_OBJ |
+                    ?SYNC_TARGET_DIR).
+
+-define(DIR_ASYNC, 'async').
+-define(DIR_SYNC, 'sync').
+-type(dir_sync_option() :: ?DIR_ASYNC |
+                           ?DIR_SYNC).
 
 
 %% @doc error messages.

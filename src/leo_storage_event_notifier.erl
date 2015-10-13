@@ -192,9 +192,9 @@ notify_fun_1(false, Pid, Method, #?METADATA{key = Key} = Metadata) ->
     %% synchronize the metadata into the cluster
     SyncMode = case binary:match(Key, [<<"$$_dir_$$">>],[]) of
                    nomatch ->
-                       async;
+                       ?DIR_ASYNC;
                    _ ->
-                       sync
+                       ?DIR_SYNC
                end,
     case SyncMode of
         async ->
@@ -202,12 +202,12 @@ notify_fun_1(false, Pid, Method, #?METADATA{key = Key} = Metadata) ->
         sync ->
             Dir = leo_directory_sync:get_directory_from_key(Key),
             case leo_directory_sync:append_metadatas(
-                   SyncMode, [#?METADATA{key = Dir,
-                                         ksize = byte_size(Dir),
-                                         dsize = -1,
-                                         clock = leo_date:clock(),
-                                         timestamp = leo_date:now()},
-                              Metadata]) of
+                   [#?METADATA{key = Dir,
+                               ksize = byte_size(Dir),
+                               dsize = -1,
+                               clock = leo_date:clock(),
+                               timestamp = leo_date:now()},
+                    Metadata], SyncMode) of
                 {_ResL, []} ->
                     ok;
                 {_, Errors} ->

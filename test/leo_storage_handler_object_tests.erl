@@ -278,6 +278,10 @@ delete_({Node0, Node1}) ->
     meck:new(leo_directory_cache, [non_strict]),
     meck:expect(leo_directory_cache, delete, fun(_) -> ok end),
 
+    meck:new(leo_directory_sync, [non_strict]),
+    meck:expect(leo_directory_sync, delete, fun(_) -> ok end),
+    meck:expect(leo_directory_sync, append, fun(_,_) -> ok end),
+
     meck:new(leo_cache_api, [non_strict]),
     meck:expect(leo_cache_api, delete, fun(_) -> ok end),
 
@@ -289,9 +293,6 @@ delete_({Node0, Node1}) ->
 
     meck:new(leo_metrics_req, [non_strict]),
     meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
-
-    meck:new(leo_directory_sync, [non_strict]),
-    meck:expect(leo_directory_sync, append, fun(_,_) -> ok end),
 
     meck:new(leo_storage_mq, [non_strict]),
     meck:expect(leo_storage_mq, publish, fun(_,_) -> ok end),

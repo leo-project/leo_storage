@@ -88,6 +88,10 @@ find_by_parent_dir_([Node0, Node1]) ->
                      end),
 
     ok = rpc:call(Node1, meck, new,    [leo_backend_db_api, [no_link, non_strict]]),
+    ok = rpc:call(Node1, meck, expect, [leo_backend_db_api, get,
+                                        fun(_,_) ->
+                                                {ok, <<>>}
+                                        end]),
     ok = rpc:call(Node1, meck, expect, [leo_backend_db_api, fetch,
                                         fun(_InstanceName,_KeyBin,_Fun,_MaxKeys) ->
                                                 {ok, [#?METADATA{key = <<"air/on/g/0.png">>},

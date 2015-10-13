@@ -491,7 +491,7 @@ sync_vnodes(Node, RingHash, [{FromAddrId, ToAddrId}|T]) ->
     sync_vnodes(Node, RingHash, T).
 
 %% @private
--spec(sync_vnodes_callback(?SYNC_TARGET_OBJ|?SYNC_TARGET_DIR, atom(), pos_integer(), pos_integer()) ->
+-spec(sync_vnodes_callback(obj_sync(), atom(), pos_integer(), pos_integer()) ->
              any()).
 sync_vnodes_callback(SyncTarget, Node, FromAddrId, ToAddrId)->
     fun(_K, V, Acc) ->
