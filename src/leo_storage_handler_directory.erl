@@ -120,28 +120,25 @@ delete(Dir) ->
                 ?BIN_SLASH ->
                     Dir;
                 _ ->
-                    << Dir/binary, ?BIN_SLASH/binary  >>
+                    << Dir/binary, ?BIN_SLASH/binary >>
             end,
-    delete_objects_under_dir(#?OBJECT{key = Dir_1}).
+    delete_objects_under_dir(Dir_1).
 
 
 %% Deletion object related constants
 %% @doc Remove objects of the under directory
--spec(delete_objects_under_dir(Object) ->
-             ok when Object::#?OBJECT{}).
-delete_objects_under_dir(Object) ->
-    Key = Object#?OBJECT.key,
-    KSize = byte_size(Key),
-
-    case catch binary:part(Key, (KSize - 1), 1) of
+-spec(delete_objects_under_dir(Dir) ->
+             ok when Dir::binary()).
+delete_objects_under_dir(Dir) ->
+    case catch binary:part(Dir, (byte_size(Dir) - 1), 1) of
         {'EXIT',_} ->
             ok;
         ?BIN_SLASH ->
             %% remove the directory w/sync
-            case leo_directory_sync:delete(Key) of
+            case leo_directory_sync:delete(Dir) of
                 ok ->
-                    %% remove object under the directory w/async
-                    Targets = [Key, undefined],
+                    %% remove objects under the directory w/async
+                    Targets = [Dir, undefined],
                     Ref = make_ref(),
                     case leo_redundant_manager_api:get_members_by_status(?STATE_RUNNING) of
                         {ok, RetL} ->
@@ -151,7 +148,7 @@ delete_objects_under_dir(Object) ->
                                   end),
                             ok;
                         _ ->
-                            leo_storage_mq:publish(?QUEUE_TYPE_ASYNC_DELETE_DIR, [Key])
+                            leo_storage_mq:publish(?QUEUE_TYPE_ASYNC_DELETE_DIR, [Dir])
                     end;
                 {error, Reason} ->
                     {error, Reason}
@@ -213,21 +210,14 @@ prefix_search_and_remove_objects(Dir) ->
                         KSize = byte_size(Key),
                         case catch binary:part(Key, (KSize - 1), 1) of
                             ?BIN_SLASH ->
-                                case leo_directory_cache:delete(Key) of
+                                case ?MODULE:delete(Key) of
                                     ok ->
                                         ok;
                                     {error, Cause} ->
                                         leo_storage_mq:publish(?QUEUE_TYPE_ASYNC_DELETE_DIR, [Key]),
                                         ?error("delete_objects_under_dir/1",
-                                               "key:~p, cause:~p", [Key, Cause])
-                                end,
-                                ok = leo_directory_sync:append(
-                                       #?METADATA{key = Key,
-                                                  ksize = KSize,
-                                                  dsize = -1,
-                                                  clock = leo_date:clock(),
-                                                  timestamp = leo_date:now(),
-                                                  del = ?DEL_TRUE}, ?DIR_SYNC);
+                                               "dir:~p, cause:~p", [Key, Cause])
+                                end;
                             _ ->
                                 void
                         end,
