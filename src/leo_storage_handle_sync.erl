@@ -96,7 +96,7 @@ send_addrid_and_key_to_remote(ClusterId, ListAddrIdAndKey) ->
               ListMembers, ClusterId, ListAddrIdAndKey);
         {error, Cause} ->
             ?warn("send_addrid_and_key_to_remote/1",
-                  "cause:~p", [Cause]),
+                  "~p", [{cause, Cause}]),
             ok
     end.
 
@@ -124,8 +124,9 @@ send_addrid_and_key_to_remote_2([], ClusterId, ListAddrIdAndKey,_RetryTimes) ->
             {ok, []};
         {error, Cause} ->
             ?warn("send_addrid_and_key_to_remote/1",
-                  "qid:~p, cluster-id:~p, list-addrid_and_key:~p, cause:~p",
-                  [QId, ClusterId, ListAddrIdAndKey, Cause]),
+                  "~p", [ [{qid, QId}, {cluster_id, ClusterId},
+                           {list_addr_id_and_key,  ListAddrIdAndKey},
+                           {cause, Cause}] ]),
             {error, Cause}
     end;
 send_addrid_and_key_to_remote_2([_|Rest], ClusterId, ListAddrIdAndKey, ?DEF_MAX_RETRY_TIMES) ->
