@@ -532,9 +532,9 @@ notify_message_to_manager([Manager|T], VNodeId, Node) ->
               ok ->
                   ok;
               {_, Cause} ->
-                    ?warn("notify_message_to_manager/3",
-                          "~p", [ [{vnode_id, VNodeId},
-                                   {node, Node}, {cause, Cause}] ]),
+                  ?warn("notify_message_to_manager/3",
+                        "~p", [ [{vnode_id, VNodeId},
+                                 {node, Node}, {cause, Cause}] ]),
                   {error, Cause};
               timeout = Cause ->
                   {error, Cause}
@@ -588,11 +588,6 @@ correct_redundancies_1(Key, AddrId, [#redundant_node{node = Node}|T], Metadatas,
                 {value, {ok, Metadata}} ->
                     correct_redundancies_1(Key, AddrId, T,
                                            [{Node, Metadata}|Metadatas], ErrorNodes);
-                {value, not_found} ->
-                    correct_redundancies_1(Key, AddrId, T,
-                                           [{Node, #?METADATA{key = Key,
-                                                              addr_id = AddrId,
-                                                              del = ?DEL_TRUE}}|Metadatas], ErrorNodes);
                 _Error ->
                     correct_redundancies_1(Key, AddrId, T,
                                            Metadatas, [Node|ErrorNodes])
@@ -608,12 +603,22 @@ correct_redundancies_1(Key, AddrId, [#redundant_node{node = Node}|T], Metadatas,
 -spec(correct_redundancies_2(list(), list()) ->
              ok | {error, any()}).
 correct_redundancies_2(ListOfMetadata, ErrorNodes) ->
-    [{_Node, Metadata} = H|_] =
-        lists:sort(fun({_, M1}, {_, M2}) ->
-                           M1#?METADATA.clock >= M2#?METADATA.clock;
-                      (_,_) ->
-                           false
-                   end, ListOfMetadata),
+    H = case (erlang:length(ListOfMetadata) == 1) of
+            true ->
+                erlang:hd(ListOfMetadata);
+            false ->
+                MaxClock = lists:max([M#?METADATA.clock
+                                      || {_,M} <- ListOfMetadata]),
+                {_,RetL} = lists:foldl(
+                             fun({_,#?METADATA{clock = Clock}} = M, {MaxClock_1, Acc}) when Clock == MaxClock_1 ->
+                                     {MaxClock_1, [M|Acc]};
+                                (_, {MaxClock_1, Acc}) ->
+                                     {MaxClock_1, Acc}
+                             end, {MaxClock, []}, ListOfMetadata),
+                erlang:hd(RetL)
+        end,
+    {_,Metadata} = H,
+    ?debugVal({Metadata, ErrorNodes}),
 
     {_Dest, CorrectNodes, InconsistentNodes} =
         lists:foldl(
@@ -637,7 +642,7 @@ correct_redundancies_3([], _, _) ->
     ok;
 correct_redundancies_3(_, [], _) ->
     {error, 'not_fix_inconsistency'};
-correct_redundancies_3(InconsistentNodes, [Node|Rest], Metadata) ->
+correct_redundancies_3(InconsistentNodes, [Node|_] = NodeL, Metadata) ->
     RPCKey = rpc:async_call(Node, leo_storage_api, synchronize,
                             [InconsistentNodes, Metadata]),
     Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
@@ -652,16 +657,32 @@ correct_redundancies_3(InconsistentNodes, [Node|Rest], Metadata) ->
               timeout = Cause->
                   {error, Cause}
           end,
-    case Ret of
-        ok ->
-            Ret;
-        {error, Why} ->
-            ?warn("correct_redundancies_3/3",
-                  "~p", [ [{inconsistent_nodes, InconsistentNodes},
-                           {node, Node}, {metadata, Metadata},
-                           {cause, Why}] ]),
-            correct_redundancies_3(InconsistentNodes, Rest, Metadata)
-    end.
+    correct_redundancies_4(Ret, InconsistentNodes, NodeL, Metadata).
+
+%% @private
+correct_redundancies_4(ok,_InconsistentNodes,_NodeL,_Metadata) ->
+    ok;
+correct_redundancies_4({error, eof},_InconsistentNodes,_NodeL, Metadata) ->
+    case (Metadata#?METADATA.dsize == 0) of
+        true ->
+            Obj = leo_object_storage_transformer:metadata_to_object(<<>>, Metadata),
+            leo_storage_handler_object:put(Obj, 0);
+        false ->
+            ?error("correct_redundancies_4/4",
+                   "~p", [ [{metadata, Metadata},
+                            {cause, 'broken_object'}] ]),
+            ok
+    end;
+correct_redundancies_4({error, not_found = Why},_InconsistentNodes, [Node|_Rest], Metadata) ->
+    ?warn("correct_redundancies_4/4",
+          "~p", [ [{node, Node},
+                   {metadata, Metadata}, {cause, Why}] ]),
+    ok;
+correct_redundancies_4({error, Why}, InconsistentNodes, [Node|Rest], Metadata) ->
+    ?warn("correct_redundancies_4/4",
+          "~p", [ [{inconsistent_nodes, InconsistentNodes},
+                   {node, Node}, {metadata, Metadata}, {cause, Why}] ]),
+    correct_redundancies_3(InconsistentNodes, Rest, Metadata).
 
 
 %% @doc Relocate an object because of executed "rebalance"
@@ -706,6 +727,11 @@ rebalance_2({ok, Redundancies}, #rebalance_message{node = Node,
         true ->
             case leo_storage_handler_object:replicate([Node], AddrId, Key) of
                 ok ->
+                    ok;
+                not_found = Cause ->
+                    ?warn("rebalance_2/2",
+                          "~p", [ [{addr_id, AddrId}, {key, Key},
+                                   {cause, Cause}] ]),
                     ok;
                 Error ->
                     ok = publish(?QUEUE_TYPE_PER_OBJECT,
