@@ -234,14 +234,15 @@ slice_and_replicate_1(#?METADATA{addr_id = AddrId,
                         ok ->
                             slice_and_replicate(StackedObject, Errors);
                         {error, Cause} ->
-                            ?warn("slice_and_replicate_1/4","key:~s, cause:~p",
-                                  [binary_to_list(Metadata#?METADATA.key), Cause]),
+                            ?warn("slice_and_replicate_1/4",
+                                  "~p", [ [{key, binary_to_list(Metadata#?METADATA.key)},
+                                           {cause, Cause}] ]),
                             slice_and_replicate(StackedObject, [Metadata|Errors])
                     end;
                 _ ->
-                    ?warn("slice_and_replicate_1/4","key:~s, cause:~p",
-                          [binary_to_list(Metadata#?METADATA.key),
-                           "Current ring-hash is not found"]),
+                    ?warn("slice_and_replicate_1/4",
+                          "~p", [ [{key, binary_to_list(Metadata#?METADATA.key)},
+                                   {cause, "Current ring-hash is not found"}] ]),
                     slice_and_replicate(StackedObject, [Metadata|Errors])
             end
     end.

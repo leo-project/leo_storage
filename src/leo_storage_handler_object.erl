@@ -54,7 +54,7 @@
 -define(output_warn(Fun, _Key, _MSG), ok).
 -else.
 -define(output_warn(Fun, _Key, _MSG),
-        ?warn(Fun, "key:~p, cause:~p", [_Key, _MSG])).
+        ?warn(Fun, "~p", [ [{key, _Key}, {cause, _MSG}] ])).
 -endif.
 
 
@@ -784,7 +784,7 @@ replicate_fun(?REP_REMOTE, Method, Object) ->
         {error, Ref, unavailable = Cause} ->
             {error, Cause};
         {error, Ref, Cause} ->
-            ?warn("replicate_fun/3", "cause:~p", [Cause]),
+            ?warn("replicate_fun/3", "~p", [{cause, Cause}]),
             {error, Cause}
     end.
 

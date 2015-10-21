@@ -112,8 +112,8 @@ replicate_1([], Ref,_From, #state{method = Method,
             %% reply error
             Cause = timeout,
             ?warn("replicate/5",
-                  "method:~w, key:~p, cause:~p",
-                  [Method, Key, Cause]),
+                  "~p", [ [{method, Method},
+                           {key, Key}, {cause, Cause}] ]),
             Callback({error, [Cause]})
     end;
 %% for local-node
@@ -200,8 +200,7 @@ loop(N, W, ResL, Ref, From, #state{method = Method,
                     %% set reply
                     Cause = timeout,
                     ?warn("loop/6",
-                          "method:~w, key:~p, cause:~p",
-                          [Method, Key, Cause]),
+                          "~p", [ [{method, Method}, {key, Key}, {cause, Cause}] ]),
                     Callback({error, [Cause]});
                 false ->
                     void
@@ -228,8 +227,8 @@ replicate_fun(Ref, #req_params{pid     = Pid,
                    {Ref, {error, {node(), Cause}}};
                {error, Ref, Cause} ->
                    ?warn("replicate_fun/2",
-                         "key:~s, node:~w, reqid:~w, cause:~p",
-                         [Key, local, ReqId, Cause]),
+                         "~p", [ [{key, Key}, {node, local},
+                                  {req_id, ReqId}, {cause, Cause}] ]),
                    {Ref, {error, {node(), Cause}}}
            end,
     erlang:send(Pid, Ret).
@@ -248,8 +247,9 @@ enqueue('put', ?ERR_TYPE_REPLICATE_DATA = Type,  AddrId, Key) ->
         ok ->
             ok;
         {error, Cause} ->
-            ?warn("enqueue/1", "qid:~p, addr-id:~p, key:~p, type:~p, cause:~p",
-                  [QId, AddrId, Key, Type, Cause])
+            ?warn("enqueue/1",
+                  "~p", [ [{qid, QId}, {addr_id, AddrId},
+                           {key, Key}, {type, Type}, {cause, Cause}] ])
     end;
 enqueue('delete', _Type,  AddrId, Key) ->
     QId = ?QUEUE_TYPE_ASYNC_DELETE_OBJ,
@@ -257,6 +257,7 @@ enqueue('delete', _Type,  AddrId, Key) ->
         ok ->
             ok;
         {error, Cause} ->
-            ?warn("enqueue/1", "qid:~p, addr-id:~p, key:~p, cause:~p",
-                  [QId, AddrId, Key, Cause])
+            ?warn("enqueue/1",
+                  "~p", [ [{qid, QId}, {addr_id, AddrId},
+                           {key, Key}, {cause, Cause}] ])
     end.
