@@ -618,7 +618,6 @@ correct_redundancies_2(ListOfMetadata, ErrorNodes) ->
                 erlang:hd(RetL)
         end,
     {_,Metadata} = H,
-    ?debugVal({Metadata, ErrorNodes}),
 
     {_Dest, CorrectNodes, InconsistentNodes} =
         lists:foldl(
