@@ -45,6 +45,7 @@
          replicate_del_dir/1, replicate_del_dir/2,
          store/2,
          delete/1,
+         delete_sub_dir/2,
          recover/1, recover/2
         ]).
 -export([handle_send/3,
@@ -359,8 +360,13 @@ replicate_del_dir_1(Dir) ->
     Parent = get_directory_from_key(Dir),
     KeyBin = << Parent/binary, "\t", Dir/binary >>,
 
+    %% Remove the directory from a backend-db
     case leo_backend_db_api:delete(?DIR_DB_ID, KeyBin) of
         ok ->
+            %% @TODO: Remove the directory from the parent cache
+            ok = delete_sub_dir(Parent, Dir),
+
+            %% Remove the directory from a cache-server
             leo_directory_cache:delete(Dir);
         {error, Cause} ->
             error_logger:info_msg("~p,~p,~p,~p~n",
@@ -409,6 +415,17 @@ delete_1(Dir, [#redundant_node{available = true,
                                node = Node}|Rest]) ->
     _ = replicate_del_dir(Node, Dir),
     delete_1(Dir, Rest).
+
+
+%% @doc Remove a sub directory from a parent dir
+%%
+-spec(delete_sub_dir(ParentDir, Dir) ->
+             ok when ParentDir::binary(),
+                     Dir::binary()).
+delete_sub_dir(ParentDir, Dir) ->
+    %% @TODO:
+    ?debugVal({ParentDir, Dir}),
+    ok.
 
 
 %% @doc Restore a dir's metadata

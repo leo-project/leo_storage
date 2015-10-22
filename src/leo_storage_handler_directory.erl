@@ -165,8 +165,7 @@ delete_objects_under_dir(Ref, []) ->
     {ok, Ref};
 delete_objects_under_dir(Ref, [undefined|Rest]) ->
     delete_objects_under_dir(Ref, Rest);
-delete_objects_under_dir(Ref, [Dir|Rest]) ->
-    ok = prefix_search_and_remove_objects(Dir),
+delete_objects_under_dir(Ref, [Dir|Rest]) ->    ok = prefix_search_and_remove_objects(Dir),
     delete_objects_under_dir(Ref, Rest).
 
 -spec(delete_objects_under_dir(Nodes, Ref, Dirs) ->
@@ -195,6 +194,24 @@ delete_objects_under_dir([Node|Rest], Ref, Dirs) ->
 prefix_search_and_remove_objects(undefined) ->
     ok;
 prefix_search_and_remove_objects(Dir) ->
+    Ref = erlang:make_ref(),
+    CallbackFun = fun(DirL) ->
+                          lists:foreach(
+                            fun(D) ->
+                                    case ?MODULE:delete(D) of
+                                        ok ->
+                                            ok;
+                                        {error, Cause} ->
+                                            leo_storage_mq:publish(?QUEUE_TYPE_ASYNC_DELETE_DIR, [D]),
+                                            ?error("prefix_search_and_remove_objects/1",
+                                                   "~p", [ [{dir, D}, {cause, Cause}] ])
+                                    end
+                            end, DirL)
+                  end,
+    Pid = spawn(fun() ->
+                        loop(Ref, CallbackFun, sets:new())
+                end),
+
     F = fun(Key, V, Acc) ->
                 Metadata = binary_to_term(V),
                 AddrId = Metadata#?METADATA.addr_id,
@@ -204,22 +221,17 @@ prefix_search_and_remove_objects(Dir) ->
                                  _ ->
                                      false
                              end,
+
                 case IsUnderDir of
                     true ->
                         %% Remove the dir's info from the metdata-layer
-                        KSize = byte_size(Key),
-                        case catch binary:part(Key, (KSize - 1), 1) of
-                            ?BIN_SLASH ->
-                                case ?MODULE:delete(Key) of
-                                    ok ->
-                                        ok;
-                                    {error, Cause} ->
-                                        leo_storage_mq:publish(?QUEUE_TYPE_ASYNC_DELETE_DIR, [Key]),
-                                        ?error("delete_objects_under_dir/1",
-                                               "dir:~p, cause:~p", [Key, Cause])
-                                end;
-                            _ ->
-                                void
+                        Dir_1 = erlang:iolist_to_binary(
+                                  [filename:dirname(Key), <<"/">>]),
+                        case (Dir == Dir_1) of
+                            true ->
+                                void;
+                            false ->
+                                erlang:send(Pid, {append, Ref, Dir_1})
                         end,
 
                         %% Remove the metadata info from the object-storage
@@ -242,8 +254,22 @@ prefix_search_and_remove_objects(Dir) ->
                 end,
                 Acc
         end,
-    leo_object_storage_api:fetch_by_key(Dir, F),
+    _ = leo_object_storage_api:fetch_by_key(Dir, F),
+    erlang:send(Pid, {done, Ref}),
     ok.
+
+
+%% @private
+loop(Ref, CallbackFun, SoFar) ->
+    receive
+        {append, Ref, Dir} ->
+            loop(Ref, CallbackFun, sets:add_element(Dir, SoFar));
+        {done, Ref} ->
+            CallbackFun(sets:to_list(SoFar))
+    after
+        ?DEF_REQ_TIMEOUT ->
+            {error, timeout}
+    end.
 
 
 %% @doc Find already uploaded objects by original-filename
