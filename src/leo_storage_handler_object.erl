@@ -251,8 +251,9 @@ put({Object, Ref}) ->
 %% @doc Insert an object (request from gateway).
 %%
 -spec(put(Object, ReqId) ->
-             ok | {error, any()} when Object::#?OBJECT{},
-                                      ReqId::integer()).
+             {ok, ETag} | {error, any()} when Object::#?OBJECT{},
+                                              ReqId::integer(),
+                                              ETag::{etag, integer()}).
 put(Object, ReqId) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
     replicate_fun(?REP_LOCAL, ?CMD_PUT, Object#?OBJECT.addr_id,
@@ -1036,7 +1037,7 @@ read_and_repair_3(_,_,_) ->
 %% @doc Replicate an object from local-node to remote node
 %% @private
 -spec(replicate_fun(replication(), request_verb(), integer(), #?OBJECT{}) ->
-             ok | {error, any()}).
+             {ok, ETag} | {error, any()} when ETag::{etag, integer()}).
 replicate_fun(?REP_LOCAL, Method, AddrId, Object) ->
     %% Check state of the node
     case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
