@@ -125,6 +125,23 @@ delete(Dir) ->
     delete_objects_under_dir(Dir_1).
 
 
+%% @doc Remove directories
+-spec(bulk_delete(DirL) ->
+             ok when DirL::[binary()]).
+bulk_delete([]) ->
+    ok;
+bulk_delete([Dir|Rest]) ->
+    case ?MODULE:delete(Dir) of
+        ok ->
+            void;
+        {error, Cause} ->
+            leo_storage_mq:publish(?QUEUE_TYPE_ASYNC_DELETE_DIR, [Dir]),
+            ?error("bulk_delete/1",
+                   "~p", [ [{dir, Dir}, {cause, Cause}] ])
+    end,
+    bulk_delete(Rest).
+
+
 %% Deletion object related constants
 %% @doc Remove objects of the under directory
 -spec(delete_objects_under_dir(Dir) ->
@@ -165,7 +182,8 @@ delete_objects_under_dir(Ref, []) ->
     {ok, Ref};
 delete_objects_under_dir(Ref, [undefined|Rest]) ->
     delete_objects_under_dir(Ref, Rest);
-delete_objects_under_dir(Ref, [Dir|Rest]) ->    ok = prefix_search_and_remove_objects(Dir),
+delete_objects_under_dir(Ref, [Dir|Rest]) ->
+    ok = prefix_search_and_remove_objects(Dir),
     delete_objects_under_dir(Ref, Rest).
 
 -spec(delete_objects_under_dir(Nodes, Ref, Dirs) ->
@@ -195,21 +213,8 @@ prefix_search_and_remove_objects(undefined) ->
     ok;
 prefix_search_and_remove_objects(Dir) ->
     Ref = erlang:make_ref(),
-    CallbackFun = fun(DirL) ->
-                          lists:foreach(
-                            fun(D) ->
-                                    case ?MODULE:delete(D) of
-                                        ok ->
-                                            ok;
-                                        {error, Cause} ->
-                                            leo_storage_mq:publish(?QUEUE_TYPE_ASYNC_DELETE_DIR, [D]),
-                                            ?error("prefix_search_and_remove_objects/1",
-                                                   "~p", [ [{dir, D}, {cause, Cause}] ])
-                                    end
-                            end, DirL)
-                  end,
     Pid = spawn(fun() ->
-                        loop(Ref, CallbackFun, sets:new())
+                        collect_dir(Ref, fun bulk_delete/1, sets:new())
                 end),
 
     F = fun(Key, V, Acc) ->
@@ -255,17 +260,19 @@ prefix_search_and_remove_objects(Dir) ->
                 Acc
         end,
     _ = leo_object_storage_api:fetch_by_key(Dir, F),
-    erlang:send(Pid, {done, Ref}),
+    erlang:send(Pid, {finish, Ref}),
     ok.
 
 
 %% @private
-loop(Ref, CallbackFun, SoFar) ->
+collect_dir(Ref, CallbackFun, SoFar) ->
     receive
+        {finish, Ref} ->
+            CallbackFun(sets:to_list(SoFar));
         {append, Ref, Dir} ->
-            loop(Ref, CallbackFun, sets:add_element(Dir, SoFar));
-        {done, Ref} ->
-            CallbackFun(sets:to_list(SoFar))
+            collect_dir(Ref, CallbackFun, sets:add_element(Dir, SoFar));
+        _ ->
+            collect_dir(Ref, CallbackFun, SoFar)
     after
         ?DEF_REQ_TIMEOUT ->
             {error, timeout}
