@@ -39,12 +39,12 @@
 -export([start/0,
          add_container/1, remove_container/1,
          append/1, append/2,
-         append_metadatas/2,
+         bulk_append/2,
          create_directories/1,
          replicate_metadatas/1, replicate_metadatas/2,
-         replicate_del_dir/1, replicate_del_dir/2,
+         replicate_del_dir/2, replicate_del_dir/3,
          store/2,
-         delete/1,
+         delete/1, delete/2,
          delete_sub_dir/2,
          recover/1, recover/2
         ]).
@@ -53,6 +53,8 @@
 -export([get_directories/1,
          get_directory_from_key/1
         ]).
+
+-define(BIN_SLASH, <<"/">>).
 
 
 %%--------------------------------------------------------------------
@@ -191,23 +193,23 @@ append_2(DestNode, Dir, #?METADATA{addr_id = AddrId,
 
 
 %% @doc Append metadatas in bulk
--spec(append_metadatas(Metadatas, SyncOption) ->
+-spec(bulk_append(Metadatas, SyncOption) ->
              [any()] when Metadatas::[#?METADATA{}],
                           SyncOption::dir_sync_option()).
-append_metadatas(Metadatas, SyncOption) ->
-    append_metadatas_1(Metadatas, SyncOption, {[],[]}).
+bulk_append(Metadatas, SyncOption) ->
+    bulk_append_1(Metadatas, SyncOption, {[],[]}).
 
 %% @private
-append_metadatas_1([],_, SoFar) ->
+bulk_append_1([],_, SoFar) ->
     SoFar;
-append_metadatas_1([#?METADATA{key = Key} = Metadata|Rest], SyncOption, {ResL, Errors}) ->
+bulk_append_1([#?METADATA{key = Key} = Metadata|Rest], SyncOption, {ResL, Errors}) ->
     Acc = case append(Metadata, SyncOption) of
               ok ->
                   {[{ok, Key}|ResL], Errors};
               Error ->
                   {ResL, [{Key, Error}|Errors]}
           end,
-    append_metadatas_1(Rest, SyncOption, Acc).
+    bulk_append_1(Rest, SyncOption, Acc).
 
 
 %% @doc Retrieve binary of a directory and a metadata
@@ -322,63 +324,6 @@ replicate_metadatas_1([#?METADATA{key = Key} = Metadata|Rest]) ->
     replicate_metadatas_1(Rest).
 
 
-%% @doc Replicate deletion of a dir
-%%
--spec(replicate_del_dir(Dir) ->
-             ok when Dir::binary()).
-replicate_del_dir(Dir) ->
-    replicate_del_dir_1(Dir).
-
--spec(replicate_del_dir(Node, Dir) ->
-             ok when Node::atom(),
-                     Dir::binary()).
-replicate_del_dir(Node, Dir) ->
-    RPCKey = rpc:async_call(Node, ?MODULE, replicate_del_dir, [Dir]),
-    Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
-              {value, ok} ->
-                  ok;
-              {value, {_, Cause}} ->
-                  {error, Cause};
-              timeout = Cause ->
-                  {error, Cause};
-              Other ->
-                  {error, Other}
-          end,
-    case Ret of
-        ok ->
-            ok;
-        {error,_} = Error ->
-            leo_storage_mq:publish(
-              ?QUEUE_TYPE_ASYNC_DELETE_DIR, [Dir]),
-            Error
-    end.
-
-%% @private
--spec(replicate_del_dir_1(Dir) ->
-             ok when Dir::binary()).
-replicate_del_dir_1(Dir) ->
-    Parent = get_directory_from_key(Dir),
-    KeyBin = << Parent/binary, "\t", Dir/binary >>,
-
-    %% Remove the directory from a backend-db
-    case leo_backend_db_api:delete(?DIR_DB_ID, KeyBin) of
-        ok ->
-            %% @TODO: Remove the directory from the parent cache
-            ok = delete_sub_dir(Parent, Dir),
-
-            %% Remove the directory from a cache-server
-            leo_directory_cache:delete(Dir);
-        {error, Cause} ->
-            error_logger:info_msg("~p,~p,~p,~p~n",
-                                  [{module, ?MODULE_STRING},
-                                   {function, "replicate_del_dir_1/1"},
-                                   {line, ?LINE}, {body, Cause}]),
-            leo_storage_mq:publish(
-              ?QUEUE_TYPE_ASYNC_DELETE_DIR, [Dir]),
-            ok
-    end.
-
-
 %% @doc Store received objects into the directory's db
 %%
 -spec(store(Ref, StackedBin) ->
@@ -396,25 +341,98 @@ store(Ref, StackedBin) ->
 -spec(delete(Dir) ->
              ok | not_found | {error, any()} when Dir::binary()).
 delete(Dir) ->
+    delete(Dir, []).
+
+-spec(delete(Dir, KeyL) ->
+             ok | not_found | {error, any()} when Dir::binary(),
+                                                  KeyL::[binary()]).
+delete(Dir, KeyL) ->
     case leo_redundant_manager_api:get_redundancies_by_key(Dir) of
         {ok, #redundancies{nodes = RedundantNodes}} ->
-            delete_1(Dir, RedundantNodes);
+            delete_1(Dir, KeyL, RedundantNodes);
         Error ->
             Error
     end.
 
 %% @private
-delete_1(_,[]) ->
+delete_1(_,_,[]) ->
     ok;
-delete_1(Dir, [#redundant_node{available = false}|Rest]) ->
-    %% enqueue a message to fix an inconsistent dir
+delete_1(Dir, KeyL, [#redundant_node{available = false}|Rest]) ->
+    %% @TODO: enqueue a message to fix an inconsistent dir
     _ = leo_storage_mq:publish(
           ?QUEUE_TYPE_ASYNC_DELETE_DIR, [Dir]),
-    delete_1(Dir, Rest);
-delete_1(Dir, [#redundant_node{available = true,
-                               node = Node}|Rest]) ->
-    _ = replicate_del_dir(Node, Dir),
-    delete_1(Dir, Rest).
+    delete_1(Dir, KeyL, Rest);
+delete_1(Dir, KeyL, [#redundant_node{available = true,
+                                     node = Node}|Rest]) ->
+    _ = replicate_del_dir(Node, Dir, KeyL),
+    delete_1(Dir, KeyL, Rest).
+
+
+%% @doc Replicate deletion of a dir
+%%
+-spec(replicate_del_dir(Dir, KeyL) ->
+             ok when Dir::binary(),
+                     KeyL::[binary()]).
+replicate_del_dir(Dir, KeyL) ->
+    replicate_del_dir_1([Dir|KeyL]).
+
+-spec(replicate_del_dir(Node, Dir, KeyL) ->
+             ok when Node::atom(),
+                     Dir::binary(),
+                     KeyL::[binary()]).
+replicate_del_dir(Node, Dir, KeyL) ->
+    RPCKey = rpc:async_call(Node, ?MODULE, replicate_del_dir, [Dir, KeyL]),
+    Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
+              {value, ok} ->
+                  ok;
+              {value, {_, Cause}} ->
+                  {error, Cause};
+              timeout = Cause ->
+                  {error, Cause};
+              Other ->
+                  {error, Other}
+          end,
+    case Ret of
+        ok ->
+            ok;
+        {error, Reason} = Error ->
+            ?warn("replicate_del_dir/2", "~p", [{cause, Reason}]),
+            %% @TODO:
+            leo_storage_mq:publish(
+              ?QUEUE_TYPE_ASYNC_DELETE_DIR, [Dir]),
+            Error
+    end.
+
+%% @private
+-spec(replicate_del_dir_1(KeyL) ->
+             ok when KeyL::[binary()]).
+replicate_del_dir_1([]) ->
+    ok;
+replicate_del_dir_1([Path|Rest]) ->
+    Parent = get_directory_from_key(Path),
+    KeyBin = << Parent/binary, "\t", Path/binary >>,
+    ?debugVal({Parent, Path, KeyBin}),
+
+    %% Remove the directory from a backend-db
+    case leo_backend_db_api:delete(?DIR_DB_ID, KeyBin) of
+        ok ->
+            %% Remove the directory from a cache-server
+            case catch binary:part(Path, (byte_size(Path) - 1), 1) of
+                ?BIN_SLASH ->
+                    %% Remove the dir from the parent cache
+                    ok = delete_sub_dir(Parent, Path),
+                    %% Remove the dir from the cache
+                    leo_directory_cache:delete(Path);
+                _ ->
+                    void
+            end;
+        {error, Cause} ->
+            ?warn("replicate_del_dir_1/1", "~p", [{cause, Cause}]),
+            %% @TODO:
+            leo_storage_mq:publish(
+              ?QUEUE_TYPE_ASYNC_DELETE_DIR, [Path])
+    end,
+    replicate_del_dir_1(Rest).
 
 
 %% @doc Remove a sub directory from a parent dir
@@ -447,8 +465,7 @@ restore_dir_metadata([{Dir, {Clock, Timestamp}}|Rest]) ->
     case leo_backend_db_api:put(?DIR_DB_ID,
                                 KeyBin, term_to_binary(Metadata)) of
         ok ->
-            ok = leo_directory_cache:append(Parent, Metadata),
-            ok;
+            leo_directory_cache:append(Parent, Metadata);
         {error, Cause} ->
             error_logger:info_msg("~p,~p,~p,~p~n",
                                   [{module, ?MODULE_STRING},

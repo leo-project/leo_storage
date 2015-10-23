@@ -201,7 +201,7 @@ notify_fun_1(false, Pid, Method, #?METADATA{key = Key} = Metadata) ->
             gen_event:notify(Pid, {Method, Metadata});
         sync ->
             Dir = leo_directory_sync:get_directory_from_key(Key),
-            case leo_directory_sync:append_metadatas(
+            case leo_directory_sync:bulk_append(
                    [#?METADATA{key = Dir,
                                ksize = byte_size(Dir),
                                dsize = -1,

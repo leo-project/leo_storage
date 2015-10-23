@@ -36,9 +36,10 @@
 -export([is_dir/1, ask_is_dir/1,
          add/1,
          delete/1,
+         bulk_delete/1,
          delete_objects_under_dir/1,
          delete_objects_under_dir/2,
-         delete_objects_under_dir/3,
+         delete_objects_under_dir/5,
          prefix_search_and_remove_objects/1,
          find_uploaded_objects_by_key/1,
          get/1, get/2,
@@ -125,21 +126,35 @@ delete(Dir) ->
     delete_objects_under_dir(Dir_1).
 
 
-%% @doc Remove directories
--spec(bulk_delete(DirL) ->
-             ok when DirL::[binary()]).
-bulk_delete([]) ->
+%% @doc Remove objects from the dir-metadata
+-spec(bulk_delete(KeyL) ->
+             ok when KeyL::[binary()]).
+bulk_delete(KeyL) ->
+    bulk_delete_1(KeyL, dict:new()).
+
+%% @private
+bulk_delete_1([], Acc) ->
+    %% Summarize meta-directories
+    DirL = lists:sort(dict:to_list(Acc)),
+    bulk_delete_2(DirL);
+bulk_delete_1([Key|Rest], Acc) ->
+    %% Retrieve directories
+    Dir = leo_directory_sync:get_directory_from_key(Key),
+    Acc_1 = case dict:find(Dir, Acc) of
+                error ->
+                    dict:store(Dir, [Key], Acc);
+                {ok, SoFar} ->
+                    dict:store(Dir, [Key|SoFar], Acc)
+            end,
+    bulk_delete_1(Rest, Acc_1).
+
+%% @private
+bulk_delete_2([]) ->
     ok;
-bulk_delete([Dir|Rest]) ->
-    case ?MODULE:delete(Dir) of
-        ok ->
-            void;
-        {error, Cause} ->
-            leo_storage_mq:publish(?QUEUE_TYPE_ASYNC_DELETE_DIR, [Dir]),
-            ?error("bulk_delete/1",
-                   "~p", [ [{dir, Dir}, {cause, Cause}] ])
-    end,
-    bulk_delete(Rest).
+bulk_delete_2([{Dir, KeyL}|Rest]) ->
+    %% Remove a meta-directry
+    _ = leo_directory_sync:delete(Dir, KeyL),
+    bulk_delete_2(Rest).
 
 
 %% Deletion object related constants
@@ -155,15 +170,19 @@ delete_objects_under_dir(Dir) ->
             case leo_directory_sync:delete(Dir) of
                 ok ->
                     %% remove objects under the directory w/async
-                    Targets = [Dir, undefined],
-                    Ref = make_ref(),
                     case leo_redundant_manager_api:get_members_by_status(?STATE_RUNNING) of
                         {ok, RetL} ->
                             Nodes = [N||#member{node = N} <- RetL],
-                            spawn(fun() ->
-                                          delete_objects_under_dir(Nodes, Ref, Targets)
-                                  end),
-                            ok;
+                            Ref = make_ref(),
+                            DirL = [Dir, undefined],
+
+                            case delete_objects_under_dir(
+                                   Nodes, erlang:length(Nodes), Ref, DirL, []) of
+                                {ok, Ref} ->
+                                    ok;
+                                {error, {Ref, Cause}} ->
+                                    {error, Cause}
+                            end;
                         _ ->
                             leo_storage_mq:publish(?QUEUE_TYPE_ASYNC_DELETE_DIR, [Dir])
                     end;
@@ -175,9 +194,9 @@ delete_objects_under_dir(Dir) ->
     end.
 
 %% @doc Remove objects of the under directory for remote-nodes
--spec(delete_objects_under_dir(Ref, Dirs) ->
+-spec(delete_objects_under_dir(Ref, DirL) ->
              {ok, Ref} when Ref::reference(),
-                            Dirs::[binary()|undefined]).
+                            DirL::[binary()|undefined]).
 delete_objects_under_dir(Ref, []) ->
     {ok, Ref};
 delete_objects_under_dir(Ref, [undefined|Rest]) ->
@@ -186,24 +205,41 @@ delete_objects_under_dir(Ref, [Dir|Rest]) ->
     ok = prefix_search_and_remove_objects(Dir),
     delete_objects_under_dir(Ref, Rest).
 
--spec(delete_objects_under_dir(Nodes, Ref, Dirs) ->
+-spec(delete_objects_under_dir(Nodes, NumOfNodes, Ref, DirL, ErrorL) ->
              {ok, Ref} when Nodes::[atom()],
+                            NumOfNodes::non_neg_integer(),
                             Ref::reference(),
-                            Dirs::[binary()|undefined]).
-delete_objects_under_dir([], Ref,_Dirs) ->
+                            DirL::[binary()|undefined],
+                            ErrorL::[any()]).
+delete_objects_under_dir([], NumOfNodes,
+                         Ref,_DirL, ErrorL) when NumOfNodes =/= erlang:length(ErrorL) ->
     {ok, Ref};
-delete_objects_under_dir([Node|Rest], Ref, Dirs) ->
+delete_objects_under_dir([],_, Ref,_DirL, ErrorL) ->
+    {error, {Ref, ErrorL}};
+delete_objects_under_dir([Node|Rest], NumOfNodes, Ref, DirL, ErrorL) ->
     RPCKey = rpc:async_call(Node, ?MODULE,
-                            delete_objects_under_dir, [Ref, Dirs]),
-    case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
-        {value, {ok, Ref}} ->
-            ok;
-        _Other ->
-            %% Enqueue a failed message into the mq
-            ok = leo_storage_mq:publish(
-                   ?QUEUE_TYPE_ASYNC_DELETE_DIR, Dirs)
-    end,
-    delete_objects_under_dir(Rest, Ref, Dirs).
+                            delete_objects_under_dir, [Ref, DirL]),
+    ErrorL_1 =
+        case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
+            {value, {ok, Ref}} ->
+                ErrorL;
+            Other ->
+                %% Enqueue a failed message into the mq
+                ok = leo_storage_mq:publish(
+                       ?QUEUE_TYPE_ASYNC_DELETE_DIR, DirL),
+                Cause = case Other of
+                            {value, {error, {Ref, Why}}} ->
+                                Why;
+                            {badrpc,_} = Why ->
+                                Why;
+                            timeout = Why ->
+                                Why;
+                            Error ->
+                                Error
+                        end,
+                [{Node, Cause}|ErrorL]
+        end,
+    delete_objects_under_dir(Rest, NumOfNodes, Ref, DirL, ErrorL_1).
 
 
 %% @doc Retrieve object of deletion from object-storage by key
@@ -214,7 +250,7 @@ prefix_search_and_remove_objects(undefined) ->
 prefix_search_and_remove_objects(Dir) ->
     Ref = erlang:make_ref(),
     Pid = spawn(fun() ->
-                        collect_dir(Ref, fun bulk_delete/1, sets:new())
+                        collect_deletion_of_objs(Ref, fun bulk_delete/1, sets:new())
                 end),
 
     F = fun(Key, V, Acc) ->
@@ -229,19 +265,13 @@ prefix_search_and_remove_objects(Dir) ->
 
                 case IsUnderDir of
                     true ->
-                        %% Remove the dir's info from the metdata-layer
-                        Dir_1 = erlang:iolist_to_binary(
-                                  [filename:dirname(Key), <<"/">>]),
-                        case (Dir == Dir_1) of
-                            true ->
-                                void;
-                            false ->
-                                erlang:send(Pid, {append, Ref, Dir_1})
-                        end,
-
                         %% Remove the metadata info from the object-storage
                         case Metadata#?METADATA.del of
                             ?DEL_FALSE ->
+                                %% Synchronous deletion of dir-metadatas
+                                erlang:send(Pid, {append, Ref, Key}),
+
+                                %% Asynchronous deletion of objects
                                 QId = ?QUEUE_TYPE_ASYNC_DELETE_OBJ,
                                 case leo_storage_mq:publish(QId, AddrId, Key) of
                                     ok ->
@@ -265,14 +295,14 @@ prefix_search_and_remove_objects(Dir) ->
 
 
 %% @private
-collect_dir(Ref, CallbackFun, SoFar) ->
+collect_deletion_of_objs(Ref, CallbackFun, SoFar) ->
     receive
         {finish, Ref} ->
-            CallbackFun(sets:to_list(SoFar));
-        {append, Ref, Dir} ->
-            collect_dir(Ref, CallbackFun, sets:add_element(Dir, SoFar));
+            CallbackFun(lists:sort(sets:to_list(SoFar)));
+        {append, Ref, Key} ->
+            collect_deletion_of_objs(Ref, CallbackFun, sets:add_element(Key, SoFar));
         _ ->
-            collect_dir(Ref, CallbackFun, SoFar)
+            collect_deletion_of_objs(Ref, CallbackFun, SoFar)
     after
         ?DEF_REQ_TIMEOUT ->
             {error, timeout}
