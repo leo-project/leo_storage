@@ -117,8 +117,8 @@ add(Dir) ->
 -spec(delete(Dir) ->
              ok | {error, any()} when Dir::binary()).
 delete(Dir) ->
-    Dir_1 = case catch binary:part(Dir, (byte_size(Dir) - 1), 1) of
-                ?BIN_SLASH ->
+    Dir_1 = case catch binary:last(Dir) of
+                $/ ->
                     Dir;
                 _ ->
                     << Dir/binary, ?BIN_SLASH/binary >>
@@ -162,10 +162,10 @@ bulk_delete_2([{Dir, KeyL}|Rest]) ->
 -spec(delete_objects_under_dir(Dir) ->
              ok when Dir::binary()).
 delete_objects_under_dir(Dir) ->
-    case catch binary:part(Dir, (byte_size(Dir) - 1), 1) of
+    case catch binary:last(Dir) of
         {'EXIT',_} ->
             ok;
-        ?BIN_SLASH ->
+        $/ ->
             %% remove the directory w/sync
             case leo_directory_sync:delete(Dir) of
                 ok ->
@@ -224,7 +224,7 @@ delete_objects_under_dir([Node|Rest], NumOfNodes, Ref, DirL, ErrorL) ->
             {value, {ok, Ref}} ->
                 ErrorL;
             Other ->
-                %% Enqueue a failed message into the mq
+                %% @TODO:Enqueue a failed message into the mq
                 ok = leo_storage_mq:publish(
                        ?QUEUE_TYPE_ASYNC_DELETE_DIR, DirL),
                 Cause = case Other of
@@ -250,7 +250,8 @@ prefix_search_and_remove_objects(undefined) ->
 prefix_search_and_remove_objects(Dir) ->
     Ref = erlang:make_ref(),
     Pid = spawn(fun() ->
-                        collect_deletion_of_objs(Ref, fun bulk_delete/1, sets:new())
+                        collect_deletion_of_objs(
+                          Ref, fun bulk_delete/1, sets:new())
                 end),
 
     F = fun(Key, V, Acc) ->
@@ -265,21 +266,23 @@ prefix_search_and_remove_objects(Dir) ->
 
                 case IsUnderDir of
                     true ->
-                        %% Remove the metadata info from the object-storage
+                        %%
+                        %% Remove a dir-metadata from the object-storage
+                        %%
                         case Metadata#?METADATA.del of
                             ?DEL_FALSE ->
-                                %% Synchronous deletion of dir-metadatas
+                                %% Synchronous deletion of a dir-metadatas
                                 erlang:send(Pid, {append, Ref, Key}),
 
-                                %% Asynchronous deletion of objects
+                                %% Asynchronous deletion of an object
                                 QId = ?QUEUE_TYPE_ASYNC_DELETE_OBJ,
                                 case leo_storage_mq:publish(QId, AddrId, Key) of
                                     ok ->
                                         void;
                                     {error, Reason} ->
                                         ?warn("prefix_search_and_remove_objects/1",
-                                              "qid:~p, addr-id:~p, key:~p, cause:~p",
-                                              [QId, AddrId, Key, Reason])
+                                              "~p", [ [{qid, QId}, {addr_id, AddrId},
+                                                       {key, Key}, {cause, Reason}] ])
                                 end;
                             _ ->
                                 void
@@ -295,14 +298,25 @@ prefix_search_and_remove_objects(Dir) ->
 
 
 %% @private
-collect_deletion_of_objs(Ref, CallbackFun, SoFar) ->
+collect_deletion_of_objs(Ref, CallbackFun, Sets) ->
     receive
         {finish, Ref} ->
-            CallbackFun(lists:sort(sets:to_list(SoFar)));
+            CallbackFun(lists:sort(sets:to_list(Sets)));
         {append, Ref, Key} ->
-            collect_deletion_of_objs(Ref, CallbackFun, sets:add_element(Key, SoFar));
+            Sets_1 =
+                case (sets:size(Sets) >= (?DEF_MAX_CACHE_DIR_METADATA + 1)) of
+                    true ->
+                        CallbackFun(
+                          lists:sort(
+                            sets:to_list(
+                              sets:add_element(Key, Sets)))),
+                        sets:new();
+                    false ->
+                        sets:add_element(Key, Sets)
+                end,
+            collect_deletion_of_objs(Ref, CallbackFun, Sets_1);
         _ ->
-            collect_deletion_of_objs(Ref, CallbackFun, SoFar)
+            collect_deletion_of_objs(Ref, CallbackFun, Sets)
     after
         ?DEF_REQ_TIMEOUT ->
             {error, timeout}
@@ -553,12 +567,10 @@ ask_to_find_by_parent_dir_1(Dir, Marker, MaxKeys) ->
              NewDir when Dir::binary(),
                          NewDir::binary()).
 get_managed_dir_name(Dir) ->
-    case binary:last(Dir) of
-        %% "/"
-        16#2f ->
+    case catch binary:last(Dir) of
+        $/ ->
             << Dir/binary, "\t" >>;
-        %% "*"
-        16#2a ->
+        $* ->
             binary:part(Dir, {0, byte_size(Dir) - 1});
         _Other ->
             << Dir/binary, "/\t" >>
