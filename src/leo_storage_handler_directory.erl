@@ -87,7 +87,7 @@ is_dir_1([#redundant_node{node = Node}|Rest], Dir) ->
             erlang:element(2, Reply);
         {error, Reason} ->
             ?error("is_dir_1/2",
-                   "~p", [ [dir, Dir}, {cause, Reason}] ]),
+                   "~p", [ [{dir, Dir}, {cause, Reason}] ]),
             is_dir_1(Rest, Dir)
     end.
 
