@@ -81,8 +81,8 @@ defer_stack(#?OBJECT{addr_id = AddrId,
                                   void;
                               {error, Cause}->
                                   ?warn("defer_stack/1",
-                                        ":~p", [ [{key, binary_to_list(Object#?OBJECT.key)},
-                                                  {cause, Cause}] ]),
+                                        "~p", [ [{key, binary_to_list(Object#?OBJECT.key)},
+                                                 {cause, Cause}] ]),
                                   QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
                                   case leo_storage_mq:publish(
                                          QId, AddrId, Key) of
@@ -273,7 +273,8 @@ compare_metadata_1({_,Cause}, #?METADATA{cluster_id = ClusterId,
                                          addr_id = AddrId,
                                          key = Key}) ->
     ?warn("comapare_metadata_1/2",
-          "~p", [[{key, binary_to_list(Key)}, {cause, Cause}] ]),
+          "~p", [ [{key, binary_to_list(Key)},
+                   {cause, Cause}] ]),
 
     QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
     case leo_storage_mq:publish(QId, ClusterId, AddrId, Key) of
@@ -418,7 +419,7 @@ slice(StackedObjs) ->
         {ok, Object, Rest_3}
     catch
         _:Cause ->
-            ?error("slice/1", "cause:~p",[Cause]),
+            ?error("slice/1", "~p",[{cause, Cause}]),
             {error, invalid_format}
     end.
 

@@ -121,7 +121,8 @@ register_in_monitor_1([Node|Rest], Pid, RequestedTimes) ->
                           false;
                       Error ->
                           ?error("register_in_monitor/1",
-                                 "manager:~w, cause:~p", [Node_1, Error]),
+                                 "~p", [ [{manager, Node_1},
+                                          {cause, Error}] ]),
                           false
                   end;
               false ->
@@ -496,8 +497,9 @@ rebalance_1([{VNodeId, Node}|T]) ->
         ok ->
             rebalance_1(T);
         {error, Cause} ->
-            ?warn("rebalance_1/1", "qid:~p, vnodeid:~p, node:~p, cause:~p",
-                  [QId, VNodeId, Node, Cause]),
+            ?warn("rebalance_1/1", "~p",
+                  [ [{qid, QId}, {vnode_id, VNodeId},
+                     {node, Node}, {cause, Cause}] ]),
             {error, Cause}
     end.
 
