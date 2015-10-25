@@ -267,6 +267,6 @@ slice(Objects) ->
         {ok, Metadata, Object, Rest_5}
     catch
         _:Cause ->
-            ?error("slice/1","cause:~p",[Cause]),
+            ?error("slice/1", "~p", [{cause, Cause}]),
             {error, invalid_format}
     end.
