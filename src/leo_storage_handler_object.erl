@@ -59,7 +59,7 @@
 -define(output_warn(Fun, _Key, _MSG), ok).
 -else.
 -define(output_warn(Fun, _Key, _MSG),
-        ?warn(Fun, "~p", [ [{key, _Key}, {cause, _MSG}] ])).
+        ?warn(Fun, [{key, _Key}, {cause, _MSG}])).
 -endif.
 
 
@@ -511,8 +511,8 @@ delete_objects_under_dir([Node|Rest], Ref, Keys) ->
                     void;
                 {error, Cause} ->
                     ?warn("delete_objects_under_dir/3",
-                          "~p", [ [{qid, QId}, {node, Node},
-                                   {keys, Keys}, {cause, Cause}] ])
+                          [{qid, QId}, {node, Node},
+                           {keys, Keys}, {cause, Cause}])
             end
     end,
     delete_objects_under_dir(Rest, Ref, Keys).
@@ -835,8 +835,8 @@ prefix_search_and_remove_objects(ParentDir) ->
                                   void;
                               {error, Cause} ->
                                   ?warn("prefix_search_and_remove_objects/1",
-                                        "~p", [ [{qid, QId}, {addr_id, AddrId},
-                                                 {key, Key}, {cause, Cause}] ])
+                                        [{qid, QId}, {addr_id, AddrId},
+                                         {key, Key}, {cause, Cause}])
                           end;
                       _ ->
                           Acc
@@ -1084,7 +1084,7 @@ replicate_fun(?REP_REMOTE, Method, Object) ->
         {error, Ref, unavailable = Cause} ->
             {error, Cause};
         {error, Ref, Cause} ->
-            ?warn("replicate_fun/3", "~p", [{cause, Cause}]),
+            ?warn("replicate_fun/3", [{cause, Cause}]),
             {error, Cause}
     end.
 

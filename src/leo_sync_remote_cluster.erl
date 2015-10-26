@@ -81,8 +81,8 @@ defer_stack(#?OBJECT{addr_id = AddrId,
                                   void;
                               {error, Cause}->
                                   ?warn("defer_stack/1",
-                                        "~p", [ [{key, binary_to_list(Object#?OBJECT.key)},
-                                                 {cause, Cause}] ]),
+                                        [{key, binary_to_list(Object#?OBJECT.key)},
+                                                 {cause, Cause}]),
                                   QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
                                   case leo_storage_mq:publish(
                                          QId, AddrId, Key) of
@@ -90,16 +90,16 @@ defer_stack(#?OBJECT{addr_id = AddrId,
                                           void;
                                       {error, Cause} ->
                                           ?warn("defer_stack/1",
-                                                "~p", [ [{addr_id, AddrId},
-                                                         {key, Key}, {cause, Cause}] ])
+                                                [{addr_id, AddrId},
+                                                 {key, Key}, {cause, Cause}])
                                   end
                           end;
                       not_found ->
                           void;
                       {error, Cause} ->
                           ?warn("defer_stack/1",
-                                "~p", [ [{key, binary_to_list(Object#?OBJECT.key)},
-                                         {cause, Cause}] ])
+                                [{key, binary_to_list(Object#?OBJECT.key)},
+                                 {cause, Cause}])
                   end
           end),
     ok;
@@ -248,8 +248,8 @@ compare_metadata_1({ok, MetaBin}, #?METADATA{cluster_id = ClusterId,
                     ok;
                 {error, Cause} ->
                     ?warn("compare_metadata_1/2",
-                          "~p", [ [{qid, QId}, {cluster_id, ClusterId},
-                                   {addr_id, AddrId}, {key, Key}, {cause, Cause}] ]),
+                          [{qid, QId}, {cluster_id, ClusterId},
+                           {addr_id, AddrId}, {key, Key}, {cause, Cause}]),
                     ok
             end
     end;
@@ -265,16 +265,16 @@ compare_metadata_1(not_found, #?METADATA{cluster_id = ClusterId,
             ok;
         {error, Cause} ->
             ?warn("compare_metadata_1/2",
-                  "~p", [ [{qid, QId}, {cluster_id, ClusterId},
-                           {addr_id, AddrId}, {key, Key}, {cause, Cause}] ]),
+                  [{qid, QId}, {cluster_id, ClusterId},
+                   {addr_id, AddrId}, {key, Key}, {cause, Cause}]),
             ok
     end;
 compare_metadata_1({_,Cause}, #?METADATA{cluster_id = ClusterId,
                                          addr_id = AddrId,
                                          key = Key}) ->
     ?warn("comapare_metadata_1/2",
-          "~p", [ [{key, binary_to_list(Key)},
-                   {cause, Cause}] ]),
+          [{key, binary_to_list(Key)},
+           {cause, Cause}]),
 
     QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
     case leo_storage_mq:publish(QId, ClusterId, AddrId, Key) of
@@ -282,8 +282,8 @@ compare_metadata_1({_,Cause}, #?METADATA{cluster_id = ClusterId,
             ok;
         {error, Cause} ->
             ?warn("compare_metadata/1",
-                  "~p", [ [{qid, QId}, {cluster_id, ClusterId},
-                           {addr_id, AddrId}, {key, Key}, {cause, Cause}] ]),
+                  [{qid, QId}, {cluster_id, ClusterId},
+                   {addr_id, AddrId}, {key, Key}, {cause, Cause}]),
             ok
     end.
 
@@ -320,8 +320,8 @@ handle_fail(UId, [{AddrId, Key}|Rest] = _StackInfo) ->
                     void;
                 {error, Cause} ->
                     ?warn("handle_fail/2",
-                          "~p", [ [{qid, QId}, {addr_id, AddrId},
-                                   {key, Key}, {cause, Cause}] ])
+                          [{qid, QId}, {addr_id, AddrId},
+                           {key, Key}, {cause, Cause}])
             end;
         ClusterId ->
             QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
@@ -330,8 +330,8 @@ handle_fail(UId, [{AddrId, Key}|Rest] = _StackInfo) ->
                     void;
                 {error, Cause} ->
                     ?warn("handle_fail/2",
-                          "~p", [ [{qid, QId}, {cluster_id, ClusterId},
-                                   {addr_id, AddrId}, {key, Key}, {cause, Cause}] ])
+                          [{qid, QId}, {cluster_id, ClusterId},
+                           {addr_id, AddrId}, {key, Key}, {cause, Cause}])
             end
     end,
     handle_fail(UId, Rest).
@@ -419,7 +419,7 @@ slice(StackedObjs) ->
         {ok, Object, Rest_3}
     catch
         _:Cause ->
-            ?error("slice/1", "~p",[{cause, Cause}]),
+            ?error("slice/1", [{cause, Cause}]),
             {error, invalid_format}
     end.
 
@@ -442,7 +442,7 @@ replicate(ClusterId, Object) ->
                           {error, Cause}
                   end;
               {error, Cause} ->
-                  ?warn("replicate/2","~p", [{cause, Cause}]),
+                  ?warn("replicate/2", [{cause, Cause}]),
                   {error, Cause}
           end,
     replicate_1(Ret).
@@ -537,7 +537,7 @@ enqueue_fail_replication([{AddrId, Key}|Rest], ClusterId) ->
             void;
         {error, Cause} ->
             ?warn("enqueue_fail_replication/2",
-                  "~p", [ [{qid, QId}, {cluster_id, ClusterId},
-                           {addr_id, AddrId}, {key, Key}, {cause, Cause}] ])
+                  [{qid, QId}, {cluster_id, ClusterId},
+                   {addr_id, AddrId}, {key, Key}, {cause, Cause}])
     end,
     enqueue_fail_replication(Rest, ClusterId).

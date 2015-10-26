@@ -116,7 +116,7 @@ loop(R, Ref, From, NumOfNodes, {ReqId, Key, E} = Args, Callback) ->
                     ok = leo_storage_msg_collector:notify(?ERROR_MSG_TIMEOUT, get, Key),
                     %% reply error
                     Cause = timeout,
-                    ?warn("loop/6", "~p",  [ [{key, Key}, {cause, Cause}] ]),
+                    ?warn("loop/6", [{key, Key}, {cause, Cause}]),
                     Callback({error, [Cause]});
                 false ->
                     void
@@ -160,8 +160,8 @@ compare(Ref, Pid, RPCKey, Node, #state{metadata = #?METADATA{addr_id = AddrId,
             ok;
         {error, {Node, Reason}} ->
             ?warn("compare/4",
-                  "~p", [ [{node, Node}, {addr_id, AddrId},
-                           {key, Key}, {clock, Clock}, {cause, Reason}] ]),
+                  [{node, Node}, {addr_id, AddrId},
+                   {key, Key}, {clock, Clock}, {cause, Reason}]),
             enqueue(AddrId, Key)
     end,
     erlang:send(Pid, {Ref, Ret}).
@@ -179,6 +179,6 @@ enqueue(AddrId, Key) ->
             void;
         {error, Cause} ->
             ?warn("enqueue/1",
-                  "~p", [ [{qid, QId}, {addr_id, AddrId},
-                           {key, Key}, {cause, Cause}] ])
+                  [{qid, QId}, {addr_id, AddrId},
+                   {key, Key}, {cause, Cause}])
     end.

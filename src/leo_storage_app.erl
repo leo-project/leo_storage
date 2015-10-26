@@ -147,7 +147,7 @@ after_proc({ok, Pid}) ->
     %% Launch others
     after_proc_1(IsAliveManagers, Pid, Managers);
 after_proc(Error) ->
-    ?error("after_proc/1", "~p", [{cause, Error}]),
+    ?error("after_proc/1", [{cause, Error}]),
     init:stop().
 
 %% @private
@@ -202,13 +202,12 @@ after_proc_1(true, Pid, Managers) ->
         {ok, Pid}
     catch
         _:Cause ->
-            ?error("after_proc_1/3", "~p", [{cause, Cause}]),
+            ?error("after_proc_1/3", [{cause, Cause}]),
             init:stop()
     end;
 after_proc_1(false,_,Managers) ->
-    ?error("after_proc_1/3", "~p",
-           [ [{manager_nodes, Managers},
-              {cause, "Not alive managers"}] ]),
+    ?error("after_proc_1/3", [{manager_nodes, Managers},
+                              {cause, "Not alive managers"}]),
     init:stop().
 
 

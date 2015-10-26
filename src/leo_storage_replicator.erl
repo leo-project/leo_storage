@@ -115,8 +115,8 @@ replicate_1([], Ref,_From, #state{method   = Method,
             %% reply error
             Cause = timeout,
             ?warn("replicate/5",
-                  "~p", [ [{method, Method},
-                           {key, Key}, {cause, Cause}] ]),
+                  [{method, Method},
+                   {key, Key}, {cause, Cause}]),
             Callback({error, [Cause]})
     end;
 %% for local-node
@@ -203,7 +203,7 @@ loop(N, W, ResL, Ref, From, #state{method = Method,
                     %% set reply
                     Cause = timeout,
                     ?warn("loop/6",
-                          "~p", [ [{method, Method}, {key, Key}, {cause, Cause}] ]),
+                          [{method, Method}, {key, Key}, {cause, Cause}]),
                     Callback({error, [Cause]});
                 false ->
                     void
@@ -230,8 +230,8 @@ replicate_fun(Ref, #req_params{pid     = Pid,
                    {Ref, {error, {node(), Cause}}};
                {error, Ref, Cause} ->
                    ?warn("replicate_fun/2",
-                         "~p", [ [{key, Key}, {node, local},
-                                  {req_id, ReqId}, {cause, Cause}] ]),
+                         [{key, Key}, {node, local},
+                          {req_id, ReqId}, {cause, Cause}]),
                    {Ref, {error, {node(), Cause}}}
            end,
     erlang:send(Pid, Ret).
@@ -251,8 +251,8 @@ enqueue('put', ?ERR_TYPE_REPLICATE_DATA = Type,  AddrId, Key) ->
             ok;
         {error, Cause} ->
             ?warn("enqueue/1",
-                  "~p", [ [{qid, QId}, {addr_id, AddrId},
-                           {key, Key}, {type, Type}, {cause, Cause}] ])
+                  [{qid, QId}, {addr_id, AddrId},
+                   {key, Key}, {type, Type}, {cause, Cause}])
     end;
 enqueue('delete', _Type,  AddrId, Key) ->
     QId = ?QUEUE_TYPE_ASYNC_DELETION,
@@ -261,6 +261,6 @@ enqueue('delete', _Type,  AddrId, Key) ->
             ok;
         {error, Cause} ->
             ?warn("enqueue/1",
-                  "~p", [ [{qid, QId}, {addr_id, AddrId},
-                           {key, Key}, {cause, Cause}] ])
+                  [{qid, QId}, {addr_id, AddrId},
+                   {key, Key}, {cause, Cause}])
     end.
