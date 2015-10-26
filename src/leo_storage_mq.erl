@@ -269,7 +269,7 @@ handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
             ?error("handle_call/1 - QUEUE_ID_PER_OBJECT",
-                   "~p", [{cause, Cause}]),
+                   [{cause, Cause}]),
             {error, Cause};
         #inconsistent_data_message{addr_id = AddrId,
                                    key     = Key,
@@ -279,8 +279,8 @@ handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
                     ok;
                 {error, Cause} ->
                     ?warn("handle_call/1 - consume",
-                          "~p", [ [{addr_id, AddrId},
-                                   {key, Key}, {cause, Cause}] ]),
+                          [{addr_id, AddrId},
+                           {key, Key}, {cause, Cause}]),
                     publish(?QUEUE_TYPE_PER_OBJECT, AddrId, Key, ErrorType),
                     {error, Cause}
             end;
@@ -292,7 +292,7 @@ handle_call({consume, ?QUEUE_ID_SYNC_BY_VNODE_ID, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
             ?error("handle_call/1 - QUEUE_ID_SYNC_BY_VNODE_ID",
-                   "~p", [{cause, Cause}]),
+                   [{cause, Cause}]),
             {error, Cause};
         #sync_unit_of_vnode_message{vnode_id = ToVNodeId,
                                     node     = Node} ->
@@ -309,7 +309,7 @@ handle_call({consume, ?QUEUE_ID_REBALANCE, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
             ?error("handle_call/1 - QUEUE_ID_REBALANCE",
-                   "~p", [{cause, Cause}]),
+                   [{cause, Cause}]),
             {error, Cause};
         #rebalance_message{} = Msg ->
             rebalance_1(Msg);
@@ -321,7 +321,7 @@ handle_call({consume, ?QUEUE_ID_ASYNC_DELETE_OBJ, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
             ?error("handle_call/1 - QUEUE_ID_ASYNC_DELETE_OBJ",
-                   "~p", [{cause, Cause}]),
+                   [{cause, Cause}]),
             {error, Cause};
         #async_deletion_message{addr_id  = AddrId,
                                 key      = Key} ->
@@ -345,7 +345,7 @@ handle_call({consume, ?QUEUE_ID_RECOVERY_NODE, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
             ?error("handle_call/1 - QUEUE_ID_RECOVERY_NODE",
-                   "~p", [{cause, Cause}]),
+                   [{cause, Cause}]),
             {error, Cause};
         #recovery_node_message{node = Node} ->
             recover_node(Node);
@@ -357,7 +357,7 @@ handle_call({consume, ?QUEUE_ID_SYNC_OBJ_WITH_DC, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
             ?error("handle_call/1 - QUEUE_ID_SYNC_OBJ_WITH_DC",
-                   "~p", [{cause, Cause}]),
+                   [{cause, Cause}]),
             {error, Cause};
         #inconsistent_data_with_dc{} = Msg ->
             fix_consistency_between_clusters(Msg);
@@ -369,7 +369,7 @@ handle_call({consume, ?QUEUE_ID_COMP_META_WITH_DC, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
             ?error("handle_call/1 - QUEUE_ID_COMP_META_WITH_DC",
-                   "~p", [{casue, Cause}]),
+                   [{casue, Cause}]),
             {error, Cause};
         #comparison_metadata_with_dc{cluster_id = ClusterId,
                                      list_of_addrid_and_key = AddrAndKeyList} ->
@@ -395,7 +395,7 @@ handle_call({consume, ?QUEUE_ID_ASYNC_RECOVER_DIR, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         {'EXIT', Cause} ->
             ?error("handle_call/1 - QUEUE_ID_ASYNC_RECOVER_DIR",
-                   "~p", [{cause, Cause}]),
+                   [{cause, Cause}]),
             {error, Cause};
         #?METADATA{addr_id = AddrId,
                    key = Key} = Metadata ->
@@ -569,7 +569,7 @@ correct_redundancies(Key) ->
             correct_redundancies_1(Key, AddrId, Redundancies_1, [], []);
         {error, Cause} ->
             ?warn("correct_redundancies/1",
-                  "~p", [ [{key, Key}, {cause, Cause}] ]),
+                  [{key, Key}, {cause, Cause}]),
             {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
     end.
 
@@ -683,19 +683,19 @@ correct_redundancies_4({error, eof},_InconsistentNodes,_NodeL, Metadata) ->
             end;
         false ->
             ?error("correct_redundancies_4/4",
-                   "~p", [ [{metadata, Metadata},
-                            {cause, 'broken_object'}] ]),
+                   [{metadata, Metadata},
+                    {cause, 'broken_object'}]),
             ok
     end;
 correct_redundancies_4({error, not_found = Why},_InconsistentNodes, [Node|_Rest], Metadata) ->
     ?warn("correct_redundancies_4/4",
-          "~p", [ [{node, Node},
-                   {metadata, Metadata}, {cause, Why}] ]),
+          [{node, Node},
+           {metadata, Metadata}, {cause, Why}]),
     ok;
 correct_redundancies_4({error, Why}, InconsistentNodes, [Node|Rest], Metadata) ->
     ?warn("correct_redundancies_4/4",
-          "~p", [ [{inconsistent_nodes, InconsistentNodes},
-                   {node, Node}, {metadata, Metadata}, {cause, Why}] ]),
+          [{inconsistent_nodes, InconsistentNodes},
+           {node, Node}, {metadata, Metadata}, {cause, Why}]),
     correct_redundancies_3(InconsistentNodes, Rest, Metadata).
 
 
@@ -723,8 +723,8 @@ rebalance_1(#rebalance_message{node = Node,
             end;
         {error, Cause} ->
             ?warn("rebalance_1/1",
-                  "~p", [ [{node, Node}, {addr_id, AddrId},
-                           {key, Key}, {cause, Cause}] ]),
+                  [{node, Node}, {addr_id, AddrId},
+                   {key, Key}, {cause, Cause}]),
             ok = publish(?QUEUE_TYPE_PER_OBJECT,
                          AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
             {error, inactive}
@@ -745,8 +745,8 @@ rebalance_2({ok, Redundancies}, #rebalance_message{node = Node,
                     ok;
                 not_found = Cause ->
                     ?warn("rebalance_2/2",
-                          "~p", [ [{addr_id, AddrId}, {key, Key},
-                                   {cause, Cause}] ]),
+                          [{addr_id, AddrId}, {key, Key},
+                           {cause, Cause}]),
                     ok;
                 Error ->
                     ok = publish(?QUEUE_TYPE_PER_OBJECT,
@@ -755,8 +755,8 @@ rebalance_2({ok, Redundancies}, #rebalance_message{node = Node,
             end;
         false ->
             ?warn("rebalance_2/2",
-                  "~p", [ [{node, Node}, {addr_id, AddrId},
-                           {key, Key}, {cause, 'node_not_found'}] ]),
+                  [{node, Node}, {addr_id, AddrId},
+                   {key, Key}, {cause, 'node_not_found'}]),
             ok = publish(?QUEUE_TYPE_PER_OBJECT,
                          AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
             ok
@@ -804,8 +804,8 @@ notify_rebalance_message_to_manager(VNodeId) ->
                                   true;
                               {_, Cause} ->
                                   ?error("notify_rebalance_message_to_manager/1",
-                                         "~p", [ [{manager, Manager1},
-                                                  {vnode_id, VNodeId}, {cause, Cause}] ]),
+                                         [{manager, Manager1},
+                                          {vnode_id, VNodeId}, {cause, Cause}]),
                                   Res;
                               timeout ->
                                   Res

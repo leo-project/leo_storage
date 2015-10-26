@@ -396,7 +396,7 @@ replicate_del_dir(Node, Dir, KeyL) ->
         ok ->
             ok;
         {error, Reason} = Error ->
-            ?warn("replicate_del_dir/2", "~p", [{cause, Reason}]),
+            ?warn("replicate_del_dir/2", [{cause, Reason}]),
             %% @TODO:
             leo_storage_mq:publish(
               ?QUEUE_TYPE_ASYNC_DELETE_DIR, [Dir]),
@@ -427,7 +427,7 @@ replicate_del_dir_1([Path|Rest]) ->
                     void
             end;
         {error, Cause} ->
-            ?warn("replicate_del_dir_1/1", "~p", [{cause, Cause}]),
+            ?warn("replicate_del_dir_1/1", [{cause, Cause}]),
             %% @TODO:
             leo_storage_mq:publish(
               ?QUEUE_TYPE_ASYNC_DELETE_DIR, [Path])
@@ -801,13 +801,13 @@ enqueue(#?METADATA{key = Key} = Metadata) ->
                                               Metadata#?METADATA{addr_id = AddrId}) of
                 {'EXIT', Cause} ->
                     ?error("enqueue/1",
-                           "key:~p, cause:~p", [Key, Cause]);
+                           [{key, Key}, {cause, Cause}]);
                 _ ->
                     void
             end,
             ok;
         {error, Cause} ->
             ?error("enqueue/1",
-                   "key:~p, cause:~p", [Key, Cause]),
+                   [{key, Key}, {cause, Cause}]),
             ok
     end.

@@ -142,7 +142,7 @@ handle_call({get, Dir}, _From, #state{directories = DirL} = State) ->
                         not_found;
                     {_, Cause} ->
                         ?error("handle_call/3 - get",
-                               "dir:~p, cause:~p", [Dir, Cause]),
+                               [{dir, Dir}, {cause, Cause}]),
                         {error, Cause}
                 end
         end,
@@ -157,7 +157,7 @@ handle_call({delete, Dir}, _From, #state{directories = DirL} = State) ->
                 case catch dict:erase(Dir, DirL) of
                     {'EXIT', Cause}->
                         ?error("handle_call/3 - delete",
-                               "dir:~p, cause:~p", [Dir, Cause]),
+                               [{dir, Dir}, {cause, Cause}]),
                         State;
                     DirL_1 ->
                         State#state{directories = DirL_1}
@@ -190,7 +190,7 @@ handle_call({merge, Dir, MetadataL}, _From, #state{directories = DirL} = State) 
                             merge_fun(Dir, MetadataL);
                         {_, Cause} ->
                             ?error("handle_call/3 - get",
-                                   "dir:~p, cause:~p", [Dir, Cause]),
+                                   [{dir, Dir}, {cause, Cause}]),
                             {error, Cause}
                     end
             end,

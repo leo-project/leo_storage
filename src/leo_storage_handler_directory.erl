@@ -87,7 +87,7 @@ is_dir_1([#redundant_node{node = Node}|Rest], Dir) ->
             erlang:element(2, Reply);
         {error, Reason} ->
             ?error("is_dir_1/2",
-                   "~p", [ [{dir, Dir}, {cause, Reason}] ]),
+                   [{dir, Dir}, {cause, Reason}]),
             is_dir_1(Rest, Dir)
     end.
 
@@ -282,8 +282,8 @@ prefix_search_and_remove_objects(Dir) ->
                                         void;
                                     {error, Reason} ->
                                         ?warn("prefix_search_and_remove_objects/1",
-                                              "~p", [ [{qid, QId}, {addr_id, AddrId},
-                                                       {key, Key}, {cause, Reason}] ])
+                                              [{qid, QId}, {addr_id, AddrId},
+                                               {key, Key}, {cause, Reason}])
                                 end;
                             _ ->
                                 void
