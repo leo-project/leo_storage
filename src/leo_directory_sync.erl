@@ -45,7 +45,7 @@
          replicate_del_dir/2, replicate_del_dir/3,
          store/2,
          delete/1, delete/2,
-         delete_sub_dir/2,
+         delete_sub_dir/2, delete_sub_dir/3,
          recover/1, recover/2
         ]).
 -export([handle_send/3,
@@ -358,7 +358,7 @@ delete(Dir, KeyL) ->
 delete_1(_,_,[]) ->
     ok;
 delete_1(Dir, KeyL, [#redundant_node{available = false}|Rest]) ->
-    %% @TODO: enqueue a message to fix an inconsistent dir
+    %% Enqueue a message to fix an inconsistent dir
     _ = leo_storage_mq:publish(
           ?QUEUE_TYPE_ASYNC_DELETE_DIR, [Dir]),
     delete_1(Dir, KeyL, Rest);
@@ -397,7 +397,6 @@ replicate_del_dir(Node, Dir, KeyL) ->
             ok;
         {error, Reason} = Error ->
             ?warn("replicate_del_dir/2", [{cause, Reason}]),
-            %% @TODO:
             leo_storage_mq:publish(
               ?QUEUE_TYPE_ASYNC_DELETE_DIR, [Dir]),
             Error
@@ -411,7 +410,6 @@ replicate_del_dir_1([]) ->
 replicate_del_dir_1([Path|Rest]) ->
     Parent = get_directory_from_key(Path),
     KeyBin = << Parent/binary, "\t", Path/binary >>,
-    ?debugVal({Parent, Path, KeyBin}),
 
     %% Remove the directory from a backend-db
     case leo_backend_db_api:delete(?DIR_DB_ID, KeyBin) of
@@ -428,7 +426,6 @@ replicate_del_dir_1([Path|Rest]) ->
             end;
         {error, Cause} ->
             ?warn("replicate_del_dir_1/1", [{cause, Cause}]),
-            %% @TODO:
             leo_storage_mq:publish(
               ?QUEUE_TYPE_ASYNC_DELETE_DIR, [Path])
     end,
@@ -441,9 +438,81 @@ replicate_del_dir_1([Path|Rest]) ->
              ok when ParentDir::binary(),
                      Dir::binary()).
 delete_sub_dir(ParentDir, Dir) ->
-    %% @TODO:
-    ?debugVal({ParentDir, Dir}),
-    ok.
+    case leo_redundant_manager_api:get_redundancies_by_key(ParentDir) of
+        {ok, #redundancies{nodes = RedundantNodes}} ->
+            delete_sub_dir_1(RedundantNodes, ParentDir, Dir);
+        {error, Cause} ->
+            %% @TODO: enqueue replication miss of dir-deletion
+            ?warn("replicate_del_dir_1/1", [{cause, Cause}]),
+            ok
+    end.
+
+-spec(delete_sub_dir(Ref, ParentDir, Dir) ->
+             {ok, Ref} | {error, {Ref, Cause}} when Ref::reference(),
+                                                    ParentDir::binary(),
+                                                    Dir::binary(),
+                                                    Cause::any()).
+delete_sub_dir(Ref, ParentDir, Dir) ->
+    case leo_cache_api:get(ParentDir) of
+        {ok, CacheBin} ->
+            Cache = binary_to_term(CacheBin),
+
+            case lists:keyfind(Dir, 2, Cache) of
+                false ->
+                    {ok, Ref};
+                _Tuple ->
+                    %% update the cache
+                    Ret = case lists:keydelete(Dir, 2, Cache) of
+                              [] ->
+                                  leo_cache_api:delete(ParentDir);
+                              Cache_1 ->
+                                  leo_cache_api:put(
+                                    ParentDir, term_to_binary(Cache_1))
+                          end,
+                    case Ret of
+                        ok ->
+                            {ok, Ref};
+                        {error, Cause} ->
+                            {ok, {Ref, Cause}}
+                    end
+            end;
+        not_found ->
+            {ok, Ref};
+        {error, Cause} ->
+            {error, {Ref, Cause}}
+    end.
+
+
+%% @private
+delete_sub_dir_1([],_ParentDir,_Dir) ->
+    ok;
+delete_sub_dir_1([#redundant_node{node = Node,
+                                  available = false}|Rest], ParentDir, Dir) ->
+    %% @TODO: enqueue replication miss of dir-deletion
+    ?warn("replicate_del_dir_1/1", [{node, Node}, {cause, not_available}]),
+    delete_sub_dir_1(Rest, ParentDir, Dir);
+delete_sub_dir_1([#redundant_node{node = Node}|Rest], ParentDir, Dir) ->
+    Ref = make_ref(),
+    RPCKey = rpc:async_call(Node, ?MODULE, delete_sub_dir, [Ref, ParentDir, Dir]),
+    Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
+              {value, {ok, Ref}} ->
+                  ok;
+              {value, {error, {Ref, Cause}}} ->
+                  {error, Cause};
+              timeout = Cause ->
+                  {error, Cause};
+              Other ->
+                  {error, Other}
+          end,
+
+    case Ret of
+        ok ->
+            void;
+        {error, Why} ->
+            %% @TODO: enqueue replication miss of dir-deletion
+            ?warn("replicate_del_dir_1/1", [{node, Node}, {cause, Why}])
+    end,
+    delete_sub_dir_1(Rest, ParentDir, Dir).
 
 
 %% @doc Restore a dir's metadata

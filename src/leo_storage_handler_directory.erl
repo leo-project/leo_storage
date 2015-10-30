@@ -225,7 +225,7 @@ delete_objects_under_dir([Node|Rest], NumOfNodes, Ref, DirL, ErrorL) ->
             {value, {ok, Ref}} ->
                 ErrorL;
             Other ->
-                %% @TODO:Enqueue a failed message into the mq
+                %% Enqueue a failed message into the mq
                 ok = leo_storage_mq:publish(
                        ?QUEUE_TYPE_ASYNC_DELETE_DIR, DirL),
                 Cause = case Other of

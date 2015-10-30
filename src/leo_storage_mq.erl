@@ -400,7 +400,7 @@ handle_call({consume, ?QUEUE_ID_ASYNC_RECOVER_DIR, MessageBin}) ->
         #?METADATA{addr_id = AddrId,
                    key = Key} = Metadata ->
             %% Retrieve latest metadata of the object
-            case leo_storage_handler_object:head(AddrId, Key, true) of
+            case leo_storage_handler_object:head(AddrId, Key, false) of
                 {ok, Metadata_1} ->
                     leo_directory_sync:append(Metadata_1);
                 {error, not_found} ->
