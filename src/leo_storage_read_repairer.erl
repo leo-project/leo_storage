@@ -55,13 +55,7 @@
                         Redundancies::[#redundant_node{}],
                         Metadata::#?METADATA{},
                         Callback::function()).
-repair(#?READ_PARAMETER{quorum = ReadQuorum,
-                        req_id = ReqId}, Redundancies, Metadata, Callback) ->
-    Ref = make_ref(),
-    From = self(),
-    AddrId = Metadata#?METADATA.addr_id,
-    Key = Metadata#?METADATA.key,
-
+repair(ReadParams, Redundancies, Metadata, Callback) ->
     DiffNumOfNodes =
         case (lists:keyfind(erlang:node(), 2, Redundancies) /= false) of
             true ->
@@ -71,6 +65,7 @@ repair(#?READ_PARAMETER{quorum = ReadQuorum,
         end,
     NumOfNodes = case erlang:length(
                         [N || #redundant_node{node = N,
+                                              available = true,
                                               can_read_repair = true}
                                   <- Redundancies]) of
                      0 ->
@@ -78,6 +73,20 @@ repair(#?READ_PARAMETER{quorum = ReadQuorum,
                      Len ->
                          Len - DiffNumOfNodes
                  end,
+    repair_1(NumOfNodes, DiffNumOfNodes,
+             ReadParams, Redundancies, Metadata, Callback).
+
+
+%% @private
+repair_1(0,_,#?READ_PARAMETER{quorum = ReadQuorum},_Redundancies,_Metadata, Callback) when ReadQuorum =< 1 ->
+    Callback(ok);
+repair_1(NumOfNodes, DiffNumOfNodes,
+         #?READ_PARAMETER{quorum = ReadQuorum,
+                          req_id = ReqId}, Redundancies, Metadata, Callback) ->
+    Ref = make_ref(),
+    From = self(),
+    AddrId = Metadata#?METADATA.addr_id,
+    Key = Metadata#?METADATA.key,
 
     lists:foreach(
       fun(#redundant_node{available = false}) ->
