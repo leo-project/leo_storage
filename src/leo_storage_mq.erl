@@ -403,7 +403,7 @@ handle_call({consume, ?QUEUE_ID_ASYNC_RECOVER_DIR, MessageBin}) ->
             case leo_storage_handler_object:head(AddrId, Key, false) of
                 {ok, Metadata_1} ->
                     leo_directory_sync:append(Metadata_1);
-                {error, not_found} ->
+                not_found ->
                     ok;
                 _ ->
                     publish(?QUEUE_TYPE_ASYNC_RECOVER_DIR, Metadata)

@@ -447,8 +447,8 @@ delete_1(Ret, Object, true) ->
 %% @doc retrieve a meta-data from mata-data-server (file).
 %%
 -spec(head(AddrId, Key) ->
-             {ok, #?METADATA{}} | {error, any} when AddrId::integer(),
-                                                    Key::binary()).
+             {ok, #?METADATA{}} | not_found | {error, any} when AddrId::integer(),
+                                                                Key::binary()).
 head(AddrId, Key) ->
     %% Do retry when being invoked as usual method
     head(AddrId, Key, true).
