@@ -25,8 +25,6 @@
 %%======================================================================
 -module(leo_storage_read_repairer).
 
--author('Yosuke Hara').
-
 -include("leo_storage.hrl").
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("leo_logger/include/leo_logger.hrl").

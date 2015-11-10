@@ -25,8 +25,6 @@
 %%====================================================================
 -module(leo_storage_mq).
 
--author('Yosuke Hara').
-
 -behaviour(leo_mq_behaviour).
 
 -include("leo_storage.hrl").

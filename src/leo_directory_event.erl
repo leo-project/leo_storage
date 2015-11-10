@@ -25,8 +25,6 @@
 %%======================================================================
 -module(leo_directory_event).
 
--author('Yosuke Hara').
-
 -behaviour(gen_event).
 
 -include("leo_storage.hrl").

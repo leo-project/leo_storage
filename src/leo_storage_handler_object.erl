@@ -24,8 +24,6 @@
 %%======================================================================
 -module(leo_storage_handler_object).
 
--author('Yosuke Hara').
-
 -include("leo_storage.hrl").
 -include_lib("leo_commons/include/leo_commons.hrl").
 -include_lib("leo_logger/include/leo_logger.hrl").

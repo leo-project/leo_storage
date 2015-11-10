@@ -27,8 +27,6 @@
 %%======================================================================
 -module(leo_directory_cache).
 
--author('Yosuke Hara').
-
 -behaviour(gen_server).
 
 -include("leo_storage.hrl").

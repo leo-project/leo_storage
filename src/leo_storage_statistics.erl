@@ -25,8 +25,6 @@
 %%======================================================================
 -module(leo_storage_statistics).
 
--author('Yosuke Hara').
-
 -behaviour(leo_statistics_behaviour).
 
 -include("leo_storage.hrl").

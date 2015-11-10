@@ -24,8 +24,6 @@
 %%======================================================================
 -module(leo_storage_watchdog_msgs).
 
--author('Yosuke Hara').
-
 -behaviour(leo_watchdog_behaviour).
 
 -include("leo_storage.hrl").

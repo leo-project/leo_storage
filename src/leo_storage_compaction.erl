@@ -25,8 +25,6 @@
 %%======================================================================
 -module(leo_storage_compaction).
 
--author('Yosuke Hara').
-
 -behaviour(leo_compact_callback).
 
 -include("leo_storage.hrl").

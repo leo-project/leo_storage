@@ -24,8 +24,6 @@
 %%======================================================================
 -module(leo_storage_cluster_monitor).
 
--author('Yosuke Hara').
-
 -include("leo_storage.hrl").
 -include_lib("leo_mq/include/leo_mq.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").

@@ -24,7 +24,6 @@
 %% @end
 %%====================================================================
 -module(leo_storage_api_tests).
--author('yosuke hara').
 
 -include("leo_storage.hrl").
 -include_lib("leo_commons/include/leo_commons.hrl").

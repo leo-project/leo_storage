@@ -24,8 +24,6 @@
 %% @end
 %%====================================================================
 -module(leo_storage_handler_directory_tests).
--author('Yosuke Hara').
-
 
 -include("leo_storage.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").

@@ -21,8 +21,6 @@
 %%======================================================================
 -module(leo_storage_handler_sync).
 
--author('Yosuke Hara').
-
 -behaviour(leo_mdcr_sync_cluster_behaviour).
 
 -include("leo_storage.hrl").

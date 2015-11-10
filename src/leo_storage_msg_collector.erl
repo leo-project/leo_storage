@@ -27,8 +27,6 @@
 %%======================================================================
 -module(leo_storage_msg_collector).
 
--author('Yosuke Hara').
-
 -behaviour(gen_server).
 
 -include("leo_storage.hrl").

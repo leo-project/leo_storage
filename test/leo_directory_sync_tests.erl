@@ -20,7 +20,6 @@
 %%
 %%====================================================================
 -module(leo_directory_sync_tests).
--author('yosuke hara').
 
 -include("leo_storage.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").

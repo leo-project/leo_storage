@@ -25,8 +25,6 @@
 %%======================================================================
 -module(leo_storage_app).
 
--author('Yosuke Hara').
-
 -behaviour(application).
 
 -include("leo_storage.hrl").

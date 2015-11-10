@@ -19,7 +19,6 @@
 %% under the License.
 %%======================================================================
 -module(leo_sync_remote_cluster).
--author('Yosuke Hara').
 
 -behaviour(leo_ordning_reda_behaviour).
 

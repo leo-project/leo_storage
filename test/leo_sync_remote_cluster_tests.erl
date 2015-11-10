@@ -19,7 +19,6 @@
 %% under the License.
 %%====================================================================
 -module(leo_sync_remote_cluster_tests).
--author('Yosuke Hara').
 
 -include("leo_storage.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
@@ -155,4 +154,3 @@ stack(ClusterId, Index) ->
     stack(ClusterId, Index - 1).
 
 -endif.
-

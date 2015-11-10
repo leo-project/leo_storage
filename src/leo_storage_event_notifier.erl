@@ -27,8 +27,6 @@
 %%======================================================================
 -module(leo_storage_event_notifier).
 
--author('Yosuke Hara').
-
 -behaviour(gen_server).
 
 -include("leo_storage.hrl").

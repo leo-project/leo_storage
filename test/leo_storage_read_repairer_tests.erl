@@ -24,7 +24,6 @@
 %% @end
 %%====================================================================
 -module(leo_storage_read_repairer_tests).
--author('Yosuke Hara').
 
 -include("leo_storage.hrl").
 -include_lib("eunit/include/eunit.hrl").

@@ -25,8 +25,6 @@
 %%======================================================================
 -module(leo_storage_sup).
 
--author('Yosuke Hara').
-
 -behaviour(supervisor).
 
 -include("leo_storage.hrl").

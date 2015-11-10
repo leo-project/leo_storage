@@ -25,8 +25,6 @@
 %%======================================================================
 -module(leo_directory_sync).
 
--author('Yosuke Hara').
-
 -behaviour(leo_ordning_reda_behaviour).
 
 -include("leo_storage.hrl").
