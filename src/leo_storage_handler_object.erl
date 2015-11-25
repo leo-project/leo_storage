@@ -210,7 +210,7 @@ get_fun(AddrId, Key, StartPos, EndPos, IsForcedCheck) ->
 %%--------------------------------------------------------------------
 %% API - PUT
 %%--------------------------------------------------------------------
-%% @doc Insert an object (request from gateway).
+%% @doc Insert an object (request between storage-nodes).
 %%
 -spec(put(ObjAndRef) ->
              {ok, reference(), tuple()} |
@@ -222,6 +222,7 @@ put({Object, Ref}) ->
 
     case Object_1#?OBJECT.del of
         ?DEL_TRUE->
+            %% Removing an object
             case leo_object_storage_api:head({AddrId, Key}) of
                 {ok, MetaBin} ->
                     case binary_to_term(MetaBin) of
@@ -242,8 +243,8 @@ put({Object, Ref}) ->
                 not_found = Cause ->
                     {error, Ref, Cause}
             end;
-        %% FOR PUT
         ?DEL_FALSE ->
+            %% Writing an object
             put_fun(Ref, AddrId, Key, Object_1)
     end.
 
@@ -257,10 +258,29 @@ put({Object, Ref}) ->
 put(Object, ReqId) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
     Object_1 = leo_object_storage_transformer:transform_object(Object),
-    replicate_fun(?REP_LOCAL, ?CMD_PUT, Object_1#?OBJECT.addr_id,
-                  Object_1#?OBJECT{method = ?CMD_PUT,
-                                   clock  = leo_date:clock(),
-                                   req_id = ReqId}).
+    #?OBJECT{data = Bin,
+             rep_method = RepMethod,
+             ec_method = ECMethod,
+             ec_params = ECParams} = Object_1,
+
+    case RepMethod of
+        ?REP_ERASURE_CODE ->
+            case leo_erasure:encode(ECMethod, ECParams, Bin) of
+                {ok, IdWithBlockL} ->
+                    replicate_fun(?REP_LOCAL, ?CMD_PUT, Object_1#?OBJECT.addr_id,
+                                  Object_1#?OBJECT{method = ?CMD_PUT,
+                                                   fragments = IdWithBlockL,
+                                                   clock  = leo_date:clock(),
+                                                   req_id = ReqId});
+                Error ->
+                    Error
+            end;
+        _ ->
+            replicate_fun(?REP_LOCAL, ?CMD_PUT, Object_1#?OBJECT.addr_id,
+                          Object_1#?OBJECT{method = ?CMD_PUT,
+                                           clock  = leo_date:clock(),
+                                           req_id = ReqId})
+    end.
 
 
 %% @doc Insert an  object (request from remote-storage-nodes/replicator).
@@ -347,15 +367,15 @@ delete_chunked_objects(0,_) ->
     ok;
 delete_chunked_objects(CIndex, ParentKey) ->
     IndexBin = list_to_binary(integer_to_list(CIndex)),
-    Key    = << ParentKey/binary, "\n", IndexBin/binary >>,
+    Key = << ParentKey/binary, "\n", IndexBin/binary >>,
     AddrId = leo_redundant_manager_chash:vnode_id(Key),
 
-    case delete(#?OBJECT{addr_id   = AddrId,
-                         key       = Key,
-                         cindex    = CIndex,
-                         clock     = leo_date:clock(),
+    case delete(#?OBJECT{addr_id = AddrId,
+                         key = Key,
+                         cindex = CIndex,
+                         clock = leo_date:clock(),
                          timestamp = leo_date:now(),
-                         del       = ?DEL_TRUE
+                         del = ?DEL_TRUE
                         }, 0) of
         ok ->
             delete_chunked_objects(CIndex - 1, ParentKey);
@@ -387,9 +407,9 @@ delete({Object, Ref}) ->
                     {ok, Ref};
                 #?METADATA{del = ?DEL_FALSE} ->
                     case leo_object_storage_api:delete(
-                           {AddrId, Key}, Object#?OBJECT{data  = <<>>,
+                           {AddrId, Key}, Object#?OBJECT{data = <<>>,
                                                          dsize = 0,
-                                                         del   = ?DEL_TRUE}) of
+                                                         del = ?DEL_TRUE}) of
                         ok ->
                             {ok, Ref};
                         {error, Why} ->
@@ -418,11 +438,11 @@ delete(Object, ReqId, CheckUnderDir) ->
     case replicate_fun(?REP_LOCAL, ?CMD_DELETE,
                        Object#?OBJECT.addr_id,
                        Object#?OBJECT{method = ?CMD_DELETE,
-                                      data   = <<>>,
-                                      dsize  = 0,
-                                      clock  = leo_date:clock(),
+                                      data = <<>>,
+                                      dsize = 0,
+                                      clock = leo_date:clock(),
                                       req_id = ReqId,
-                                      del    = ?DEL_TRUE}) of
+                                      del = ?DEL_TRUE}) of
         {ok,_} ->
             delete_1(ok, Object, CheckUnderDir);
         {error, not_found = Cause} ->
@@ -522,8 +542,10 @@ replicate(Object) ->
     %% Transform an object to a metadata
     Metadata = leo_object_storage_transformer:object_to_metadata(Object),
     Method = case Object#?OBJECT.del of
-                 ?DEL_TRUE  -> ?CMD_DELETE;
-                 ?DEL_FALSE -> ?CMD_PUT
+                 ?DEL_TRUE ->
+                     ?CMD_DELETE;
+                 ?DEL_FALSE ->
+                     ?CMD_PUT
              end,
     NumOfReplicas = Object#?OBJECT.num_of_replicas,
     AddrId = Metadata#?METADATA.addr_id,
@@ -537,9 +559,12 @@ replicate(Object) ->
             Redundancies_1 = lists:sublist(Redundancies, NumOfReplicas),
             Quorum_1 = ?quorum(Method, WriteQuorum, DeleteQuorum),
             Quorum_2 = case (NumOfReplicas < Quorum_1) of
-                           true when NumOfReplicas =< 1 -> 1;
-                           true  -> NumOfReplicas - 1;
-                           false -> Quorum_1
+                           true when NumOfReplicas =< 1 ->
+                               1;
+                           true ->
+                               NumOfReplicas - 1;
+                           false ->
+                               Quorum_1
                        end,
             case get_active_redundancies(Quorum_2, Redundancies_1) of
                 {ok, Redundancies_2} ->
@@ -641,19 +666,19 @@ read_and_repair_1(ReadParams, [Node|Rest], AvailableNodes, Errors) ->
                                  Redundancies::[atom()]).
 read_and_repair_2(_, [], _) ->
     {error, not_found};
-read_and_repair_2(#?READ_PARAMETER{addr_id   = AddrId,
-                                   key       = Key,
-                                   etag      = 0,
+read_and_repair_2(#?READ_PARAMETER{addr_id = AddrId,
+                                   key = Key,
+                                   etag = 0,
                                    start_pos = StartPos,
-                                   end_pos   = EndPos} = ReadParameter,
+                                   end_pos = EndPos} = ReadParameter,
                   #redundant_node{node = Node}, Redundancies) when Node == erlang:node() ->
     read_and_repair_3(get_fun(AddrId, Key, StartPos, EndPos), ReadParameter, Redundancies);
 
-read_and_repair_2(#?READ_PARAMETER{addr_id   = AddrId,
-                                   key       = Key,
-                                   etag      = ETag,
+read_and_repair_2(#?READ_PARAMETER{addr_id = AddrId,
+                                   key = Key,
+                                   etag = ETag,
                                    start_pos = StartPos,
-                                   end_pos   = EndPos} = ReadParameter,
+                                   end_pos = EndPos} = ReadParameter,
                   #redundant_node{node = Node}, Redundancies) when Node == erlang:node() ->
     %% Retrieve an head of object,
     %%     then compare it with requested 'Etag'
@@ -735,14 +760,14 @@ read_and_repair_3(_,_,_) ->
 %% @private
 -spec(replicate_fun(replication(), request_verb(), integer(), #?OBJECT{}) ->
              {ok, ETag} | {error, any()} when ETag::{etag, integer()}).
-replicate_fun(?REP_LOCAL, Method, AddrId, Object) ->
+replicate_fun(?REP_LOCAL, Method, AddrId, #?OBJECT{rep_method = ?REP_COPY} = Object) ->
     %% Check state of the node
     case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
         not_found ->
             case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
-                {ok, #redundancies{nodes     = Redundancies,
-                                   w         = WriteQuorum,
-                                   d         = DeleteQuorum,
+                {ok, #redundancies{nodes = Redundancies,
+                                   w = WriteQuorum,
+                                   d = DeleteQuorum,
                                    ring_hash = RingHash}} ->
                     Quorum = ?quorum(Method, WriteQuorum, DeleteQuorum),
                     case get_active_redundancies(Quorum, Redundancies) of
@@ -759,15 +784,41 @@ replicate_fun(?REP_LOCAL, Method, AddrId, Object) ->
         {ok, ErrorItems}->
             ?debug("replicate_fun/4", "error-items:~p", [ErrorItems]),
             {error, unavailable}
+    end;
+replicate_fun(?REP_LOCAL, Method,_AddrId, #?OBJECT{rep_method = ?REP_ERASURE_CODE,
+                                                   key = Key,
+                                                   ec_params = {CodingParam_K, CodingParam_M,_CodingParam_W}
+                                                  } = Object) ->
+    case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
+        not_found ->
+            TotalReplicas = CodingParam_K + CodingParam_M,
+            case leo_redundant_manager_api:collect_redundancies_by_key(Key, TotalReplicas) of
+                {ok, {Options, RedundantNodeL}} ->
+                    N = leo_misc:get_value(?PROP_N, Options),
+                    W = leo_misc:get_value(?PROP_W, Options),
+                    D = leo_misc:get_value(?PROP_D, Options),
+                    Quorum = ?quorum_of_fragments(Method, N, W, D, TotalReplicas),
+
+                    leo_storage_replicator:replicate(
+                      Method, Quorum, RedundantNodeL, Object, replicate_callback(Object));
+                Error ->
+                    Error
+            end;
+        {ok, ErrorItems}->
+            ?debug("replicate_fun/4", "error-items:~p", [ErrorItems]),
+            {error, unavailable}
     end.
+
 
 %% @doc obj-replication request from remote node.
 %%
 replicate_fun(?REP_REMOTE, Method, Object) ->
     Ref = make_ref(),
     Ret = case Method of
-              ?CMD_PUT    -> ?MODULE:put({Object, Ref});
-              ?CMD_DELETE -> ?MODULE:delete({Object, Ref})
+              ?CMD_PUT ->
+                  ?MODULE:put({Object, Ref});
+              ?CMD_DELETE ->
+                  ?MODULE:delete({Object, Ref})
           end,
     case Ret of
         %% for put-operation

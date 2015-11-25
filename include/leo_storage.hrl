@@ -339,11 +339,21 @@
 -define(DEF_MQ_INTERVAL_MIN,  8).
 
 %% Retrieve a quorum bv a method
--define(quorum(_Method,_W,_D), case _Method of
-                                   ?CMD_PUT    -> _W;
-                                   ?CMD_DELETE -> _D;
-                                   _ -> _W
-                               end).
+-define(quorum(_Method,_W,_D),
+        case _Method of
+            ?CMD_DELETE ->
+                _D;
+            _ ->
+                _W
+        end).
+
+-define(quorum_of_fragments(_Method,_N,_W,_D,_TotalFragments),
+        case _Method of
+            ?CMD_DELETE ->
+                leo_math:ceiling(_TotalFragments * _D/_N);
+            _ ->
+                leo_math:ceiling(_TotalFragments * _W/_N)
+        end).
 
 
 %% For Directory

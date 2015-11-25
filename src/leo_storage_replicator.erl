@@ -67,30 +67,34 @@
                         Nodes::list(),
                         Object:: #?OBJECT{},
                         Callback::function()).
-replicate(Method, Quorum, Nodes, Object, Callback) ->
-    AddrId = Object#?OBJECT.addr_id,
-    Key    = Object#?OBJECT.key,
-    ReqId  = Object#?OBJECT.req_id,
+replicate(Method, Quorum, Nodes, #?OBJECT{rep_method = ?REP_COPY,
+                                          addr_id = AddrId,
+                                          key = Key,
+                                          req_id = ReqId} = Object, Callback) ->
     NumOfNodes = erlang:length(Nodes),
-
     Pid = self(),
     Ref = make_ref(),
-    State = #state{method       = Method,
-                   addr_id      = AddrId,
-                   key          = Key,
-                   object       = Object,
+    State = #state{method = Method,
+                   addr_id = AddrId,
+                   key = Key,
+                   object = Object,
                    num_of_nodes = NumOfNodes,
-                   req_id       = ReqId,
-                   callback     = Callback,
-                   errors       = [],
-                   is_reply     = false
+                   req_id = ReqId,
+                   callback = Callback,
+                   errors = [],
+                   is_reply = false
                   },
     case proc_lib:start(?MODULE, init_loop, [NumOfNodes, Quorum, Ref, Pid, State]) of
         {ok, Ref, SubParent} ->
             replicate_1(Nodes, Ref, SubParent, State);
         _ ->
             Callback({error, ["Failed to initialize"]})
-    end.
+    end;
+replicate(Method, Quorum, Nodes, #?OBJECT{rep_method = ?REP_ERASURE_CODE} = Object, Callback) ->
+    %% @TODO:
+    ?debugVal({Method, Quorum, Nodes, Object, Callback}),
+    ok.
+
 
 init_loop(NumOfNodes, Quorum, Ref, Parent, State) ->
     ok = proc_lib:init_ack(Parent, {ok, Ref, self()}),
@@ -213,22 +217,22 @@ loop(N, W, ResL, Ref, From, #state{method = Method,
 %%
 -spec(replicate_fun(reference(), #req_params{}) ->
              {ok, atom()} | {error, atom(), any()}).
-replicate_fun(Ref, #req_params{pid     = Pid,
-                               key     = Key,
-                               object  = Object,
-                               req_id  = ReqId}) ->
+replicate_fun(Ref, #req_params{pid = Pid,
+                               key = Key,
+                               object = Object,
+                               req_id = ReqId}) ->
     %% Ref  = make_ref(),
-    Ret  = case leo_storage_handler_object:put({Object, Ref}) of
-               {ok, Ref, Checksum} ->
-                   {Ref, {ok, Checksum}};
-               {error, Ref, not_found = Cause} ->
-                   {Ref, {error, {node(), Cause}}};
-               {error, Ref, Cause} ->
-                   ?warn("replicate_fun/2",
-                         [{key, Key}, {node, local},
-                          {req_id, ReqId}, {cause, Cause}]),
-                   {Ref, {error, {node(), Cause}}}
-           end,
+    Ret = case leo_storage_handler_object:put({Object, Ref}) of
+              {ok, Ref, Checksum} ->
+                  {Ref, {ok, Checksum}};
+              {error, Ref, not_found = Cause} ->
+                  {Ref, {error, {node(), Cause}}};
+              {error, Ref, Cause} ->
+                  ?warn("replicate_fun/2",
+                        [{key, Key}, {node, local},
+                         {req_id, ReqId}, {cause, Cause}]),
+                  {Ref, {error, {node(), Cause}}}
+          end,
     erlang:send(Pid, Ret).
 
 
