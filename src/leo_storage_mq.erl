@@ -49,6 +49,7 @@
 -define(MSG_PATH_COMP_META_WITH_DC, "7").
 -define(MSG_PATH_ASYNC_DELETE_DIR,  "8").
 -define(MSG_PATH_ASYNC_RECOVER_DIR, "9").
+-define(MSG_PATH_PER_FRAGMENT,      "10").
 
 
 %%--------------------------------------------------------------------
@@ -95,7 +96,8 @@ start(RefSup, RootPath) ->
              {?QUEUE_ID_SYNC_OBJ_WITH_DC,  ?MSG_PATH_SYNC_OBJ_WITH_DC},
              {?QUEUE_ID_COMP_META_WITH_DC, ?MSG_PATH_COMP_META_WITH_DC},
              {?QUEUE_ID_ASYNC_DELETE_DIR,  ?MSG_PATH_ASYNC_DELETE_DIR},
-             {?QUEUE_ID_ASYNC_RECOVER_DIR, ?MSG_PATH_ASYNC_RECOVER_DIR}
+             {?QUEUE_ID_ASYNC_RECOVER_DIR, ?MSG_PATH_ASYNC_RECOVER_DIR},
+             {?QUEUE_ID_PER_FRAGMENT,      ?MSG_PATH_PER_FRAGMENT}
             ], RefMQSup, RootPath_1).
 
 %% @private
@@ -152,9 +154,9 @@ publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID = Id, VNodeId, Node) ->
     Clock = leo_date:clock(),
     KeyBin     = term_to_binary({VNodeId, Node, Clock}),
     MessageBin = term_to_binary(
-                   #sync_unit_of_vnode_message{id        = Clock,
-                                               vnode_id  = VNodeId,
-                                               node      = Node,
+                   #sync_unit_of_vnode_message{id = Clock,
+                                               vnode_id = VNodeId,
+                                               node = Node,
                                                timestamp = leo_date:now()}),
     leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
 
@@ -162,9 +164,9 @@ publish(?QUEUE_TYPE_ASYNC_DELETE_OBJ = Id, AddrId, Key) ->
     Clock = leo_date:clock(),
     KeyBin     = term_to_binary({AddrId, Key, Clock}),
     MessageBin = term_to_binary(
-                   #async_deletion_message{id        = Clock,
-                                           addr_id   = AddrId,
-                                           key       = Key,
+                   #async_deletion_message{id = Clock,
+                                           addr_id = AddrId,
+                                           key = Key,
                                            timestamp = leo_date:now()}),
     leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
 
@@ -189,10 +191,10 @@ publish(?QUEUE_TYPE_PER_OBJECT = Id, AddrId, Key, ErrorType) ->
     Clock = leo_date:clock(),
     KeyBin = term_to_binary({ErrorType, Key, Clock}),
     MessageBin = term_to_binary(
-                   #inconsistent_data_message{id        = Clock,
-                                              type      = ErrorType,
-                                              addr_id   = AddrId,
-                                              key       = Key,
+                   #inconsistent_data_message{id = Clock,
+                                              type = ErrorType,
+                                              addr_id = AddrId,
+                                              key = Key,
                                               timestamp = leo_date:now()}),
     leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
 
@@ -200,12 +202,23 @@ publish(?QUEUE_TYPE_SYNC_OBJ_WITH_DC = Id, ClusterId, AddrId, Key) ->
     Clock = leo_date:clock(),
     KeyBin = term_to_binary({ClusterId, AddrId, Key, Clock}),
     MessageBin  = term_to_binary(
-                    #inconsistent_data_with_dc{id         = Clock,
+                    #inconsistent_data_with_dc{id = Clock,
                                                cluster_id = ClusterId,
-                                               addr_id    = AddrId,
-                                               key        = Key,
-                                               del        = 0,
-                                               timestamp  = leo_date:now()}),
+                                               addr_id = AddrId,
+                                               key = Key,
+                                               del = 0,
+                                               timestamp = leo_date:now()}),
+    leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
+
+publish(?QUEUE_TYPE_PER_FRAGMENT = Id, AddrId, Key, FragmentIdL) ->
+    Clock = leo_date:clock(),
+    KeyBin = term_to_binary({AddrId, Key, Clock}),
+    MessageBin  = term_to_binary(
+                    #miss_storing_fragment{id = Clock,
+                                           addr_id = AddrId,
+                                           key = Key,
+                                           fragment_id_list = FragmentIdL,
+                                           timestamp = leo_date:now()}),
     leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
 
 publish(_,_,_,_) ->
@@ -408,8 +421,26 @@ handle_call({consume, ?QUEUE_ID_ASYNC_RECOVER_DIR, MessageBin}) ->
             end;
         _ ->
             ok
-    end.
+    end;
 
+handle_call({consume, ?QUEUE_ID_PER_FRAGMENT, MessageBin}) ->
+    case catch binary_to_term(MessageBin) of
+        {'EXIT', Cause} ->
+            ?error("handle_call/1 - QUEUE_ID_PER_FRAGMENT",
+                   [{cause, Cause}]),
+            {error, Cause};
+        #miss_storing_fragment{addr_id = AddrId,
+                               key = Key,
+                               fragment_id_list = FragmentIdL} ->
+            %% @TODO - Recover fragment(s)
+            ?debugVal({AddrId, Key, FragmentIdL}),
+            %% publish(?QUEUE_TYPE_PER_FRAGMENT, AddrId, Key, FragmentIdL)
+            ok;
+        _ ->
+            ok
+    end;
+handle_call(_) ->
+    ok.
 handle_call(_,_,_) ->
     ok.
 

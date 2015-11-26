@@ -214,8 +214,15 @@ get_fun(AddrId, Key, StartPos, EndPos, IsForcedCheck) ->
 %%
 -spec(put(ObjAndRef) ->
              {ok, reference(), tuple()} |
-             {error, reference(), any()} when ObjAndRef::{#?OBJECT{}, reference()}).
+             {error, reference(), any()}
+                 when ObjAndRef::{#?OBJECT{}, reference()}|
+                                 {[#?OBJECT{}], reference()}).
+put({[#?OBJECT{rep_method = ?REP_ERASURE_CODE}|_] = Fragments, Ref}) ->
+    %% @TODO
+    ?debugVal({Fragments, Ref}),
+    ok;
 put({Object, Ref}) ->
+    %% method: COPY-OBJECT
     Object_1 = leo_object_storage_transformer:transform_object(Object),
     AddrId = Object_1#?OBJECT.addr_id,
     Key = Object_1#?OBJECT.key,
@@ -248,7 +255,6 @@ put({Object, Ref}) ->
             put_fun(Ref, AddrId, Key, Object_1)
     end.
 
-
 %% @doc Insert an object (request from gateway).
 %%
 -spec(put(Object, ReqId) ->
@@ -267,11 +273,11 @@ put(Object, ReqId) ->
         ?REP_ERASURE_CODE ->
             case leo_erasure:encode(ECMethod, ECParams, Bin) of
                 {ok, IdWithBlockL} ->
-                    replicate_fun(?REP_LOCAL, ?CMD_PUT, Object_1#?OBJECT.addr_id,
-                                  Object_1#?OBJECT{method = ?CMD_PUT,
-                                                   fragments = IdWithBlockL,
-                                                   clock  = leo_date:clock(),
-                                                   req_id = ReqId});
+                    Fragments = [Object_1#?OBJECT{data = <<>>,
+                                                  fid = FId,
+                                                  fsize = byte_size(FBin)}
+                                 || {FId, FBin} <- IdWithBlockL],
+                    replicate_fun(?REP_LOCAL, ?CMD_PUT, Fragments);
                 Error ->
                     Error
             end;
@@ -782,13 +788,20 @@ replicate_fun(?REP_LOCAL, Method, AddrId, #?OBJECT{rep_method = ?REP_COPY} = Obj
                     {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
             end;
         {ok, ErrorItems}->
-            ?debug("replicate_fun/4", "error-items:~p", [ErrorItems]),
+            ?debug("replicate_fun/4",
+                   "~p", [{error_items, ErrorItems}]),
             {error, unavailable}
     end;
-replicate_fun(?REP_LOCAL, Method,_AddrId, #?OBJECT{rep_method = ?REP_ERASURE_CODE,
-                                                   key = Key,
-                                                   ec_params = {CodingParam_K, CodingParam_M,_CodingParam_W}
-                                                  } = Object) ->
+replicate_fun(_,_,_,_) ->
+    {error, badargs}.
+
+%% @private
+-spec(replicate_fun(replication(), request_verb(), [#?OBJECT{}]) ->
+             {ok, ETag} | {error, any()} when ETag::{etag, integer()}).
+replicate_fun(?REP_LOCAL, Method,
+              [#?OBJECT{rep_method = ?REP_ERASURE_CODE,
+                        key = Key,
+                        ec_params = {CodingParam_K, CodingParam_M,_CodingParam_W}}|_] = Fragments) ->
     case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
         not_found ->
             TotalReplicas = CodingParam_K + CodingParam_M,
@@ -800,18 +813,19 @@ replicate_fun(?REP_LOCAL, Method,_AddrId, #?OBJECT{rep_method = ?REP_ERASURE_COD
                     Quorum = ?quorum_of_fragments(Method, N, W, D, TotalReplicas),
 
                     leo_storage_replicator:replicate(
-                      Method, Quorum, RedundantNodeL, Object, replicate_callback(Object));
+                      Method, Quorum, RedundantNodeL, Fragments,
+                      replicate_callback(erlang:hd(Fragments)));
                 Error ->
                     Error
             end;
         {ok, ErrorItems}->
-            ?debug("replicate_fun/4", "error-items:~p", [ErrorItems]),
+            ?debug("replicate_fun/3",
+                   "~p", [{error_items, ErrorItems}]),
             {error, unavailable}
-    end.
-
+    end;
 
 %% @doc obj-replication request from remote node.
-%%
+%% @private
 replicate_fun(?REP_REMOTE, Method, Object) ->
     Ref = make_ref(),
     Ret = case Method of
@@ -836,7 +850,9 @@ replicate_fun(?REP_REMOTE, Method, Object) ->
         {error, Ref, Cause} ->
             ?warn("replicate_fun/3", [{cause, Cause}]),
             {error, Cause}
-    end.
+    end;
+replicate_fun(_,_,_) ->
+    {error, badargs}.
 
 
 %% @doc Being callback, after executed replication of an object

@@ -61,6 +61,7 @@
 -define(QUEUE_ID_COMP_META_WITH_DC, 'leo_comp_meta_with_dc_queue').
 -define(QUEUE_ID_ASYNC_DELETE_DIR,  'leo_async_delete_dir_queue').
 -define(QUEUE_ID_ASYNC_RECOVER_DIR, 'leo_async_recover_dir_queue').
+-define(QUEUE_ID_PER_FRAGMENT,      'leo_per_fragment_queue').
 
 -define(QUEUE_TYPE_PER_OBJECT,        'queue_type_per_object').
 -define(QUEUE_TYPE_SYNC_BY_VNODE_ID,  'queue_type_sync_by_vnode_id').
@@ -71,6 +72,7 @@
 -define(QUEUE_TYPE_COMP_META_WITH_DC, 'queue_type_comp_meta_with_dc').
 -define(QUEUE_TYPE_ASYNC_DELETE_DIR,  'queue_type_async_delete_dir').
 -define(QUEUE_TYPE_ASYNC_RECOVER_DIR, 'queue_type_async_recover_dir').
+-define(QUEUE_TYPE_PER_FRAGMENT,      'queue_type_per_fragment').
 
 -define(ERR_TYPE_REPLICATE_DATA,      'error_msg_replicate_data').
 -define(ERR_TYPE_RECOVER_DATA,        'error_msg_recover_data').
@@ -78,6 +80,7 @@
 -define(ERR_TYPE_REPLICATE_INDEX,     'error_msg_replicate_index').
 -define(ERR_TYPE_RECOVER_INDEX,       'error_msg_recover_index').
 -define(ERR_TYPE_DELETE_INDEX,        'error_msg_delete_index').
+-define(ERR_TYPE_STORE_FRAGMENT,      'error_msg_store_fragment').
 
 -define(TBL_REBALANCE_COUNTER,        'leo_rebalance_counter').
 
@@ -143,74 +146,82 @@
 %% @doc Queue's Message.
 %%
 -record(inconsistent_data_message, {
-          id = 0                :: non_neg_integer(),
-          type                  :: atom(),
-          addr_id = 0           :: non_neg_integer(),
-          key                   :: any(),
-          meta                  :: tuple(),
-          timestamp = 0         :: non_neg_integer(),
-          times = 0             :: non_neg_integer()}).
+          id = 0 :: non_neg_integer(),
+          type :: atom(),
+          addr_id = 0 :: non_neg_integer(),
+          key :: any(),
+          meta :: tuple(),
+          timestamp = 0 :: non_neg_integer(),
+          times = 0 :: non_neg_integer()}).
 
 -record(inconsistent_index_message, {
-          id = 0                :: non_neg_integer(),
-          type                  :: atom(),
-          addr_id = 0           :: non_neg_integer(),
-          key                   :: any(),
-          timestamp = 0         :: non_neg_integer(),
-          times = 0             :: non_neg_integer()}).
+          id = 0 :: non_neg_integer(),
+          type :: atom(),
+          addr_id = 0 :: non_neg_integer(),
+          key :: any(),
+          timestamp = 0 :: non_neg_integer(),
+          times = 0 :: non_neg_integer()}).
 
 -record(sync_unit_of_vnode_message, {
-          id = 0                :: non_neg_integer(),
-          vnode_id = 0          :: non_neg_integer(),
-          node                  :: atom(),
-          timestamp = 0         :: non_neg_integer(),
-          times = 0             :: non_neg_integer()
+          id = 0 :: non_neg_integer(),
+          vnode_id = 0 :: non_neg_integer(),
+          node :: atom(),
+          timestamp = 0 :: non_neg_integer(),
+          times = 0 :: non_neg_integer()
          }).
 
 -record(rebalance_message, {
-          id = 0                :: non_neg_integer(),
-          vnode_id = 0          :: non_neg_integer(),
-          addr_id = 0           :: non_neg_integer(),
-          key                   :: binary(),
-          node                  :: atom(),
-          timestamp = 0         :: non_neg_integer(),
-          times = 0             :: non_neg_integer()
+          id = 0 :: non_neg_integer(),
+          vnode_id = 0 :: non_neg_integer(),
+          addr_id = 0 :: non_neg_integer(),
+          key = <<>> :: binary(),
+          node :: atom(),
+          timestamp = 0 :: non_neg_integer(),
+          times = 0 :: non_neg_integer()
          }).
 
 -record(async_deletion_message, {
-          id = 0                :: non_neg_integer(),
-          addr_id = 0           :: non_neg_integer(),
-          key                   :: any(),
-          timestamp = 0         :: non_neg_integer(),
-          times = 0             :: non_neg_integer()}).
+          id = 0 :: non_neg_integer(),
+          addr_id = 0 :: non_neg_integer(),
+          key :: any(),
+          timestamp = 0 :: non_neg_integer(),
+          times = 0 :: non_neg_integer()}).
 
 -record(recovery_node_message, {
-          id = 0                :: non_neg_integer(),
-          node                  :: atom(),
-          timestamp = 0         :: non_neg_integer(),
-          times = 0             :: non_neg_integer()}).
+          id = 0 :: non_neg_integer(),
+          node :: atom(),
+          timestamp = 0 :: non_neg_integer(),
+          times = 0 :: non_neg_integer()}).
 
 -record(inconsistent_data_with_dc, {
-          id = 0                :: non_neg_integer(),
-          cluster_id            :: atom(),
-          addr_id = 0           :: non_neg_integer(),
-          key                   :: binary(),
-          del = 0               :: non_neg_integer(), %% del:[0:false, 1:true]
-          timestamp = 0         :: non_neg_integer(),
-          times = 0             :: non_neg_integer()}).
+          id = 0 :: non_neg_integer(),
+          cluster_id :: atom(),
+          addr_id = 0 :: non_neg_integer(),
+          key :: binary(),
+          del = 0 :: non_neg_integer(), %% del:[0:false, 1:true]
+          timestamp = 0 :: non_neg_integer(),
+          times = 0 :: non_neg_integer()}).
 
 -record(comparison_metadata_with_dc, {
-          id = 0                 :: non_neg_integer(),
-          cluster_id             :: atom(),
+          id = 0 :: non_neg_integer(),
+          cluster_id :: atom(),
           list_of_addrid_and_key :: list(),
-          timestamp = 0          :: non_neg_integer()
+          timestamp = 0 :: non_neg_integer()
          }).
 
 -record(delete_dir, {
-          id = 0           :: non_neg_integer(),
+          id = 0 :: non_neg_integer(),
           node = undefined :: atom(),
-          keys = []        :: [binary()|undefined],
-          timestamp = 0    :: non_neg_integer()
+          keys = [] :: [binary()|undefined],
+          timestamp = 0 :: non_neg_integer()
+         }).
+
+-record(miss_storing_fragment, {
+          id = 0 :: non_neg_integer(),
+          addr_id = 0 :: non_neg_integer(),
+          key = <<>> :: binary(),
+          fragment_id_list = [] :: [non_neg_integer()],
+          timestamp = 0 :: non_neg_integer()
          }).
 
 
