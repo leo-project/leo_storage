@@ -233,13 +233,24 @@
 
 
 %% @doc Default coder of erasure-code
-%% @since (v1.4.0-pre2)
+%% @since (v1.4.0-pre3)
 {mapping,
  "erasure_code.coder",
  "leo_erasure.default_coder",
  [
   {datatype, atom},
   {default, vandrs} %% [vandrs | cauchyrs | liberation | isars]
+ ]}.
+
+
+%% @doc Minimum length of an object for the erasure-coding
+%% @since (v1.4.0-pre3)
+{mapping,
+ "erasure_code.min_object_size",
+ "leo_storage.min_object_size_for_ec",
+ [
+  {datatype, integer},
+  {default, 262144} %% 256KB
  ]}.
 
 

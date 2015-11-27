@@ -42,7 +42,7 @@
          replicate/1, replicate/3
         ]).
 
--define(REP_LOCAL,  'local').
+-define(REP_LOCAL, 'local').
 -define(REP_REMOTE, 'remote').
 -type(replication() :: ?REP_LOCAL | ?REP_REMOTE).
 
@@ -217,12 +217,24 @@ get_fun(AddrId, Key, StartPos, EndPos, IsForcedCheck) ->
              {error, reference(), any()}
                  when ObjAndRef::{#?OBJECT{}, reference()}|
                                  {[#?OBJECT{}], reference()}).
-put({[#?OBJECT{rep_method = ?REP_ERASURE_CODE}|_] = Fragments, Ref}) ->
-    %% @TODO
+put({[{_,#?OBJECT{rep_method = ?REP_ERASURE_CODE}}|_] = Fragments, Ref}) ->
+    %% method: ERASURE_CODE
     ?debugVal({Fragments, Ref}),
-    ok;
+    case lists:foldl(fun({FId, #?OBJECT{} = Object}, {Acc_1, Acc_2}) ->
+                             case put({Object, Ref}) of
+                                 {ok, Ref,_} ->
+                                     {[FId|Acc_1], Acc_2};
+                                 Error ->
+                                     {Acc_1, [{FId, Error}|Acc_2]}
+                             end
+                     end, {[],[]}, Fragments) of
+        {_,[]} ->
+            {ok, Ref};
+        {_,[_|_] = Errors} ->
+            {error, Ref, Errors}
+    end;
 put({Object, Ref}) ->
-    %% method: COPY-OBJECT
+    %% method: COPY_OBJECT
     Object_1 = leo_object_storage_transformer:transform_object(Object),
     AddrId = Object_1#?OBJECT.addr_id,
     Key = Object_1#?OBJECT.key,
@@ -264,16 +276,25 @@ put({Object, Ref}) ->
 put(Object, ReqId) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
     Object_1 = leo_object_storage_transformer:transform_object(Object),
-    #?OBJECT{data = Bin,
+    Object_2 = Object_1#?OBJECT{method = ?CMD_PUT,
+                                clock = leo_date:clock(),
+                                req_id = ReqId},
+    #?OBJECT{addr_id = AddrId,
+             data = Bin,
+             dsize = DSize,
              rep_method = RepMethod,
              ec_method = ECMethod,
-             ec_params = ECParams} = Object_1,
+             ec_params = ECParams} = Object_2,
+    MinObjSizeForEC = ?env_erasure_coding_min_object_size(),
 
     case RepMethod of
-        ?REP_ERASURE_CODE ->
+        ?REP_ERASURE_CODE when DSize >= MinObjSizeForEC ->
+            %% Execute encoding object,
+            %%   then generate the plural OBJECTs,
+            %%   then replicate them into the cluster
             case leo_erasure:encode(ECMethod, ECParams, Bin) of
                 {ok, IdWithBlockL} ->
-                    Fragments = [Object_1#?OBJECT{data = <<>>,
+                    Fragments = [Object_1#?OBJECT{data = FBin,
                                                   fid = FId,
                                                   fsize = byte_size(FBin)}
                                  || {FId, FBin} <- IdWithBlockL],
@@ -281,11 +302,13 @@ put(Object, ReqId) ->
                 Error ->
                     Error
             end;
+        ?REP_ERASURE_CODE ->
+            Object_3 = Object_1#?OBJECT{rep_method = ?REP_ERASURE_CODE,
+                                        ec_method = undefined,
+                                        ec_params = undefined},
+            replicate_fun(?REP_LOCAL, ?CMD_PUT, AddrId, Object_3);
         _ ->
-            replicate_fun(?REP_LOCAL, ?CMD_PUT, Object_1#?OBJECT.addr_id,
-                          Object_1#?OBJECT{method = ?CMD_PUT,
-                                           clock  = leo_date:clock(),
-                                           req_id = ReqId})
+            replicate_fun(?REP_LOCAL, ?CMD_PUT, AddrId, Object_2)
     end.
 
 
@@ -795,26 +818,32 @@ replicate_fun(?REP_LOCAL, Method, AddrId, #?OBJECT{rep_method = ?REP_COPY} = Obj
 replicate_fun(_,_,_,_) ->
     {error, badargs}.
 
+%% @doc Store encoded objects for the erasure-coding support
 %% @private
 -spec(replicate_fun(replication(), request_verb(), [#?OBJECT{}]) ->
              {ok, ETag} | {error, any()} when ETag::{etag, integer()}).
 replicate_fun(?REP_LOCAL, Method,
               [#?OBJECT{rep_method = ?REP_ERASURE_CODE,
                         key = Key,
-                        ec_params = {CodingParam_K, CodingParam_M,_CodingParam_W}}|_] = Fragments) ->
+                        ec_params = {CodingParam_K,
+                                     CodingParam_M,_}}|_] = Fragments) ->
     case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
         not_found ->
             TotalReplicas = CodingParam_K + CodingParam_M,
             case leo_redundant_manager_api:collect_redundancies_by_key(Key, TotalReplicas) of
-                {ok, {Options, RedundantNodeL}} ->
+                {ok, {Options, RedundantNodeL}}
+                  when TotalReplicas == erlang:length(RedundantNodeL) ->
                     N = leo_misc:get_value(?PROP_N, Options),
                     W = leo_misc:get_value(?PROP_W, Options),
                     D = leo_misc:get_value(?PROP_D, Options),
-                    Quorum = ?quorum_of_fragments(Method, N, W, D, TotalReplicas),
+                    Quorum = ?quorum_of_fragments(
+                                Method, N, W, D, CodingParam_M, TotalReplicas),
 
                     leo_storage_replicator:replicate(
                       Method, Quorum, RedundantNodeL, Fragments,
                       replicate_callback(erlang:hd(Fragments)));
+                {ok,_} ->
+                    {error, invalid_redundancies};
                 Error ->
                     Error
             end;

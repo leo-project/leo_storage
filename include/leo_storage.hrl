@@ -22,35 +22,32 @@
 %% LeoFS Storage - Constant/Macro/Record
 %%
 %%====================================================================
+
 %% @doc default-values.
-%%
 -define(SHUTDOWN_WAITING_TIME, 2000).
 -define(MAX_RESTART, 5).
 -define(MAX_TIME, 60).
 -define(RETRY_TIMES, 5).
 
 -ifdef(TEST).
--define(TIMEOUT,         1000).
--define(DEF_REQ_TIMEOUT, 1000).
+-define(TIMEOUT, timer:seconds(1)).
+-define(DEF_REQ_TIMEOUT, timer:seconds(1)).
 -else.
--define(TIMEOUT,          5000). %%  5sec
--define(DEF_REQ_TIMEOUT, 30000). %% 30sec
+-define(TIMEOUT, timer:seconds(5)).
+-define(DEF_REQ_TIMEOUT, timer:seconds(30)).
 -endif.
 
 %% @doc operationg-methods.
-%%
--define(CMD_GET,    get).
--define(CMD_PUT,    put).
+-define(CMD_GET, get).
+-define(CMD_PUT, put).
 -define(CMD_DELETE, delete).
--define(CMD_HEAD,   head).
+-define(CMD_HEAD, head).
 -type(request_verb() :: ?CMD_GET |
                         ?CMD_PUT |
                         ?CMD_DELETE |
-                        ?CMD_HEAD
-                        ).
+                        ?CMD_HEAD).
 
 %% @doc queue-related.
-%%
 -define(QUEUE_ID_PER_OBJECT,        'leo_per_object_queue').
 -define(QUEUE_ID_SYNC_BY_VNODE_ID,  'leo_sync_by_vnode_id_queue').
 -define(QUEUE_ID_DIRECTORY,         'leo_directory_queue').
@@ -349,7 +346,7 @@
 -define(DEF_MQ_INTERVAL_MAX, 32).
 -define(DEF_MQ_INTERVAL_MIN,  8).
 
-%% Retrieve a quorum bv a method
+%% @doc Retrieve a quorum bv a method for the replication method
 -define(quorum(_Method,_W,_D),
         case _Method of
             ?CMD_DELETE ->
@@ -358,12 +355,21 @@
                 _W
         end).
 
--define(quorum_of_fragments(_Method,_N,_W,_D,_TotalFragments),
-        case _Method of
-            ?CMD_DELETE ->
-                leo_math:ceiling(_TotalFragments * _D/_N);
-            _ ->
-                leo_math:ceiling(_TotalFragments * _W/_N)
+%% @doc Retrieve a quorum bv a method for the erasure-coding method
+-define(quorum_of_fragments(_Method,_N,_W,_D,_M,_TotalFragments),
+        begin
+            _Q = case _Method of
+                     ?CMD_DELETE ->
+                         leo_math:ceiling(_TotalFragments * _D/_N);
+                     _ ->
+                         leo_math:ceiling(_TotalFragments * _W/_N)
+                 end,
+            case _Q < _M of
+                true ->
+                    _M;
+                false ->
+                    _Q
+            end
         end).
 
 
@@ -524,12 +530,12 @@
 %%    * round(active-size/total-size)
 %%    * default:50%
 -ifdef(TEST).
--define(DEF_WARN_ACTIVE_SIZE_RATIO,      95).
+-define(DEF_WARN_ACTIVE_SIZE_RATIO, 95).
 -define(DEF_THRESHOLD_ACTIVE_SIZE_RATIO, 90).
 -define(DEF_THRESHOLD_NUM_OF_NOTIFIED_MSGS, 10).
 -define(DEF_STORAGE_WATCHDOG_INTERVAL, timer:seconds(3)).
 -else.
--define(DEF_WARN_ACTIVE_SIZE_RATIO,      55).
+-define(DEF_WARN_ACTIVE_SIZE_RATIO, 55).
 -define(DEF_THRESHOLD_ACTIVE_SIZE_RATIO, 50).
 -define(DEF_THRESHOLD_NUM_OF_NOTIFIED_MSGS, 10).
 -define(DEF_STORAGE_WATCHDOG_INTERVAL, timer:seconds(180)).
@@ -585,8 +591,7 @@
             end
         end).
 
-%% For the autonomic-operation
-%%
+%% @doc For the autonomic-operation
 -define(env_auto_compaction_enabled(),
         case application:get_env(leo_storage, auto_compaction_enabled) of
             {ok, EnvAutoCompactionEnabled} ->
@@ -617,6 +622,18 @@
                 EnvAutoCompactionCoefficient;
             _ ->
                 ?DEF_COMPACTION_COEFFICIENT_MID
+        end).
+
+
+%% @doc For the erasure-coding support
+-define(DEF_ERASURE_CODING_MIN_OBJ_SIZE, 262144).
+
+-define(env_erasure_coding_min_object_size(),
+        case application:get_env(leo_storage, min_object_size_for_ec) of
+            {ok, EnvErasureCondingMinObjSize} ->
+                EnvErasureCondingMinObjSize;
+            _ ->
+                ?DEF_ERASURE_CODING_MIN_OBJ_SIZE
         end).
 
 

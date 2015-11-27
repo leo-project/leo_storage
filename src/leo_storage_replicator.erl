@@ -56,8 +56,7 @@
          }).
 
 
-%% @doc Replicate an object to local-node and remote-nodes.
-%%
+%% @doc Replicate/Store an object to local-node and remote-nodes.
 -spec(replicate(Method, Quorum, Nodes, Object, Callback) ->
              any() when Method::put|delete,
                         Quorum::pos_integer(),
@@ -91,7 +90,8 @@ replicate(Method, Quorum, Nodes, [#?OBJECT{rep_method = ?REP_ERASURE_CODE,
                                            addr_id = AddrId,
                                            key = Key,
                                            req_id = ReqId}|_] = Fragments, Callback) ->
-    case (erlang:length(Nodes) == erlang:length(Fragments)) of
+    TotalNodes = erlang:length(Nodes),
+    case (TotalNodes == erlang:length(Fragments)) of
         true ->
             Fun = fun({#redundant_node{node = Node,
                                        available = Available
@@ -105,11 +105,12 @@ replicate(Method, Quorum, Nodes, [#?OBJECT{rep_method = ?REP_ERASURE_CODE,
             State = #state{method = Method,
                            addr_id = AddrId,
                            key = Key,
+                           num_of_nodes = TotalNodes,
                            req_id = ReqId,
                            callback = Callback,
                            errors = [],
                            is_reply = false},
-            ?debugVal({Method, Quorum, Nodes, Key, Fragments}),
+            ?debugVal({Method, Quorum, TotalNodes, Nodes, Key, Fragments}),
             ?debugVal(NodeWithFragmntL),
             ?debugVal(State),
 
@@ -273,7 +274,7 @@ loop(N, W, ResL, Ref, Observer, #state{method = Method,
             loop(N-1, W, ResL, Ref, Observer, State_1);
         {Ref, {error, {Node, Cause, IdWithFragmentL}}} ->
             %% @TODO:
-            FIdList = [FId || {FId,_FBin} <- IdWithFragmentL],
+            FIdList = [FId || {FId,_FObj} <- IdWithFragmentL],
             enqueue(Method, ?ERR_TYPE_STORE_FRAGMENT, AddrId, Key, FIdList),
             State_1 = State#state{errors = [{Node, Cause}|E]},
             loop(N - 1, W, ResL, Ref, Observer, State_1)
@@ -325,7 +326,7 @@ replicate_fun(Ref, #req_params{pid = Pid,
                      Type::error_msg_type(),
                      AddrId::non_neg_integer(),
                      Key::binary()).
-enqueue('put', ?ERR_TYPE_REPLICATE_DATA = Type,  AddrId, Key) ->
+enqueue(?CMD_PUT, ?ERR_TYPE_REPLICATE_DATA = Type,  AddrId, Key) ->
     QId = ?QUEUE_TYPE_PER_OBJECT,
     case leo_storage_mq:publish(QId, AddrId, Key, Type) of
         ok ->
@@ -335,7 +336,7 @@ enqueue('put', ?ERR_TYPE_REPLICATE_DATA = Type,  AddrId, Key) ->
                   [{qid, QId}, {addr_id, AddrId},
                    {key, Key}, {type, Type}, {cause, Cause}])
     end;
-enqueue('delete', ?ERR_TYPE_REPLICATE_DATA, AddrId, Key) ->
+enqueue(?CMD_DELETE, ?ERR_TYPE_REPLICATE_DATA, AddrId, Key) ->
     QId = ?QUEUE_TYPE_ASYNC_DELETE_OBJ,
     case leo_storage_mq:publish(QId, AddrId, Key) of
         ok ->
@@ -347,7 +348,7 @@ enqueue('delete', ?ERR_TYPE_REPLICATE_DATA, AddrId, Key) ->
     end.
 
 %% @private
-enqueue('put', ?ERR_TYPE_STORE_FRAGMENT,  AddrId, Key, FragmentIdL) ->
+enqueue(?CMD_PUT, ?ERR_TYPE_STORE_FRAGMENT,  AddrId, Key, FragmentIdL) ->
     QId = ?QUEUE_TYPE_PER_FRAGMENT,
     case leo_storage_mq:publish(QId, AddrId, Key, FragmentIdL) of
         ok ->
@@ -358,7 +359,7 @@ enqueue('put', ?ERR_TYPE_STORE_FRAGMENT,  AddrId, Key, FragmentIdL) ->
                    {key, Key}, {fragment_id_list, FragmentIdL},
                    {cause, Cause}])
     end;
-enqueue('delete', ?ERR_TYPE_STORE_FRAGMENT, AddrId, Key, FragmentIdL) ->
+enqueue(?CMD_DELETE, ?ERR_TYPE_STORE_FRAGMENT, AddrId, Key, FragmentIdL) ->
     QId = ?QUEUE_TYPE_PER_FRAGMENT,
     case leo_storage_mq:publish(QId, AddrId, Key, FragmentIdL) of
         ok ->
