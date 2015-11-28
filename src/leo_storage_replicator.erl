@@ -95,7 +95,7 @@ replicate(Method, Quorum, Nodes, [#?OBJECT{rep_method = ?REP_ERASURE_CODE,
         true ->
             Fun = fun({#redundant_node{node = Node,
                                        available = Available
-                                      }, #?OBJECT{fid = FId} = FObj}, Acc) ->
+                                      }, #?OBJECT{cindex = FId} = FObj}, Acc) ->
                           dict:append({Node, Available}, {FId, FObj}, Acc)
                   end,
             NodeWithFragmntL = dict:to_list(

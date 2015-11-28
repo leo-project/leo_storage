@@ -280,6 +280,7 @@ put(Object, ReqId) ->
                                 clock = leo_date:clock(),
                                 req_id = ReqId},
     #?OBJECT{addr_id = AddrId,
+             key = Key,
              data = Bin,
              dsize = DSize,
              rep_method = RepMethod,
@@ -294,10 +295,15 @@ put(Object, ReqId) ->
             %%   then replicate them into the cluster
             case leo_erasure:encode(ECMethod, ECParams, Bin) of
                 {ok, IdWithBlockL} ->
-                    Fragments = [Object_1#?OBJECT{data = FBin,
-                                                  fid = FId,
-                                                  fsize = byte_size(FBin)}
-                                 || {FId, FBin} <- IdWithBlockL],
+                    Fragments = [begin
+                                     FIdBin = list_to_binary(integer_to_list(FId)),
+                                     Object_1#?OBJECT{key = << Key/binary,
+                                                               "\n",
+                                                               FIdBin/binary >>,
+                                                      data = FBin,
+                                                      cindex = FId,
+                                                      csize = byte_size(FBin)}
+                                 end || {FId, FBin} <- IdWithBlockL],
                     replicate_fun(?REP_LOCAL, ?CMD_PUT, Fragments);
                 Error ->
                     Error
