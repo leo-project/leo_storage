@@ -20,10 +20,8 @@
 %%
 %% -------------------------------------------------------------------
 %% LeoFS Storage - EUnit
-%% @doc
-%% @end
 %%====================================================================
--module(leo_storage_replicator_tests).
+-module(leo_storage_replicator_cp_tests).
 
 -include("leo_storage.hrl").
 -include_lib("leo_mq/include/leo_mq.hrl").
@@ -31,15 +29,15 @@
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
--define(TEST_SERVER_ID,    'replicator_0').
--define(TEST_RING_ID_1,    255).
--define(TEST_KEY_1,        <<"air/on/g/string/music.png">>).
--define(TEST_BODY_1,       <<"air-on-g-string">>).
--define(TEST_META_1, #?METADATA{key       = ?TEST_KEY_1,
-                                addr_id   = 1,
-                                clock     = 9,
+-define(TEST_SERVER_ID, 'replicator_0').
+-define(TEST_RING_ID_1, 255).
+-define(TEST_KEY_1, <<"air/on/g/string/music.png">>).
+-define(TEST_BODY_1, <<"air-on-g-string">>).
+-define(TEST_META_1, #?METADATA{key = ?TEST_KEY_1,
+                                addr_id = 1,
+                                clock = 9,
                                 timestamp = 8,
-                                checksum  = 7}).
+                                checksum = 7}).
 
 -define(TEST_REDUNDANCIES_1, [#redundant_node{node = Test0Node, available = true},
                               #redundant_node{node = Test1Node, available = true}]).
@@ -51,9 +49,9 @@
 
 replicate_test_() ->
     {foreach, fun setup/0, fun teardown/1,
-     [{with, [T]} || T <- [fun replicate_obj_0_/1,
-                           fun replicate_obj_1_/1,
-                           fun replicate_obj_2_/1
+     [{with, [T]} || T <- [fun replicate_obj_1_/1,
+                           fun replicate_obj_2_/1,
+                           fun replicate_obj_3_/1
                           ]]}.
 
 setup() ->
@@ -86,34 +84,34 @@ teardown({_Test0Node, Test1Node}) ->
 %% for Object
 %%--------------------------------------------------------------------
 %% object-replication#1
-replicate_obj_0_({Test0Node, Test1Node}) ->
+replicate_obj_1_({Test0Node, Test1Node}) ->
     gen_mock_2(object, {Test0Node, Test1Node}, ok),
     gen_mock_3(object, Test1Node, ok),
 
-    Object = #?OBJECT{key     = ?TEST_KEY_1,
+    Object = #?OBJECT{key = ?TEST_KEY_1,
                       addr_id = ?TEST_RING_ID_1,
-                      dsize   = erlang:byte_size(?TEST_BODY_1),
-                      data    = ?TEST_BODY_1},
+                      dsize = erlang:byte_size(?TEST_BODY_1),
+                      data = ?TEST_BODY_1},
 
     F = fun({ok, _Method, ETag}) ->
                 {ok, ETag};
            ({error, Cause}) ->
                 {error, Cause}
         end,
-    {ok, _} = leo_storage_replicator:replicate(
+    {ok, _} = leo_storage_replicator_cp:replicate(
                 put, 1, ?TEST_REDUNDANCIES_1, Object, F),
     timer:sleep(100),
     ok.
 
 %% object-replication#2
-replicate_obj_1_({Test0Node, Test1Node}) ->
+replicate_obj_2_({Test0Node, Test1Node}) ->
     gen_mock_2(object, {Test0Node, Test1Node}, fail),
     gen_mock_3(object, Test1Node, ok),
 
-    Object = #?OBJECT{key     = ?TEST_KEY_1,
+    Object = #?OBJECT{key = ?TEST_KEY_1,
                       addr_id = ?TEST_RING_ID_1,
-                      dsize   = erlang:byte_size(?TEST_BODY_1),
-                      data    = ?TEST_BODY_1},
+                      dsize = erlang:byte_size(?TEST_BODY_1),
+                      data  = ?TEST_BODY_1},
 
     F = fun({ok, _Method, ETag}) ->
                 {ok, ETag};
@@ -121,28 +119,28 @@ replicate_obj_1_({Test0Node, Test1Node}) ->
                 {error, Cause}
         end,
     %% {ok, {etag, _}} =
-    Res = leo_storage_replicator:replicate(
+    Res = leo_storage_replicator_cp:replicate(
             put, 1, ?TEST_REDUNDANCIES_1, Object, F),
     ?assertEqual({ok, 1}, Res),
     timer:sleep(100),
     ok.
 
 %% object-replication#3
-replicate_obj_2_({Test0Node, Test1Node}) ->
+replicate_obj_3_({Test0Node, Test1Node}) ->
     gen_mock_2(object, {Test0Node, Test1Node}, ok),
     gen_mock_3(object, Test1Node, fail),
 
-    Object = #?OBJECT{key     = ?TEST_KEY_1,
+    Object = #?OBJECT{key = ?TEST_KEY_1,
                       addr_id = ?TEST_RING_ID_1,
-                      dsize   = erlang:byte_size(?TEST_BODY_1),
-                      data    = ?TEST_BODY_1},
+                      dsize = erlang:byte_size(?TEST_BODY_1),
+                      data = ?TEST_BODY_1},
 
     F = fun({ok, _Method, ETag}) ->
                 {ok, ETag};
            ({error, Cause}) ->
                 {error, Cause}
         end,
-    {ok, {etag, _}} = leo_storage_replicator:replicate(
+    {ok, {etag, _}} = leo_storage_replicator_cp:replicate(
                         put, 1, ?TEST_REDUNDANCIES_1, Object, F),
     timer:sleep(100),
     ok.
@@ -157,8 +155,8 @@ gen_mock_2(object, {_Test0Node, _Test1Node}, Case) ->
     meck:expect(leo_storage_mq, publish,
                 fun(Type, VNodeId, Key, _ErrorType) ->
                         ?assertEqual(?QUEUE_TYPE_PER_OBJECT, Type),
-                        ?assertEqual(?TEST_RING_ID_1,        VNodeId),
-                        ?assertEqual(?TEST_KEY_1,            Key),
+                        ?assertEqual(?TEST_RING_ID_1, VNodeId),
+                        ?assertEqual(?TEST_KEY_1, Key),
                         ok
                 end),
 
@@ -168,42 +166,53 @@ gen_mock_2(object, {_Test0Node, _Test1Node}, Case) ->
                         ?assertEqual(true, erlang:is_reference(Ref)),
 
                         case Case of
-                            ok   -> {ok, Ref, {etag, 1}};
-                            fail -> {error, Ref, []}
+                            ok ->
+                                {ok, Ref, {etag, 1}};
+                            fail ->
+                                {error, Ref, []}
                         end
                 end),
     meck:expect(leo_storage_handler_object, put,
                 fun(Ref, From, _Object, _ReqId) ->
                         case Case of
-                            ok   -> erlang:send(From, {Ref, {ok, 1}});
-                            fail -> erlang:send(From, {Ref, {error, {node(), []}}})
+                            ok ->
+                                erlang:send(From, {Ref, {ok, 1}});
+                            fail ->
+                                erlang:send(From, {Ref, {error, {node(), []}}})
                         end
                 end),
     ok.
 
 %% for object-operation #2.
 gen_mock_3(object, Test1Node, Case) ->
-    ok = rpc:call(Test1Node, meck, new,    [leo_storage_handler_object, [no_link, non_strict]]),
-    ok = rpc:call(Test1Node, meck, expect, [leo_storage_handler_object, put,
-                                            fun(#?OBJECT{addr_id = VNodeId,
-                                                         key     = Key,
-                                                         data    = Body,
-                                                         del     = DelFlag}) ->
-                                                    ?assertEqual(?TEST_RING_ID_1, VNodeId),
-                                                    ?assertEqual(?TEST_KEY_1,     Key),
-                                                    ?assertEqual(?TEST_BODY_1,    Body),
-                                                    ?assertEqual(0,               DelFlag),
-                                                    case Case of
-                                                        ok   -> {ok, {etag, 1}};
-                                                        fail -> {error, []}
-                                                    end
-                                            end]),
-    ok = rpc:call(Test1Node, meck, expect, [leo_storage_handler_object, put,
-                                            fun(Ref, From,_Object,_ReqId) ->
-                                                    case Case of
-                                                        ok   -> erlang:send(From, {Ref, {ok, 1}});
-                                                        fail -> erlang:send(From, {Ref, {error, {node(),[]}}})
-                                                    end
-                                            end]),
+    ok = rpc:call(Test1Node, meck, new,
+                  [leo_storage_handler_object, [no_link, non_strict]]),
+    ok = rpc:call(Test1Node, meck, expect,
+                  [leo_storage_handler_object, put,
+                   fun(#?OBJECT{addr_id = VNodeId,
+                                key = Key,
+                                data = Body,
+                                del = DelFlag}) ->
+                           ?assertEqual(?TEST_RING_ID_1, VNodeId),
+                           ?assertEqual(?TEST_KEY_1, Key),
+                           ?assertEqual(?TEST_BODY_1, Body),
+                           ?assertEqual(0, DelFlag),
+                           case Case of
+                               ok ->
+                                   {ok, {etag, 1}};
+                               fail ->
+                                   {error, []}
+                           end
+                   end]),
+    ok = rpc:call(Test1Node, meck, expect,
+                  [leo_storage_handler_object, put,
+                   fun(Ref, From,_Object,_ReqId) ->
+                           case Case of
+                               ok ->
+                                   erlang:send(From, {Ref, {ok, 1}});
+                               fail ->
+                                   erlang:send(From, {Ref, {error, {node(),[]}}})
+                           end
+                   end]),
     ok.
 -endif.

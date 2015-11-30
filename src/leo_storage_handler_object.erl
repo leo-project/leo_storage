@@ -210,8 +210,8 @@ get_fun(AddrId, Key, StartPos, EndPos, IsForcedCheck) ->
 %%--------------------------------------------------------------------
 %% API - PUT
 %%--------------------------------------------------------------------
-%% @doc Insert an object (request between storage-nodes).
-%%
+%% @doc Put an object
+%%      Request between storage-nodes
 -spec(put(ObjAndRef) ->
              {ok, reference(), tuple()} |
              {error, reference(), any()}
@@ -220,18 +220,21 @@ get_fun(AddrId, Key, StartPos, EndPos, IsForcedCheck) ->
 put({[{_,#?OBJECT{rep_method = ?REP_ERASURE_CODE}}|_] = Fragments, Ref}) ->
     %% method: ERASURE_CODE
     ?debugVal({Fragments, Ref}),
+
     case lists:foldl(fun({FId, #?OBJECT{} = Object}, {Acc_1, Acc_2}) ->
                              case put({Object, Ref}) of
                                  {ok, Ref,_} ->
+                                     ?debugVal({FId, Object}),
                                      {[FId|Acc_1], Acc_2};
-                                 Error ->
-                                     {Acc_1, [{FId, Error}|Acc_2]}
+                                 {error, Ref, Cause} ->
+                                     {Acc_1, [{FId, Cause}|Acc_2]}
                              end
                      end, {[],[]}, Fragments) of
-        {_,[]} ->
-            {ok, Ref};
-        {_,[_|_] = Errors} ->
-            {error, Ref, Errors}
+        {[], ErrorL} ->
+            {error, Ref, ErrorL};
+        {RetL, ErrorL} ->
+            ?debugVal({RetL, ErrorL}),
+            {ok, Ref, {RetL, ErrorL}}
     end;
 put({Object, Ref}) ->
     %% method: COPY_OBJECT
@@ -267,8 +270,7 @@ put({Object, Ref}) ->
             put_fun(Ref, AddrId, Key, Object_1)
     end.
 
-%% @doc Insert an object (request from gateway).
-%%
+%% @doc Put an object (request from gateway).
 -spec(put(Object, ReqId) ->
              {ok, ETag} | {error, any()} when Object::#?OBJECT{},
                                               ReqId::integer(),
@@ -279,8 +281,7 @@ put(Object, ReqId) ->
     Object_2 = Object_1#?OBJECT{method = ?CMD_PUT,
                                 clock = leo_date:clock(),
                                 req_id = ReqId},
-    #?OBJECT{addr_id = AddrId,
-             key = Key,
+    #?OBJECT{key = Key,
              data = Bin,
              dsize = DSize,
              rep_method = RepMethod,
@@ -295,16 +296,18 @@ put(Object, ReqId) ->
             %%   then replicate them into the cluster
             case leo_erasure:encode(ECMethod, ECParams, Bin) of
                 {ok, IdWithBlockL} ->
+                    ParentObj = Object_2#?OBJECT{data = <<>>,
+                                                 cnumber = erlang:length(IdWithBlockL)},
                     Fragments = [begin
                                      FIdBin = list_to_binary(integer_to_list(FId)),
-                                     Object_1#?OBJECT{key = << Key/binary,
+                                     Object_2#?OBJECT{key = << Key/binary,
                                                                "\n",
                                                                FIdBin/binary >>,
                                                       data = FBin,
                                                       cindex = FId,
                                                       csize = byte_size(FBin)}
                                  end || {FId, FBin} <- IdWithBlockL],
-                    replicate_fun(?REP_LOCAL, ?CMD_PUT, Fragments);
+                    replicate_fun(?REP_LOCAL, ?CMD_PUT, {ParentObj, Fragments});
                 Error ->
                     Error
             end;
@@ -312,21 +315,43 @@ put(Object, ReqId) ->
             Object_3 = Object_1#?OBJECT{rep_method = ?REP_ERASURE_CODE,
                                         ec_method = undefined,
                                         ec_params = undefined},
-            replicate_fun(?REP_LOCAL, ?CMD_PUT, AddrId, Object_3);
+            replicate_fun(?REP_LOCAL, ?CMD_PUT, Object_3);
         _ ->
-            replicate_fun(?REP_LOCAL, ?CMD_PUT, AddrId, Object_2)
+            replicate_fun(?REP_LOCAL, ?CMD_PUT, Object_2)
     end.
 
 
-%% @doc Insert an  object (request from remote-storage-nodes/replicator).
-%%
+%% @doc Put an object
+%%      Request from remote-storage-nodes/replicator - between storage-nodes
 -spec(put(Ref, From, Object, ReqId) ->
              {ok, atom()} |
              {error, any()} when Ref::reference(),
                                  From::pid(),
-                                 Object::#?OBJECT{},
+                                 Object::#?OBJECT{}|[{non_neg_integer(), #?OBJECT{}}],
                                  ReqId::integer()).
+%% for erasure-coding
+put(Ref, From, [{_,#?OBJECT{rep_method = ?REP_ERASURE_CODE}}|_] = Fragments, ReqId) ->
+    case lists:foldl(
+           fun({FId, #?OBJECT{} = Object}, {Acc_1, Acc_2}) ->
+                   case put(Ref, From, Object, ReqId, false) of
+                       {ok,_} ->
+                           {[{FId, ok}|Acc_1], Acc_2};
+                       {error, Cause} ->
+                           {Acc_1, [{FId, Cause}|Acc_2]}
+                   end
+           end, {[],[]}, Fragments) of
+        {[], ErrorL} ->
+            erlang:send(From, {Ref, {error, {node(), ErrorL}}});
+        {RetL, ErrorL} ->
+            erlang:send(From, {Ref, {ok, {RetL, ErrorL}}})
+    end;
+
+%% for copy-object
 put(Ref, From, Object, ReqId) ->
+    put(Ref, From, Object, ReqId, true).
+
+%% @private
+put(Ref, From, Object, ReqId, IsSendMsg) ->
     Object_1 = leo_object_storage_transformer:transform_object(Object),
     Method = case Object_1#?OBJECT.del of
                  ?DEL_TRUE ->
@@ -337,18 +362,24 @@ put(Ref, From, Object, ReqId) ->
                      ?CMD_PUT
              end,
 
-    case replicate_fun(?REP_REMOTE, Method, Object_1) of
-        {ok, ETag} ->
-            erlang:send(From, {Ref, {ok, ETag}});
-        %% not found an object (during rebalance and delete-operation)
-        {error, not_found} when ReqId == 0 ->
-            erlang:send(From, {Ref, {ok, 0}});
-        {error, Cause} ->
-            erlang:send(From, {Ref, {error, {node(), Cause}}})
+    Ret = case replicate_fun(?REP_REMOTE, Method, Object_1) of
+              {ok, ETag} ->
+                  {ok, ETag};
+              %% not found an object (during rebalance and delete-operation)
+              {error, not_found} when ReqId == 0 ->
+                  {ok, 0};
+              {error, Cause} ->
+                  {error, {node(), Cause}}
+          end,
+    case IsSendMsg of
+        true ->
+            erlang:send(From, {Ref, Ret});
+        false ->
+            Ret
     end.
 
 
-%% Input an object into the object-storage
+%% Put an object into the object-storage
 %% @private
 -spec(put_fun(Ref, AddrId, Key, Object) ->
              {ok, reference(), tuple()} |
@@ -471,7 +502,6 @@ delete(Object, ReqId) ->
 delete(Object, ReqId, CheckUnderDir) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
     case replicate_fun(?REP_LOCAL, ?CMD_DELETE,
-                       Object#?OBJECT.addr_id,
                        Object#?OBJECT{method = ?CMD_DELETE,
                                       data = <<>>,
                                       dsize = 0,
@@ -603,8 +633,8 @@ replicate(Object) ->
                        end,
             case get_active_redundancies(Quorum_2, Redundancies_1) of
                 {ok, Redundancies_2} ->
-                    leo_storage_replicator:replicate(Method, Quorum_2, Redundancies_2,
-                                                     Object, replicate_callback());
+                    leo_storage_replicator_cp:replicate(Method, Quorum_2, Redundancies_2,
+                                                        Object, replicate_callback());
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -791,12 +821,14 @@ read_and_repair_3(_,_,_) ->
     {error, invalid_request}.
 
 
-%% @doc Replicate an object from local-node to remote node
+%% @doc Replicate/Store an object from local-node to remote node
 %% @private
--spec(replicate_fun(replication(), request_verb(), integer(), #?OBJECT{}) ->
+-spec(replicate_fun(replication(), request_verb(), #?OBJECT{}|{#?OBJECT{},[#?OBJECT{}]}) ->
              {ok, ETag} | {error, any()} when ETag::{etag, integer()}).
-replicate_fun(?REP_LOCAL, Method, AddrId, #?OBJECT{rep_method = ?REP_COPY} = Object) ->
-    %% Check state of the node
+replicate_fun(?REP_LOCAL, Method,
+              #?OBJECT{addr_id = AddrId,
+                       rep_method = ?REP_COPY} = Object) ->
+    %% Replicate an object into the cluster
     case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
         not_found ->
             case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
@@ -807,7 +839,7 @@ replicate_fun(?REP_LOCAL, Method, AddrId, #?OBJECT{rep_method = ?REP_COPY} = Obj
                     Quorum = ?quorum(Method, WriteQuorum, DeleteQuorum),
                     case get_active_redundancies(Quorum, Redundancies) of
                         {ok, Redundancies_1} ->
-                            leo_storage_replicator:replicate(
+                            leo_storage_replicator_cp:replicate(
                               Method, Quorum, Redundancies_1, Object#?OBJECT{ring_hash = RingHash},
                               replicate_callback(Object));
                         {error, Reason} ->
@@ -817,37 +849,54 @@ replicate_fun(?REP_LOCAL, Method, AddrId, #?OBJECT{rep_method = ?REP_COPY} = Obj
                     {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
             end;
         {ok, ErrorItems}->
-            ?debug("replicate_fun/4",
+            ?debug("replicate_fun/3",
                    "~p", [{error_items, ErrorItems}]),
             {error, unavailable}
     end;
-replicate_fun(_,_,_,_) ->
-    {error, badargs}.
 
-%% @doc Store encoded objects for the erasure-coding support
-%% @private
--spec(replicate_fun(replication(), request_verb(), [#?OBJECT{}]) ->
-             {ok, ETag} | {error, any()} when ETag::{etag, integer()}).
 replicate_fun(?REP_LOCAL, Method,
-              [#?OBJECT{rep_method = ?REP_ERASURE_CODE,
-                        key = Key,
-                        ec_params = {CodingParam_K,
-                                     CodingParam_M,_}}|_] = Fragments) ->
+              {ParentObj, [#?OBJECT{rep_method = ?REP_ERASURE_CODE,
+                                    key = Key,
+                                    ec_params = {CodingParam_K,
+                                                 CodingParam_M,_}}|_] = Fragments}) ->
+    %% Store encoded objects for the erasure-coding support
     case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
         not_found ->
             TotalReplicas = CodingParam_K + CodingParam_M,
             case leo_redundant_manager_api:collect_redundancies_by_key(Key, TotalReplicas) of
                 {ok, {Options, RedundantNodeL}}
                   when TotalReplicas == erlang:length(RedundantNodeL) ->
-                    N = leo_misc:get_value(?PROP_N, Options),
-                    W = leo_misc:get_value(?PROP_W, Options),
-                    D = leo_misc:get_value(?PROP_D, Options),
-                    Quorum = ?quorum_of_fragments(
-                                Method, N, W, D, CodingParam_M, TotalReplicas),
+                    NumOfReplicas = leo_misc:get_value(?PROP_N, Options),
+                    QuorumForRep = [],
+                    QuorumForFrL = ?quorum_of_fragments(
+                                      Method, NumOfReplicas,
+                                      leo_misc:get_value(?PROP_W, Options),
+                                      leo_misc:get_value(?PROP_D, Options),
+                                      CodingParam_M, TotalReplicas),
 
-                    leo_storage_replicator:replicate(
-                      Method, Quorum, RedundantNodeL, Fragments,
-                      replicate_callback(erlang:hd(Fragments)));
+                    %% Replicate the parent object (metadata)
+                    Self = erlang:self(),
+                    Ref = erlang:make_ref(),
+                    spawn(
+                      fun() ->
+                              Ret = leo_storage_replicator_cp:replicate(
+                                      Method, QuorumForRep,
+                                      lists:sublist(RedundantNodeL, NumOfReplicas),
+                                      ParentObj#?OBJECT{ring_hash = leo_misc:get_value(
+                                                                      ?PROP_RING_HASH, Options)},
+                                      replicate_callback(ParentObj)),
+                              erlang:send(Self, {parent, Ref, Ret})
+                      end),
+
+                    %% Store the fragments
+                    spawn(
+                      fun() ->
+                              Ret = leo_storage_replicator_ec:replicate(
+                                      Method, QuorumForFrL, RedundantNodeL, Fragments,
+                                      replicate_callback(erlang:hd(Fragments))),
+                              erlang:send(Self, {fragments, Ref, Ret})
+                      end),
+                    replicate_fun_loop(Ref, []);
                 {ok,_} ->
                     {error, invalid_redundancies};
                 Error ->
@@ -888,6 +937,27 @@ replicate_fun(?REP_REMOTE, Method, Object) ->
     end;
 replicate_fun(_,_,_) ->
     {error, badargs}.
+
+
+%% @doc
+%% @private
+replicate_fun_loop(_,Acc) when erlang:length(Acc) == 2 ->
+    %% @TODO
+    ?debugVal(Acc),
+    ok;
+replicate_fun_loop(Ref, Acc) ->
+    receive
+        {parent, Ref, Ret} ->
+            ?debugVal(Ret),
+            replicate_fun_loop(Ref, [{parent, Ret}|Acc]);
+        {fragments, Ref, Ret} ->
+            ?debugVal(Ret),
+            replicate_fun_loop(Ref, [{fragments, Ret}|Acc]);
+        _ ->
+            replicate_fun_loop(Ref, Acc)
+    after ?DEF_REQ_TIMEOUT ->
+            {error, timeout}
+    end.
 
 
 %% @doc Being callback, after executed replication of an object

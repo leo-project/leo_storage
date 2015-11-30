@@ -182,8 +182,8 @@ put_0_({Node0, Node1}) ->
                                            n = 2, r = 1, w = 1, d = 1}}
                 end),
 
-    meck:new(leo_storage_replicator, [non_strict]),
-    meck:expect(leo_storage_replicator, replicate,
+    meck:new(leo_storage_replicator_cp, [non_strict]),
+    meck:expect(leo_storage_replicator_cp, replicate,
                 fun(_Method,_Quorum,_Redundancies,_ObjectPool,_Callback) ->
                         {ok, {etag, 1}}
                 end),
@@ -258,8 +258,8 @@ delete_({Node0, Node1}) ->
                         not_found
                 end),
 
-    meck:new(leo_storage_replicator, [non_strict]),
-    meck:expect(leo_storage_replicator, replicate,
+    meck:new(leo_storage_replicator_cp, [non_strict]),
+    meck:expect(leo_storage_replicator_cp, replicate,
                 fun(_Method,_Quorum,_Redundancies,_ObjectPool,_Callback) ->
                         {ok, 0}
                 end),

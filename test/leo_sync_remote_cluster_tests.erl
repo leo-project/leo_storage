@@ -73,8 +73,8 @@ gen_mocks(Node) ->
                                                }}
                      end),
 
-    ok = meck:new(leo_storage_replicator, [non_strict]),
-    ok = meck:expect(leo_storage_replicator, replicate,
+    ok = meck:new(leo_storage_replicator_cp, [non_strict]),
+    ok = meck:expect(leo_storage_replicator_cp, replicate,
                      fun(_,_,_,_,_) ->
                              ok
                      end),
