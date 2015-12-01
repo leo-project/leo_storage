@@ -54,17 +54,28 @@
 
 replicate_test_() ->
     {foreach, fun setup/0, fun teardown/1,
-     [{with, [T]} || T <- [fun replicate_obj_1_/1
-                           %% fun replicate_obj_2_/1,
-                           %% fun replicate_obj_3_/1
+     [{with, [T]} || T <- [fun replicate_obj_1_/1,
+                           fun replicate_obj_2_/1,
+                           fun replicate_obj_3_/1
                           ]]}.
 
 setup() ->
+    %% Create mocks
     meck:new(leo_logger, [non_strict]),
     meck:expect(leo_logger, append, fun(_,_,_) ->
                                             ok
                                     end),
 
+    meck:new(leo_storage_mq, [non_strict]),
+    meck:expect(leo_storage_mq, publish, fun(_,_,_,_) ->
+                                                 ok
+                                         end),
+
+    meck:new(leo_storage_msg_collector, [non_strict]),
+    meck:expect(leo_storage_msg_collector, notify, fun(_,_,_) ->
+                                                           ok
+                                                   end),
+    %% Prepare network env
     [] = os:cmd("epmd -daemon"),
     {ok, Hostname} = inet:gethostname(),
 
@@ -90,8 +101,7 @@ teardown({_TestNode_1, TestNode_2}) ->
 %%--------------------------------------------------------------------
 %% object-replication#1
 replicate_obj_1_({TestNode_1, TestNode_2}) ->
-    gen_mock_1(ok),
-    gen_mock_2([TestNode_1, TestNode_2], ok),
+    gen_mock([{TestNode_1,ok}, {TestNode_2,ok}]),
 
     CodingParam_K = 4,
     CodingParam_M = 2,
@@ -113,103 +123,86 @@ replicate_obj_1_({TestNode_1, TestNode_2}) ->
                 {error, Cause}
         end,
 
-    Quorum = ?quorum_of_fragments(
-                ?CMD_PUT, 2, 1, 1,
-                CodingParam_M, TotalReplicas),
-    ?debugVal(Quorum),
-
-    {ok, _} = leo_storage_replicator_ec:replicate(
-                put, Quorum, ?TEST_REDUNDANCIES_1, Fragments, F),
+    Quorum = ?quorum_of_fragments(?CMD_PUT, 2, 1, 1,
+                                  CodingParam_M, TotalReplicas),
+    Ret = leo_storage_replicator_ec:replicate(
+            put, Quorum, ?TEST_REDUNDANCIES_1, Fragments, F),
+    ?assertEqual({ok,{etag,0}}, Ret),
     timer:sleep(100),
     ok.
 
-%% %% object-replication#2
-%% replicate_obj_2_({TestNode_1, TestNode_2}) ->
-%%     gen_mock_1({TestNode_1, TestNode_2}, fail),
-%%     gen_mock_2(TestNode_2, ok),
-%%
-%%     Object = #?OBJECT{key = ?TEST_KEY_1,
-%%                       addr_id = ?TEST_RING_ID_1,
-%%                       dsize = erlang:byte_size(?TEST_BODY_1),
-%%                       data = ?TEST_BODY_1},
-%%
-%%     F = fun({ok, _Method, ETag}) ->
-%%                 {ok, ETag};
-%%            ({error, Cause}) ->
-%%                 {error, Cause}
-%%         end,
-%%     %% {ok, {etag, _}} =
-%%     Res = leo_storage_replicator_cp:replicate(
-%%             put, 1, ?TEST_REDUNDANCIES_1, Object, F),
-%%     ?assertEqual({ok, 1}, Res),
-%%     timer:sleep(100),
-%%     ok.
+%% object-replication#2
+replicate_obj_2_({TestNode_1, TestNode_2}) ->
+    gen_mock([{TestNode_1,ok}, {TestNode_2,fail}]),
 
-%% %% object-replication#3
-%% replicate_obj_3_({TestNode_1, TestNode_2}) ->
-%%     gen_mock_1({TestNode_1, TestNode_2}, ok),
-%%     gen_mock_2(TestNode_2, fail),
-%%
-%%     Object = #?OBJECT{key = ?TEST_KEY_1,
-%%                       addr_id = ?TEST_RING_ID_1,
-%%                       dsize = erlang:byte_size(?TEST_BODY_1),
-%%                       data = ?TEST_BODY_1},
-%%
-%%     F = fun({ok, _Method, ETag}) ->
-%%                 {ok, ETag};
-%%            ({error, Cause}) ->
-%%                 {error, Cause}
-%%         end,
-%%     {ok, {etag, _}} = leo_storage_replicator_cp:replicate(
-%%                         put, 1, ?TEST_REDUNDANCIES_1, Object, F),
-%%     timer:sleep(100),
-%%     ok.
+    CodingParam_K = 4,
+    CodingParam_M = 2,
+    TotalReplicas = CodingParam_K + CodingParam_M,
+    Fragments = lists:map(
+                  fun(Index) ->
+                          FIdBin = list_to_binary(integer_to_list(Index)),
+                          #?OBJECT{key = << ?TEST_KEY_1/binary, "\n", FIdBin/binary >>,
+                                   addr_id = ?TEST_RING_ID_1,
+                                   data = ?TEST_BODY_1,
+                                   cindex = Index,
+                                   csize = erlang:byte_size(?TEST_BODY_1)
+                                  }
+                  end, lists:seq(1, TotalReplicas)),
 
+    F = fun({ok, _Method, ETag}) ->
+                {ok, ETag};
+           ({error, Cause}) ->
+                {error, Cause}
+        end,
 
-%%--------------------------------------------------------------------
-%% INTERNAL-FUNCTIONS
-%%--------------------------------------------------------------------
-%% for object-operation #1.
-gen_mock_1(Case) ->
-    meck:new(leo_storage_mq, [non_strict]),
-    meck:expect(leo_storage_mq, publish,
-                fun(Type, AddrId, Key, _FragmentIdL) ->
-                        ?assertEqual(?QUEUE_TYPE_PER_FRAGMENT, Type),
-                        ?assertEqual(?TEST_RING_ID_1, AddrId),
-                        ?assertEqual(?TEST_KEY_1, Key),
-                        ok
-                end),
-
-    meck:new(leo_storage_handler_object, [non_strict]),
-    meck:expect(leo_storage_handler_object, put,
-                fun({Fragments, Ref}) ->
-                        ?assertEqual(true, erlang:is_reference(Ref)),
-                        case Case of
-                            ok ->
-                                FIdL = [FId || {FId,_Object} <- Fragments],
-                                {ok, Ref, {FIdL, []}};
-                            fail ->
-                                ErrorL = [{FId, cause} || {FId,_Object} <- Fragments],
-                                {error, Ref, ErrorL}
-                        end
-                end),
-    meck:expect(leo_storage_handler_object, put,
-                fun(Ref, From, Fragments,_ReqId) ->
-                        case Case of
-                            ok ->
-                                FIdL = [FId || {FId,_Object} <- Fragments],
-                                erlang:send(From, {Ref, {ok, {FIdL, []}}});
-                            fail ->
-                                ErrorL = [{FId, cause} || {FId,_Object} <- Fragments],
-                                erlang:send(From, {Ref, {error, {node(), ErrorL}}})
-                        end
-                end),
+    Quorum = ?quorum_of_fragments(?CMD_PUT, 2, 1, 1,
+                                  CodingParam_M, TotalReplicas),
+    Ret = leo_storage_replicator_ec:replicate(
+            put, Quorum, ?TEST_REDUNDANCIES_1, Fragments, F),
+    ?assertEqual({ok,{etag,0}}, Ret),
+    timer:sleep(100),
     ok.
 
-%% for object-operation #2.
-gen_mock_2([],_) ->
+%% object-replication#2
+replicate_obj_3_({TestNode_1, TestNode_2}) ->
+    gen_mock([{TestNode_1,fail}, {TestNode_2,ok}]),
+
+    CodingParam_K = 4,
+    CodingParam_M = 2,
+    TotalReplicas = CodingParam_K + CodingParam_M,
+    Fragments = lists:map(
+                  fun(Index) ->
+                          FIdBin = list_to_binary(integer_to_list(Index)),
+                          #?OBJECT{key = << ?TEST_KEY_1/binary, "\n", FIdBin/binary >>,
+                                   addr_id = ?TEST_RING_ID_1,
+                                   data = ?TEST_BODY_1,
+                                   cindex = Index,
+                                   csize = erlang:byte_size(?TEST_BODY_1)
+                                  }
+                  end, lists:seq(1, TotalReplicas)),
+
+    F = fun({ok, _Method, ETag}) ->
+                {ok, ETag};
+           ({error, Cause}) ->
+                {error, Cause}
+        end,
+
+    Quorum = ?quorum_of_fragments(?CMD_PUT, 2, 1, 1,
+                                  CodingParam_M, TotalReplicas),
+    Ret = leo_storage_replicator_ec:replicate(
+            put, Quorum, ?TEST_REDUNDANCIES_1, Fragments, F),
+    ?assertEqual({error,[{TestNode_1,[{1,cause},
+                                      {4,cause},
+                                      {5,cause},
+                                      {6,cause}]}]}, Ret),
+    timer:sleep(100),
+    ok.
+
+%% @doc for object-operation #2.
+%% @private
+gen_mock([]) ->
     ok;
-gen_mock_2([H|T], Case) ->
+gen_mock([{H, Case}|T]) ->
     catch rpc:call(H, meck, new,
                    [leo_storage_handler_object, [no_link, non_strict]]),
     catch rpc:call(H, meck, expect,
@@ -237,5 +230,6 @@ gen_mock_2([H|T], Case) ->
                                     erlang:send(From, {Ref, {error, {node(), ErrorL}}})
                             end
                     end]),
-    gen_mock_2(T, Case).
+    gen_mock(T).
+
 -endif.

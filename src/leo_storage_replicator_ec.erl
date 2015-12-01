@@ -69,7 +69,6 @@ replicate(Method, Quorum, Nodes, [#?OBJECT{addr_id = AddrId,
                                          #?OBJECT{cindex = FId} = FObj}, Acc) ->
                                             dict:append({Node, Available}, {FId, FObj}, Acc)
                                     end, dict:new(), lists:zip(Nodes, Fragments))),
-            ?debugVal(NodeWithFragmentL),
             Key_1 = begin
                         {Pos,_} = lists:last(binary:matches(Key, [<<"\n">>], [])),
                         binary:part(Key, 0, Pos)
@@ -103,7 +102,6 @@ replicate_1([], Ref,_Observer, #state{method = Method,
                                       callback = Callback}) ->
     receive
         {Ref, Reply} ->
-            ?debugVal(Reply),
             Callback(Reply)
     after
         (?DEF_REQ_TIMEOUT + timer:seconds(1)) ->
@@ -157,8 +155,7 @@ loop(0, 0,_Ref,_From, #state{is_reply = true}) ->
     ok;
 loop(0, 0, Ref, From, #state{method = Method}) ->
     erlang:send(From, {Ref, {ok, Method, {etag, 0}}});
-loop(_, W, Ref, From, #state{num_of_nodes = N,
-                             errors = E}) when (N - W) < length(E) ->
+loop(0,_W, Ref, From, #state{errors = E}) ->
     erlang:send(From, {Ref, {error, E}});
 loop(N, W, Ref, From, #state{method = Method,
                              addr_id = AddrId,
@@ -187,6 +184,8 @@ loop(N, W, Ref, From, #state{method = Method,
             loop(N - NumOfFragments, W_2, Ref, From, State_1);
 
         {Ref, {error, {Node, ErrorL}}} ->
+            ?debugVal({Node, ErrorL}),
+
             %% enqueue error fragments
             {ok, {_FragmentIdL, CauseL}} = enqueue(Method, AddrId, Key, ErrorL),
             State_1 = State#state{errors = [{Node, CauseL}|E]},
@@ -197,11 +196,6 @@ loop(N, W, Ref, From, #state{method = Method,
         ?DEF_REQ_TIMEOUT ->
             case (W > 0) of
                 true ->
-                    %% for recovering message of the repair-obj's MQ
-                    %% enqueue(Method, ?ERR_TYPE_REPLICATE_DATA, AddrId, Key),
-
-
-                    %% set reply
                     Cause = timeout,
                     ?warn("loop/5",
                           [{method, Method}, {key, Key}, {cause, Cause}]),
@@ -224,9 +218,14 @@ loop(N, W, Ref, From, #state{method = Method,
 enqueue(_,_,_,[]) ->
     {ok, {[],[]}};
 enqueue(Method, AddrId, Key, ErrorL) ->
-    {FragmentIdL, CauseL} = [{FId, Cause} || {FId, Cause} <- ErrorL],
-    ok = enqueue_1(Method, AddrId, Key, FragmentIdL),
-    {ok, {FragmentIdL, CauseL}}.
+    {FragmentIdL, CauseL} =
+        lists:foldl(fun({FId, Cause}, {Acc_1, Acc_2}) ->
+                            {[FId|Acc_1], [{FId, Cause}|Acc_2]}
+                    end, {[],[]}, ErrorL),
+
+    FragmentIdL_1 = lists:reverse(FragmentIdL),
+    ok = enqueue_1(Method, AddrId, Key, FragmentIdL_1),
+    {ok, {FragmentIdL, lists:reverse(CauseL)}}.
 
 %% @private
 -spec(enqueue_1(Method, AddrId, Key, FragmentIdL) ->
@@ -257,4 +256,6 @@ enqueue_1(?CMD_DELETE, AddrId, Key, FragmentIdL) ->
                    {key, Key}, {fragment_id_list, FragmentIdL},
                    {cause, Cause}]),
             ok
-    end.
+    end;
+enqueue_1(_,_,_,_) ->
+    ok.

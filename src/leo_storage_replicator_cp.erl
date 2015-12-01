@@ -94,7 +94,6 @@ replicate_1([], Ref,_From, #state{method = Method,
                                   callback = Callback}) ->
     receive
         {Ref, Reply} ->
-            ?debugVal(Reply),
             Callback(Reply)
     after
         (?DEF_REQ_TIMEOUT + timer:seconds(1)) ->

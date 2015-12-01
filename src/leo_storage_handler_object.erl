@@ -312,7 +312,7 @@ put(Object, ReqId) ->
                     Error
             end;
         ?REP_ERASURE_CODE ->
-            Object_3 = Object_1#?OBJECT{rep_method = ?REP_ERASURE_CODE,
+            Object_3 = Object_2#?OBJECT{rep_method = ?REP_ERASURE_CODE,
                                         ec_method = undefined,
                                         ec_params = undefined},
             replicate_fun(?REP_LOCAL, ?CMD_PUT, Object_3);
