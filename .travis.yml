@@ -8,4 +8,3 @@ before_install:
   - sudo apt-get install -y automake autoconf libtool yasm
 install:
   - sudo apt-get install -y build-essential cmake check
-  - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.8 90
