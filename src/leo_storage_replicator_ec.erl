@@ -69,6 +69,7 @@ replicate(Method, Quorum, Nodes, [#?OBJECT{addr_id = AddrId,
                                          #?OBJECT{cindex = FId} = FObj}, Acc) ->
                                             dict:append({Node, Available}, {FId, FObj}, Acc)
                                     end, dict:new(), lists:zip(Nodes, Fragments))),
+            ?debugVal(NodeWithFragmentL),
             Key_1 = begin
                         {Pos,_} = lists:last(binary:matches(Key, [<<"\n">>], [])),
                         binary:part(Key, 0, Pos)
@@ -165,7 +166,6 @@ loop(N, W, Ref, From, #state{method = Method,
                              is_reply = IsReply} = State) ->
     receive
         {Ref, {ok, {RetL, ErrorL}}} ->
-            ?debugVal({RetL, ErrorL}),
             NumOfFragments = erlang:length(RetL),
             W_1 = W - NumOfFragments,
             {W_2, State_1} =
@@ -184,8 +184,6 @@ loop(N, W, Ref, From, #state{method = Method,
             loop(N - NumOfFragments, W_2, Ref, From, State_1);
 
         {Ref, {error, {Node, ErrorL}}} ->
-            ?debugVal({Node, ErrorL}),
-
             %% enqueue error fragments
             {ok, {_FragmentIdL, CauseL}} = enqueue(Method, AddrId, Key, ErrorL),
             State_1 = State#state{errors = [{Node, CauseL}|E]},

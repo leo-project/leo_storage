@@ -39,8 +39,8 @@
                                 timestamp = 8,
                                 checksum = 7}).
 
--define(TEST_REDUNDANCIES_1, [#redundant_node{node = Test0Node, available = true},
-                              #redundant_node{node = Test1Node, available = true}]).
+-define(TEST_REDUNDANCIES_1, [#redundant_node{node = TestNode_1, available = true},
+                              #redundant_node{node = TestNode_2, available = true}]).
 
 %%--------------------------------------------------------------------
 %% TEST FUNCTIONS
@@ -63,20 +63,20 @@ setup() ->
     [] = os:cmd("epmd -daemon"),
     {ok, Hostname} = inet:gethostname(),
 
-    Test0Node = list_to_atom("test_rep_0@" ++ Hostname),
-    net_kernel:start([Test0Node, shortnames]),
-    {ok, Test1Node} = slave:start_link(list_to_atom(Hostname), 'test_rep_1'),
+    TestNode_1 = list_to_atom("test_rep_0@" ++ Hostname),
+    net_kernel:start([TestNode_1, shortnames]),
+    {ok, TestNode_2} = slave:start_link(list_to_atom(Hostname), 'test_rep_1'),
 
-    true = rpc:call(Test0Node, code, add_path, ["../deps/meck/ebin"]),
-    true = rpc:call(Test1Node, code, add_path, ["../deps/meck/ebin"]),
+    true = rpc:call(TestNode_1, code, add_path, ["../deps/meck/ebin"]),
+    true = rpc:call(TestNode_2, code, add_path, ["../deps/meck/ebin"]),
 
     timer:sleep(100),
-    {Test0Node, Test1Node}.
+    {TestNode_1, TestNode_2}.
 
-teardown({_Test0Node, Test1Node}) ->
+teardown({_TestNode_1, TestNode_2}) ->
     meck:unload(),
     net_kernel:stop(),
-    slave:stop(Test1Node),
+    slave:stop(TestNode_2),
     ok.
 
 
@@ -84,9 +84,9 @@ teardown({_Test0Node, Test1Node}) ->
 %% for Object
 %%--------------------------------------------------------------------
 %% object-replication#1
-replicate_obj_1_({Test0Node, Test1Node}) ->
-    gen_mock_2(object, {Test0Node, Test1Node}, ok),
-    gen_mock_3(object, Test1Node, ok),
+replicate_obj_1_({TestNode_1, TestNode_2}) ->
+    gen_mock_1(ok),
+    gen_mock_2(TestNode_2, ok),
 
     Object = #?OBJECT{key = ?TEST_KEY_1,
                       addr_id = ?TEST_RING_ID_1,
@@ -104,9 +104,9 @@ replicate_obj_1_({Test0Node, Test1Node}) ->
     ok.
 
 %% object-replication#2
-replicate_obj_2_({Test0Node, Test1Node}) ->
-    gen_mock_2(object, {Test0Node, Test1Node}, fail),
-    gen_mock_3(object, Test1Node, ok),
+replicate_obj_2_({TestNode_1, TestNode_2}) ->
+    gen_mock_1(fail),
+    gen_mock_2(TestNode_2, ok),
 
     Object = #?OBJECT{key = ?TEST_KEY_1,
                       addr_id = ?TEST_RING_ID_1,
@@ -126,9 +126,9 @@ replicate_obj_2_({Test0Node, Test1Node}) ->
     ok.
 
 %% object-replication#3
-replicate_obj_3_({Test0Node, Test1Node}) ->
-    gen_mock_2(object, {Test0Node, Test1Node}, ok),
-    gen_mock_3(object, Test1Node, fail),
+replicate_obj_3_({TestNode_1, TestNode_2}) ->
+    gen_mock_1(ok),
+    gen_mock_2(TestNode_2, fail),
 
     Object = #?OBJECT{key = ?TEST_KEY_1,
                       addr_id = ?TEST_RING_ID_1,
@@ -150,7 +150,7 @@ replicate_obj_3_({Test0Node, Test1Node}) ->
 %% INTERNAL-FUNCTIONS
 %%--------------------------------------------------------------------
 %% for object-operation #1.
-gen_mock_2(object, {_Test0Node, _Test1Node}, Case) ->
+gen_mock_1(Case) ->
     meck:new(leo_storage_mq, [non_strict]),
     meck:expect(leo_storage_mq, publish,
                 fun(Type, VNodeId, Key, _ErrorType) ->
@@ -184,10 +184,10 @@ gen_mock_2(object, {_Test0Node, _Test1Node}, Case) ->
     ok.
 
 %% for object-operation #2.
-gen_mock_3(object, Test1Node, Case) ->
-    ok = rpc:call(Test1Node, meck, new,
+gen_mock_2(TestNode_2, Case) ->
+    ok = rpc:call(TestNode_2, meck, new,
                   [leo_storage_handler_object, [no_link, non_strict]]),
-    ok = rpc:call(Test1Node, meck, expect,
+    ok = rpc:call(TestNode_2, meck, expect,
                   [leo_storage_handler_object, put,
                    fun(#?OBJECT{addr_id = VNodeId,
                                 key = Key,
@@ -204,7 +204,7 @@ gen_mock_3(object, Test1Node, Case) ->
                                    {error, []}
                            end
                    end]),
-    ok = rpc:call(Test1Node, meck, expect,
+    ok = rpc:call(TestNode_2, meck, expect,
                   [leo_storage_handler_object, put,
                    fun(Ref, From,_Object,_ReqId) ->
                            case Case of

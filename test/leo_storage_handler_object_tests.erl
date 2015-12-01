@@ -20,8 +20,6 @@
 %%
 %% ---------------------------------------------------------------------
 %% LeoFS Storage - EUnit
-%% @doc
-%% @end
 %%======================================================================
 -module(leo_storage_handler_object_tests).
 
@@ -32,76 +30,118 @@
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
+
 %%--------------------------------------------------------------------
 %% TEST FUNCTIONS
 %%--------------------------------------------------------------------
 -ifdef(EUNIT).
 
 -define(TEST_BUCKET, <<"air">>).
--define(TEST_DIR_0,  <<"air/on/g/">>).
--define(TEST_KEY_0,  <<"air/on/g/string">>).
--define(TEST_KEY_1,  <<"air/on/g/bach/music">>).
--define(TEST_BIN,    <<"V">>).
--define(TEST_META_0, #?METADATA{key   = ?TEST_KEY_0,
+-define(TEST_KEY_1, <<"air/on/g/string/1">>).
+-define(TEST_KEY_2, <<"air/on/g/string/2">>).
+-define(TEST_KEY_3, <<"air/on/g/string/3">>).
+-define(TEST_KEY_4, <<"air/on/g/string/4">>).
+-define(TEST_KEY_5, <<"air/on/g/string/5">>).
+-define(TEST_KEY_6, <<"air/on/g/string/6">>).
+-define(TEST_KEY_7, <<"air/on/g/string/7">>).
+-define(TEST_KEY_8, <<"air/on/g/string/8">>).
+-define(TEST_KEY_9, <<"air/on/g/string/9">>).
+
+
+-define(TEST_BIN, <<"V">>).
+-define(TEST_META_1, #?METADATA{key = ?TEST_KEY_2,
                                 dsize = byte_size(?TEST_BIN)}).
--define(TEST_META_1, #?METADATA{key   = ?TEST_KEY_0,
-                                dsize = byte_size(?TEST_BIN),
-                                del   = 1
+-define(TEST_META_2, #?METADATA{key = ?TEST_KEY_5,
+                                dsize = byte_size(?TEST_BIN)
                                }).
+-define(TEST_META_3, #?METADATA{key = ?TEST_KEY_7,
+                                dsize = byte_size(?TEST_BIN)
+                               }).
+-define(TEST_META_4, #?METADATA{key = ?TEST_KEY_8,
+                                dsize = byte_size(?TEST_BIN)
+                               }).
+
+
+-define(TEST_META_9, #?METADATA{key = ?TEST_KEY_1,
+                                dsize = byte_size(?TEST_BIN),
+                                del = 1
+                               }).
+
+
+
+-define(TEST_REDUNDANCIES_1, [#redundant_node{node = TestNode_1, available = true},
+                              #redundant_node{node = TestNode_2, available = true},
+                              #redundant_node{node = TestNode_2, available = true},
+                              #redundant_node{node = TestNode_1, available = true},
+                              #redundant_node{node = TestNode_1, available = true},
+                              #redundant_node{node = TestNode_1, available = true}
+                             ]).
 
 
 object_handler_test_() ->
     {foreach, fun setup/0, fun teardown/1,
-     [{with, [T]} || T <- [fun get_a0_/1,
-                           fun get_a1_/1,
-                           fun put_0_/1,
+     [{with, [T]} || T <- [fun get_1_/1,
+                           fun get_2/1,
                            fun put_1_/1,
+                           fun put_2_/1,
+                           fun put_3_/1,
                            fun delete_/1,
                            fun head_/1,
                            fun copy_/1
                           ]]}.
 
 setup() ->
+    %% Create mocks
+    meck:new(leo_logger, [non_strict]),
+    meck:expect(leo_logger, append, fun(_,_,_) ->
+                                            ok
+                                    end),
+
+    meck:new(leo_storage_mq, [non_strict]),
+    meck:expect(leo_storage_mq, publish, fun(_,_,_,_) ->
+                                                 ok
+                                         end),
+    meck:expect(leo_storage_mq, publish, fun(_,_) ->
+                                                 ok
+                                         end),
+
+    %% Prepare network env
     [] = os:cmd("epmd -daemon"),
     {ok, Hostname} = inet:gethostname(),
 
-    Node0 = list_to_atom("node_0@" ++ Hostname),
-    net_kernel:start([Node0, shortnames]),
-    {ok, Node1} = slave:start_link(list_to_atom(Hostname), 'node_1'),
+    TestNode_1 = list_to_atom("node_0@" ++ Hostname),
+    net_kernel:start([TestNode_1, shortnames]),
+    {ok, TestNode_2} = slave:start_link(list_to_atom(Hostname), 'node_1'),
 
-    true = rpc:call(Node0, code, add_path, ["../deps/meck/ebin"]),
-    true = rpc:call(Node1, code, add_path, ["../deps/meck/ebin"]),
+    true = rpc:call(TestNode_1, code, add_path, ["../deps/meck/ebin"]),
+    true = rpc:call(TestNode_2, code, add_path, ["../deps/meck/ebin"]),
+    {TestNode_1, TestNode_2}.
 
-    {Node0, Node1}.
-
-teardown({_, Node1}) ->
+teardown({_, TestNode_2}) ->
     meck:unload(),
     net_kernel:stop(),
-    slave:stop(Node1),
+    slave:stop(TestNode_2),
     timer:sleep(100),
     ok.
+
 
 %%--------------------------------------------------------------------
 %% GET
 %%--------------------------------------------------------------------
 %% @doc  get/1
 %% @private
-get_a0_({Node0, Node1}) ->
+get_1_({TestNode_1, TestNode_2}) ->
     %% leo_redundant_manager_api
     meck:new(leo_redundant_manager_api, [non_strict]),
     meck:expect(leo_redundant_manager_api, get_redundancies_by_key,
                 fun(get, _Key) ->
                         {ok, #redundancies{id = 0,
-                                           nodes = [{Node0,true}, {Node1,true}],
+                                           nodes = [{TestNode_1,true}, {TestNode_2,true}],
                                            n = 2, r = 1, w = 1, d = 1}}
                 end),
 
     %% leo_object_storage_api
     meck:new(leo_object_storage_api, [non_strict]),
-    meck:expect(leo_object_storage_api, get,
-                fun(_Key, _StartPos, _EndPos) ->
-                        not_found
-                end),
     meck:expect(leo_object_storage_api, get,
                 fun(_Key, _StartPos, _EndPos, _IsForcedCheck) ->
                         not_found
@@ -118,19 +158,19 @@ get_a0_({Node0, Node1}) ->
     meck:expect(leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end),
 
     Ref = make_ref(),
-    Res = leo_storage_handler_object:get({Ref, ?TEST_KEY_0}),
+    Res = leo_storage_handler_object:get({Ref, ?TEST_KEY_1}),
     ?assertEqual({error, Ref, not_found}, Res),
     ok.
 
 %% @doc  get/1
 %% @private
-get_a1_({Node0, Node1}) ->
+get_2({TestNode_1, TestNode_2}) ->
     %% leo_redundant_manager_api
     meck:new(leo_redundant_manager_api, [non_strict]),
     meck:expect(leo_redundant_manager_api, get_redundancies_by_key,
                 fun(get, _AddrId) ->
                         {ok, #redundancies{id = 0,
-                                           nodes = [{Node0,true}, {Node1,true}],
+                                           nodes = [{TestNode_1,true}, {TestNode_2,true}],
                                            n = 2, r = 1, w = 1, d = 1}}
                 end),
 
@@ -138,11 +178,11 @@ get_a1_({Node0, Node1}) ->
     meck:new(leo_object_storage_api, [non_strict]),
     meck:expect(leo_object_storage_api, get,
                 fun(_Key, _StartPos, _EndPos) ->
-                        {ok, ?TEST_META_0, #?OBJECT{}}
+                        {ok, ?TEST_META_1, #?OBJECT{}}
                 end),
     meck:expect(leo_object_storage_api, get,
                 fun(_Key, _StartPos, _EndPos, _IsForcedCheck) ->
-                        {ok, ?TEST_META_0, #?OBJECT{}}
+                        {ok, ?TEST_META_1, #?OBJECT{}}
                 end),
 
     meck:new(leo_metrics_req, [non_strict]),
@@ -152,32 +192,32 @@ get_a1_({Node0, Node1}) ->
     meck:expect(leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end),
 
     meck:expect(leo_storage_read_repairer, repair,
-                fun(_,_,_,_) -> {ok, ?TEST_META_0, <<>>} end),
+                fun(_,_,_,_) -> {ok, ?TEST_META_1, <<>>} end),
 
     Ref = make_ref(),
-    Res = leo_storage_handler_object:get({Ref, ?TEST_KEY_0}),
-    ?assertEqual({ok, Ref, ?TEST_META_0, <<>>}, Res),
+    Res = leo_storage_handler_object:get({Ref, ?TEST_KEY_2}),
+    ?assertEqual({ok, Ref, ?TEST_META_1, <<>>}, Res),
     ok.
 
 %%--------------------------------------------------------------------
 %% PUT
 %%--------------------------------------------------------------------
 %% put/6
-put_0_({Node0, Node1}) ->
-    AddrId    = 0,
-    Key       = ?TEST_KEY_0,
-    Bin       = ?TEST_BIN,
-    Size      = byte_size(?TEST_BIN),
-    ReqId     = 0,
+put_1_({TestNode_1, TestNode_2}) ->
+    AddrId = 0,
+    Key = ?TEST_KEY_3,
+    Bin = ?TEST_BIN,
+    Size = byte_size(?TEST_BIN),
+    ReqId = 0,
     Timestamp = 0,
 
     meck:new(leo_redundant_manager_api, [non_strict]),
     meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id,
                 fun(put, _AddrId) ->
                         {ok, #redundancies{id = 0,
-                                           nodes = [#redundant_node{node = Node0,
+                                           nodes = [#redundant_node{node = TestNode_1,
                                                                     available = true},
-                                                    #redundant_node{node = Node1,
+                                                    #redundant_node{node = TestNode_2,
                                                                     available = true}],
                                            n = 2, r = 1, w = 1, d = 1}}
                 end),
@@ -188,28 +228,36 @@ put_0_({Node0, Node1}) ->
                         {ok, {etag, 1}}
                 end),
 
-    ok = rpc:call(Node1, meck, new,    [leo_metrics_req, [no_link, non_strict]]),
-    ok = rpc:call(Node1, meck, expect, [leo_metrics_req, notify, fun(_) -> ok end]),
+    ok = rpc:call(TestNode_2, meck, new,
+                  [leo_metrics_req, [no_link, non_strict]]),
+    ok = rpc:call(TestNode_2, meck, expect,
+                  [leo_metrics_req, notify, fun(_) -> ok end]),
 
     meck:new(leo_metrics_req, [non_strict]),
-    meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
+    meck:expect(leo_metrics_req, notify,
+                fun(_) ->
+                        ok
+                end),
 
     meck:new(leo_watchdog_state, [non_strict]),
-    meck:expect(leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end),
+    meck:expect(leo_watchdog_state, find_not_safe_items,
+                fun(_) ->
+                        not_found
+                end),
 
-    Object = #?OBJECT{method    = ?CMD_PUT,
-                      addr_id   = AddrId,
-                      key       = Key,
-                      data      = Bin,
-                      dsize     = Size,
-                      req_id    = ReqId,
+    Object = #?OBJECT{method = ?CMD_PUT,
+                      addr_id = AddrId,
+                      key = Key,
+                      data = Bin,
+                      dsize = Size,
+                      req_id = ReqId,
                       timestamp = Timestamp,
-                      del       = 0},
+                      del = 0},
     {ok, _Checksum} = leo_storage_handler_object:put(Object, 0),
     ok.
 
 %% put/2
-put_1_({_Node0, _Node1}) ->
+put_2_({_TestNode_1, _TestNode_2}) ->
     meck:new(leo_object_storage_api, [non_strict]),
     meck:expect(leo_object_storage_api, put,
                 fun(_Key, _ObjPool) ->
@@ -217,10 +265,75 @@ put_1_({_Node0, _Node1}) ->
                 end),
 
     meck:new(leo_watchdog_state, [non_strict]),
-    meck:expect(leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end),
+    meck:expect(leo_watchdog_state, find_not_safe_items,
+                fun(_) ->
+                        not_found
+                end),
 
     Ref = make_ref(),
-    {ok, Ref, _Etag} = leo_storage_handler_object:put({#?OBJECT{}, Ref}),
+    {ok, Ref,_Etag} = leo_storage_handler_object:put(
+                        {#?OBJECT{key = ?TEST_KEY_3}, Ref}),
+    ok.
+
+%% put an object for the erasure-coding
+put_3_({TestNode_1, TestNode_2}) ->
+    %% Create mocks
+    meck:new(leo_object_storage_api, [non_strict]),
+    meck:expect(leo_object_storage_api, head,
+                fun({_AddrId,_Key}) ->
+                        {ok, term_to_binary(#?METADATA{key = ?TEST_KEY_3})}
+                end),
+    meck:expect(leo_object_storage_api, put,
+                fun(_Key, _ObjPool) ->
+                        {ok, 1}
+                end),
+
+    meck:new(leo_watchdog_state, [non_strict]),
+    meck:expect(leo_watchdog_state, find_not_safe_items,
+                fun(_) ->
+                        not_found
+                end),
+
+    meck:new(leo_metrics_req, [non_strict]),
+    meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
+
+    meck:new(leo_redundant_manager_api, [non_strict]),
+    meck:expect(leo_redundant_manager_api, collect_redundancies_by_key,
+                fun(_Key,_TotalReplicas) ->
+                        {ok, {[{n, 2},
+                               {w, 1},
+                               {r, 1},
+                               {d, 1}], ?TEST_REDUNDANCIES_1}}
+                end),
+
+    meck:new(leo_storage_event_notifier, [non_strict]),
+    meck:expect(leo_storage_event_notifier, operate,
+                fun(_,_) ->
+                        ok
+                end),
+
+    gen_mock([{TestNode_1, ok},{TestNode_2, ok}]),
+
+    %% Execute the erasure-coding
+    DSize = 1024 * 1024,
+    Bin = crypto:rand_bytes(DSize),
+    Checksum = leo_hex:raw_binary_to_integer(crypto:hash(md5, Bin)),
+    meck:new(leo_storage_replicator_cp, [non_strict]),
+    meck:expect(leo_storage_replicator_cp, replicate,
+                fun(_,_,_,_,_) ->
+                        {ok,{etag,Checksum}}
+                end),
+
+    Ret = leo_storage_handler_object:put(
+            #?OBJECT{rep_method = ?REP_ERASURE_CODE,
+                     method = put,
+                     addr_id = 123,
+                     key = ?TEST_KEY_3,
+                     data = Bin,
+                     dsize = DSize,
+                     ec_method = 'vandrs',
+                     ec_params = {4,2,8}}, 1),
+    ?assertEqual({ok,{etag,Checksum}}, Ret),
     ok.
 
 
@@ -228,28 +341,28 @@ put_1_({_Node0, _Node1}) ->
 %% DELETE
 %%--------------------------------------------------------------------
 %% delete/4
-delete_({Node0, Node1}) ->
-    AddrId    = 0,
-    Key       = ?TEST_KEY_0,
-    ReqId     = 0,
+delete_({TestNode_1, TestNode_2}) ->
+    AddrId = 0,
+    Key = ?TEST_KEY_4,
+    ReqId = 0,
     Timestamp = 0,
 
     meck:new(leo_redundant_manager_api, [non_strict]),
     meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id,
                 fun(put, _AddrId) ->
                         {ok, #redundancies{id = 0,
-                                           nodes = [#redundant_node{node = Node0,
+                                           nodes = [#redundant_node{node = TestNode_1,
                                                                     available = true},
-                                                    #redundant_node{node = Node1,
+                                                    #redundant_node{node = TestNode_2,
                                                                     available = true}],
                                            n = 2, r = 1, w = 1, d = 1}}
                 end),
     meck:expect(leo_redundant_manager_api, get_redundancies_by_key,
                 fun(_) ->
                         {ok, #redundancies{id = 0,
-                                           nodes = [#redundant_node{node = Node0,
+                                           nodes = [#redundant_node{node = TestNode_1,
                                                                     available = true},
-                                                    #redundant_node{node = Node1,
+                                                    #redundant_node{node = TestNode_2,
                                                                     available = true}],
                                            n = 2, r = 1, w = 1, d = 1}}
                 end),
@@ -283,37 +396,35 @@ delete_({Node0, Node1}) ->
     meck:new(leo_cache_api, [non_strict]),
     meck:expect(leo_cache_api, delete, fun(_) -> ok end),
 
-    ok = rpc:call(Node1, meck, new,    [leo_cache_api, [no_link, non_strict]]),
-    ok = rpc:call(Node1, meck, expect, [leo_cache_api, delete, fun(_) -> ok end]),
+    ok = rpc:call(TestNode_2, meck, new,    [leo_cache_api, [no_link, non_strict]]),
+    ok = rpc:call(TestNode_2, meck, expect, [leo_cache_api, delete, fun(_) -> ok end]),
 
-    ok = rpc:call(Node1, meck, new,    [leo_metrics_req, [no_link, non_strict]]),
-    ok = rpc:call(Node1, meck, expect, [leo_metrics_req, notify, fun(_) -> ok end]),
+    ok = rpc:call(TestNode_2, meck, new,    [leo_metrics_req, [no_link, non_strict]]),
+    ok = rpc:call(TestNode_2, meck, expect, [leo_metrics_req, notify, fun(_) -> ok end]),
 
     meck:new(leo_metrics_req, [non_strict]),
     meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
 
-    meck:new(leo_storage_mq, [non_strict]),
-    meck:expect(leo_storage_mq, publish, fun(_,_) -> ok end),
 
-    Object_1 = #?OBJECT{method    = ?CMD_DELETE,
-                        addr_id   = AddrId,
-                        key       = << Key/binary, "/" >>,
-                        data      = <<>>,
-                        dsize     = 0,
-                        req_id    = ReqId,
+    Object_1 = #?OBJECT{method = ?CMD_DELETE,
+                        addr_id = AddrId,
+                        key = << Key/binary, "/" >>,
+                        data = <<>>,
+                        dsize = 0,
+                        req_id = ReqId,
                         timestamp = Timestamp,
-                        del       = 1},
+                        del = 1},
     Res_1 = leo_storage_handler_object:delete(Object_1, 0),
     ?assertEqual(ok, Res_1),
 
-    Object_2 = #?OBJECT{method    = ?CMD_DELETE,
-                        addr_id   = AddrId,
-                        key       = << Key/binary >>,
-                        data      = <<>>,
-                        dsize     = 0,
-                        req_id    = ReqId,
+    Object_2 = #?OBJECT{method = ?CMD_DELETE,
+                        addr_id = AddrId,
+                        key = << Key/binary >>,
+                        data = <<>>,
+                        dsize = 0,
+                        req_id = ReqId,
                         timestamp = Timestamp,
-                        del       = 1},
+                        del = 1},
     Res_2 = leo_storage_handler_object:delete(Object_2, 0),
     ?assertEqual(ok, Res_2),
     ok.
@@ -322,26 +433,26 @@ delete_({Node0, Node1}) ->
 %%--------------------------------------------------------------------
 %% OTHER
 %%--------------------------------------------------------------------
-head_({Node0, Node1}) ->
+head_({TestNode_1, TestNode_2}) ->
     %% 1.
     meck:new(leo_object_storage_api, [non_strict]),
     meck:expect(leo_object_storage_api, head,
                 fun(_Key) ->
-                        {ok, term_to_binary(?TEST_META_0)}
+                        {ok, term_to_binary(?TEST_META_2)}
                 end),
     meck:new(leo_redundant_manager_api, [non_strict]),
     meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id,
                 fun(get, _AddrId) ->
                         {ok, #redundancies{id = 0,
-                                           nodes = [#redundant_node{node = Node0,
+                                           nodes = [#redundant_node{node = TestNode_1,
                                                                     available = true},
-                                                    #redundant_node{node = Node1,
+                                                    #redundant_node{node = TestNode_2,
                                                                     available = true}],
                                            n = 2, r = 1, w = 1, d = 1}}
                 end),
 
-    Res0 = leo_storage_handler_object:head(0, ?TEST_KEY_0),
-    ?assertEqual({ok, ?TEST_META_0}, Res0),
+    Res0 = leo_storage_handler_object:head(0, ?TEST_KEY_5),
+    ?assertEqual({ok, ?TEST_META_2}, Res0),
 
     %% 2.
     meck:unload(),
@@ -354,14 +465,14 @@ head_({Node0, Node1}) ->
     meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id,
                 fun(get, _AddrId) ->
                         {ok, #redundancies{id = 0,
-                                           nodes = [#redundant_node{node = Node0,
+                                           nodes = [#redundant_node{node = TestNode_1,
                                                                     available = true},
-                                                    #redundant_node{node = Node1,
+                                                    #redundant_node{node = TestNode_2,
                                                                     available = true}],
                                            n = 2, r = 1, w = 1, d = 1}}
                 end),
 
-    Res1 = leo_storage_handler_object:head(0, ?TEST_KEY_0),
+    Res1 = leo_storage_handler_object:head(0, ?TEST_KEY_6),
     ?assertEqual({error, not_found}, Res1),
 
     %% 2.
@@ -370,40 +481,42 @@ head_({Node0, Node1}) ->
     meck:expect(leo_redundant_manager_api, get_redundancies_by_addr_id,
                 fun(get, _AddrId) ->
                         {ok, #redundancies{id = 0,
-                                           nodes = [#redundant_node{node = Node0,
+                                           nodes = [#redundant_node{node = TestNode_1,
                                                                     available = false},
-                                                    #redundant_node{node = Node1,
+                                                    #redundant_node{node = TestNode_2,
                                                                     available = true}],
                                            n = 2, r = 1, w = 1, d = 1}}
                 end),
 
-    ok = rpc:call(Node1, meck, new,    [leo_object_storage_api, [no_link, non_strict]]),
-    ok = rpc:call(Node1, meck, expect, [leo_object_storage_api, head,
-                                        fun(_Arg) ->
-                                                {ok, term_to_binary(?TEST_META_0)}
-                                        end]),
+    ok = rpc:call(TestNode_2, meck, new,
+                  [leo_object_storage_api, [no_link, non_strict]]),
+    ok = rpc:call(TestNode_2, meck, expect,
+                  [leo_object_storage_api, head,
+                   fun(_Arg) ->
+                           {ok, term_to_binary(?TEST_META_3)}
+                   end]),
 
-    {ok, Res2} = leo_storage_handler_object:head(0, ?TEST_KEY_0),
-    ?assertEqual(?TEST_META_0, Res2),
+    {ok, Res2} = leo_storage_handler_object:head(0, ?TEST_KEY_7),
+    ?assertEqual(?TEST_META_3, Res2),
     ok.
 
 
-copy_({Node0, Node1}) ->
+copy_({TestNode_1, TestNode_2}) ->
     %% 1. for WRITE
     %%
     %% Retrieve metadata from head-func
     meck:new(leo_object_storage_api, [non_strict]),
     meck:expect(leo_object_storage_api, head,
                 fun(_Key) ->
-                        {ok, term_to_binary(?TEST_META_0)}
+                        {ok, term_to_binary(?TEST_META_4)}
                 end),
     meck:expect(leo_object_storage_api, get,
                 fun(_Key, _StartPos, _EndPos) ->
-                        {ok, ?TEST_META_0, #?OBJECT{}}
+                        {ok, ?TEST_META_4, #?OBJECT{}}
                 end),
     meck:expect(leo_object_storage_api, get,
                 fun(_Key, _StartPos, _EndPos, _IsForcedCheck) ->
-                        {ok, ?TEST_META_0, #?OBJECT{}}
+                        {ok, ?TEST_META_4, #?OBJECT{}}
                 end),
 
     %% Retrieve object from get-func
@@ -411,7 +524,7 @@ copy_({Node0, Node1}) ->
     meck:expect(leo_redundant_manager_api, get_redundancies_by_key,
                 fun(get, _AddrId) ->
                         {ok, #redundancies{id = 0,
-                                           nodes = [{Node0,true}, {Node1,true}],
+                                           nodes = [{TestNode_1,true}, {TestNode_2,true}],
                                            n = 2, r = 1, w = 1, d = 1}}
                 end),
     meck:expect(leo_redundant_manager_api, get_member_by_node,
@@ -438,7 +551,7 @@ copy_({Node0, Node1}) ->
     meck:new(leo_storage_event_notifier, [non_strict]),
     meck:expect(leo_storage_event_notifier, replicate, fun(_,_,_) -> ok end),
 
-    Res1 = leo_storage_handler_object:replicate([Node1, Node1], 0, ?TEST_KEY_0),
+    Res1 = leo_storage_handler_object:replicate([TestNode_2, TestNode_2], 0, ?TEST_KEY_8),
     ?assertEqual(ok, Res1),
 
     %% 2. for DELETE
@@ -447,20 +560,62 @@ copy_({Node0, Node1}) ->
     meck:new(leo_object_storage_api, [non_strict]),
     meck:expect(leo_object_storage_api, head,
                 fun(_Key) ->
-                        {ok, term_to_binary(?TEST_META_1)}
+                        {ok, term_to_binary(?TEST_META_2)}
                 end),
     meck:expect(leo_object_storage_api, get,
                 fun(_Key, _StartPos, _EndPos) ->
-                        {ok, ?TEST_META_1, #?OBJECT{}}
+                        {ok, ?TEST_META_2, #?OBJECT{}}
                 end),
     meck:expect(leo_object_storage_api, get,
                 fun(_Key, _StartPos, _EndPos, _IsForcedCheck) ->
-                        {ok, ?TEST_META_1, #?OBJECT{}}
+                        {ok, ?TEST_META_2, #?OBJECT{}}
                 end),
 
-    Res2 = leo_storage_handler_object:replicate([Node1, Node1], 0, ?TEST_KEY_0),
+    Res2 = leo_storage_handler_object:replicate(
+             [TestNode_2, TestNode_2], 0, ?TEST_KEY_9),
     ?assertEqual(ok, Res2),
     ok.
 
+
+%% @doc for object-operation #2.
+%% @private
+gen_mock([]) ->
+    ok;
+gen_mock([{H, Case}|T]) when H /= node() ->
+    catch rpc:call(H, meck, new,
+                   [leo_storage_handler_object, [no_link, non_strict]]),
+    catch rpc:call(H, meck, expect,
+                   [leo_storage_handler_object, put,
+                    fun({[{_,#?OBJECT{rep_method = ?REP_ERASURE_CODE}}|_] = Fragments, Ref}) ->
+                            case Case of
+                                ok ->
+                                    FIdL = [FId || {FId,_Object} <- Fragments],
+                                    {ok, Ref, {FIdL, []}};
+                                fail ->
+                                    ErrorL = [{FId, cause} || {FId,_Object} <- Fragments],
+                                    {error, Ref, ErrorL}
+                            end;
+                       ({_Object, Ref}) ->
+                            {ok, Ref, 1}
+                    end]),
+    catch rpc:call(H, meck, expect,
+                   [leo_storage_handler_object, put,
+                    fun(Ref, From, Fragments,_ReqId) ->
+                            case Case of
+                                ok when is_list(Fragments) ->
+                                    FIdL = [FId || {FId,_Object} <- Fragments],
+                                    erlang:send(From, {Ref, {ok, {FIdL, []}}});
+                                ok ->
+                                    erlang:send(From, {Ref, {ok, 1}});
+                                fail when is_list(Fragments) ->
+                                    ErrorL = [{FId, cause} || {FId,_Object} <- Fragments],
+                                    erlang:send(From, {Ref, {error, {node(), ErrorL}}});
+                                fail ->
+                                    erlang:send(From, {Ref, {error, {node(), 'cause'}}})
+                            end
+                    end]),
+    gen_mock(T);
+gen_mock([_|T]) ->
+    gen_mock(T).
 
 -endif.

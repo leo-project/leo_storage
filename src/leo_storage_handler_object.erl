@@ -219,12 +219,9 @@ get_fun(AddrId, Key, StartPos, EndPos, IsForcedCheck) ->
                                  {[#?OBJECT{}], reference()}).
 put({[{_,#?OBJECT{rep_method = ?REP_ERASURE_CODE}}|_] = Fragments, Ref}) ->
     %% method: ERASURE_CODE
-    ?debugVal({Fragments, Ref}),
-
     case lists:foldl(fun({FId, #?OBJECT{} = Object}, {Acc_1, Acc_2}) ->
                              case put({Object, Ref}) of
                                  {ok, Ref,_} ->
-                                     ?debugVal({FId, Object}),
                                      {[FId|Acc_1], Acc_2};
                                  {error, Ref, Cause} ->
                                      {Acc_1, [{FId, Cause}|Acc_2]}
@@ -233,7 +230,6 @@ put({[{_,#?OBJECT{rep_method = ?REP_ERASURE_CODE}}|_] = Fragments, Ref}) ->
         {[], ErrorL} ->
             {error, Ref, ErrorL};
         {RetL, ErrorL} ->
-            ?debugVal({RetL, ErrorL}),
             {ok, Ref, {RetL, ErrorL}}
     end;
 put({Object, Ref}) ->
@@ -296,15 +292,18 @@ put(Object, ReqId) ->
             %%   then replicate them into the cluster
             case leo_erasure:encode(ECMethod, ECParams, Bin) of
                 {ok, IdWithBlockL} ->
+                    Checksum = leo_hex:raw_binary_to_integer(crypto:hash(md5, Bin)),
                     ParentObj = Object_2#?OBJECT{data = <<>>,
-                                                 cnumber = erlang:length(IdWithBlockL)},
+                                                 cnumber = erlang:length(IdWithBlockL),
+                                                 checksum = Checksum},
                     Fragments = [begin
-                                     FIdBin = list_to_binary(integer_to_list(FId)),
+                                     FId_1 = FId + 1,
+                                     FIdBin = list_to_binary(integer_to_list(FId_1)),
                                      Object_2#?OBJECT{key = << Key/binary,
                                                                "\n",
                                                                FIdBin/binary >>,
                                                       data = FBin,
-                                                      cindex = FId,
+                                                      cindex = FId_1,
                                                       csize = byte_size(FBin)}
                                  end || {FId, FBin} <- IdWithBlockL],
                     replicate_fun(?REP_LOCAL, ?CMD_PUT, {ParentObj, Fragments});
@@ -894,6 +893,7 @@ replicate_fun(?REP_LOCAL, Method,
                               Ret = leo_storage_replicator_ec:replicate(
                                       Method, QuorumForFrL, RedundantNodeL, Fragments,
                                       replicate_callback(erlang:hd(Fragments))),
+                              ?debugVal(Ret),
                               erlang:send(Self, {fragments, Ref, Ret})
                       end),
                     replicate_fun_loop(Ref, []);
@@ -939,23 +939,31 @@ replicate_fun(_,_,_) ->
     {error, badargs}.
 
 
-%% @doc
+%% @doc Receiver of a replicator's loop
 %% @private
 replicate_fun_loop(_,Acc) when erlang:length(Acc) == 2 ->
-    %% @TODO
-    ?debugVal(Acc),
-    ok;
+    RetFrL = leo_misc:get_value('fragments', Acc),
+    RetMeta = leo_misc:get_value('parent', Acc),
+    ?debugVal({RetFrL, RetMeta}),
+
+    case (element(1, RetFrL) == ok andalso
+          element(1, RetMeta) == ok) of
+        true ->
+            RetMeta;
+        false ->
+            %% @TODO
+            {error, []}
+    end;
 replicate_fun_loop(Ref, Acc) ->
     receive
         {parent, Ref, Ret} ->
-            ?debugVal(Ret),
             replicate_fun_loop(Ref, [{parent, Ret}|Acc]);
         {fragments, Ref, Ret} ->
-            ?debugVal(Ret),
             replicate_fun_loop(Ref, [{fragments, Ret}|Acc]);
         _ ->
             replicate_fun_loop(Ref, Acc)
-    after ?DEF_REQ_TIMEOUT ->
+    after
+        ?DEF_REQ_TIMEOUT ->
             {error, timeout}
     end.
 
