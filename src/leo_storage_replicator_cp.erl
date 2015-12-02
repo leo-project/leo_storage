@@ -151,7 +151,7 @@ loop(0, 0,_ResL,_Ref,_From, #state{is_reply = true}) ->
 loop(0, 0, ResL, Ref, From, #state{method = Method}) ->
     erlang:send(From, {Ref, {ok, Method, hd(ResL)}});
 loop(_, W,_ResL, Ref, From, #state{num_of_nodes = N,
-                                   errors = E}) when (N - W) < length(E) ->
+                                   errors = E}) when (N - W) < erlang:length(E) ->
     erlang:send(From, {Ref, {error, E}});
 loop(N, W, ResL, Ref, From, #state{method = Method,
                                    addr_id = AddrId,
@@ -246,7 +246,7 @@ enqueue(?CMD_PUT, ?ERR_TYPE_REPLICATE_DATA = Type,  AddrId, Key) ->
         ok ->
             ok;
         {error, Cause} ->
-            ?warn("enqueue/1",
+            ?warn("enqueue/4",
                   [{qid, QId}, {addr_id, AddrId},
                    {key, Key}, {type, Type}, {cause, Cause}]),
             ok
@@ -257,7 +257,7 @@ enqueue(?CMD_DELETE, _Type,  AddrId, Key) ->
         ok ->
             ok;
         {error, Cause} ->
-            ?warn("enqueue/1",
+            ?warn("enqueue/4",
                   [{qid, QId}, {addr_id, AddrId},
                    {key, Key}, {cause, Cause}]),
             ok

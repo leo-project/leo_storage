@@ -406,7 +406,7 @@ get_1([#redundant_node{node = Node}|Rest], Dir, Errors) ->
              {error, any()} when Dir::binary(),
                                  Delimiter::binary()|null,
                                  Marker::binary()|null,
-                                 MaxKeys::integer()).
+                                 MaxKeys::non_neg_integer()).
 
 find_by_parent_dir(Dir, _Delimiter, Marker, MaxKeys) when is_binary(Marker) == false ->
     find_by_parent_dir(Dir, _Delimiter, <<>>, MaxKeys);
@@ -460,7 +460,7 @@ find_by_parent_dir_1([#redundant_node{node = Node}|Rest], AddrId, Dir, Marker, M
              {ok, list()} |
              {error, any()} when Dir::binary(),
                                  Marker::binary()|null,
-                                 MaxKeys::integer()).
+                                 MaxKeys::non_neg_integer()).
 ask_to_find_by_parent_dir(Dir, <<>> = Marker, MaxKeys) ->
     Dir_1 = hd(leo_misc:binary_tokens(Dir, <<"\t">>)),
     Ret = case Dir_1 of

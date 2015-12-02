@@ -112,9 +112,9 @@ get(ReadParameter, Redundancies) ->
 %%
 -spec(get(AddrId, Key, ReqId) ->
              {ok, #?METADATA{}, binary()} |
-             {error, any()} when AddrId::integer(),
+             {error, any()} when AddrId::non_neg_integer(),
                                  Key::binary(),
-                                 ReqId::integer()).
+                                 ReqId::non_neg_integer()).
 get(AddrId, Key, ReqId) ->
     get(#?READ_PARAMETER{ref = make_ref(),
                          addr_id   = AddrId,
@@ -126,10 +126,10 @@ get(AddrId, Key, ReqId) ->
 -spec(get(AddrId, Key, ETag, ReqId) ->
              {ok, #?METADATA{}, binary()} |
              {ok, match} |
-             {error, any()} when AddrId::integer(),
+             {error, any()} when AddrId::non_neg_integer(),
                                  Key::binary(),
-                                 ETag::integer(),
-                                 ReqId::integer()).
+                                 ETag::non_neg_integer(),
+                                 ReqId::non_neg_integer()).
 get(AddrId, Key, ETag, ReqId) ->
     get(#?READ_PARAMETER{ref = make_ref(),
                          addr_id   = AddrId,
@@ -142,11 +142,11 @@ get(AddrId, Key, ETag, ReqId) ->
 -spec(get(AddrId, Key, StartPos, EndPos, ReqId) ->
              {ok, #?METADATA{}, binary()} |
              {ok, match} |
-             {error, any()} when AddrId::integer(),
+             {error, any()} when AddrId::non_neg_integer(),
                                  Key::binary(),
                                  StartPos::integer(),
                                  EndPos::integer(),
-                                 ReqId::integer()).
+                                 ReqId::non_neg_integer()).
 get(AddrId, Key, StartPos, EndPos, ReqId) ->
     get(#?READ_PARAMETER{ref = make_ref(),
                          addr_id   = AddrId,
@@ -161,7 +161,7 @@ get(AddrId, Key, StartPos, EndPos, ReqId) ->
 %% @private
 -spec(get_fun(AddrId, Key, IsForcedCheck) ->
              {ok, #?METADATA{}, #?OBJECT{}} |
-             {error, any()} when AddrId::integer(),
+             {error, any()} when AddrId::non_neg_integer(),
                                  Key::binary(),
                                  IsForcedCheck::boolean()).
 get_fun(AddrId, Key, IsForcedCheck) ->
@@ -170,7 +170,7 @@ get_fun(AddrId, Key, IsForcedCheck) ->
 %% @private
 -spec(get_fun(AddrId, Key, StartPos, EndPos) ->
              {ok, #?METADATA{}, #?OBJECT{}} |
-             {error, any()} when AddrId::integer(),
+             {error, any()} when AddrId::non_neg_integer(),
                                  Key::binary(),
                                  StartPos::integer(),
                                  EndPos::integer()).
@@ -180,7 +180,7 @@ get_fun(AddrId, Key, StartPos, EndPos) ->
 %% @private
 -spec(get_fun(AddrId, Key, StartPos, EndPos, IsForcedCheck) ->
              {ok, #?METADATA{}, #?OBJECT{}} |
-             {error, any()} when AddrId::integer(),
+             {error, any()} when AddrId::non_neg_integer(),
                                  Key::binary(),
                                  StartPos::integer(),
                                  EndPos::integer(),
@@ -254,7 +254,7 @@ put({Object, Ref}) ->
                                 {error, Cause} ->
                                     {error, Ref, Cause}
                             end;
-                        #?METADATA{} ->
+                        #?METADATA{rep_method = ?REP_ERASURE_CODE} ->
                             {ok, Ref, {etag, 0}};
                         _ ->
                             {error, Ref, 'invalid_data'}
@@ -272,7 +272,7 @@ put({Object, Ref}) ->
 %% @doc Put an object (request from gateway).
 -spec(put(Object, ReqId) ->
              {ok, ETag} | {error, any()} when Object::#?OBJECT{},
-                                              ReqId::integer(),
+                                              ReqId::non_neg_integer(),
                                               ETag::{etag, integer()}).
 put(Object, ReqId) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
@@ -320,7 +320,7 @@ put(Object, ReqId) ->
              {error, any()} when Ref::reference(),
                                  From::pid(),
                                  Object::#?OBJECT{}|[{non_neg_integer(), #?OBJECT{}}],
-                                 ReqId::integer()).
+                                 ReqId::non_neg_integer()).
 %% for erasure-coding
 put(Ref, From, [{_,#?OBJECT{rep_method = ?REP_ERASURE_CODE}}|_] = Fragments, ReqId) ->
     case lists:foldl(
@@ -376,7 +376,7 @@ put(Ref, From, Object, ReqId, IsSendMsg) ->
 -spec(put_fun(Ref, AddrId, Key, Object) ->
              {ok, reference(), tuple()} |
              {error, reference(), any()} when Ref::reference(),
-                                              AddrId::integer(),
+                                              AddrId::non_neg_integer(),
                                               Key::binary(),
                                               Object::#?OBJECT{}).
 put_fun(Ref, AddrId, Key, #?OBJECT{del = ?DEL_TRUE} = Object) ->
@@ -451,7 +451,7 @@ gen_fragments_1(TotalFramgments, Acc) ->
 %% Remove chunked objects from the object-storage
 %% @private
 -spec(delete_chunked_objects(CIndex, ParentKey) ->
-             ok | {error, any()} when CIndex::integer(),
+             ok | {error, any()} when CIndex::non_neg_integer(),
                                       ParentKey::binary()).
 delete_chunked_objects(0,_) ->
     ok;
@@ -515,13 +515,13 @@ delete({Object, Ref}) ->
 %%
 -spec(delete(Object, ReqId) ->
              ok | {error, any()} when Object::#?OBJECT{},
-                                      ReqId::integer()|reference()).
+                                      ReqId::non_neg_integer()|reference()).
 delete(Object, ReqId) ->
     delete(Object, ReqId, true).
 
 -spec(delete(Object, ReqId, CheckUnderDir) ->
              ok | {error, any()} when Object::#?OBJECT{},
-                                      ReqId::integer()|reference(),
+                                      ReqId::non_neg_integer(),
                                       CheckUnderDir::boolean()).
 delete(#?OBJECT{addr_id = AddrId,
                 key = Key} = Object, ReqId, CheckUnderDir) ->
@@ -588,14 +588,14 @@ delete_1(Ret, Object, CheckUnderDir) ->
 %% @doc retrieve a meta-data from mata-data-server (file).
 %%
 -spec(head(AddrId, Key) ->
-             {ok, #?METADATA{}} | not_found | {error, any} when AddrId::integer(),
+             {ok, #?METADATA{}} | not_found | {error, any} when AddrId::non_neg_integer(),
                                                                 Key::binary()).
 head(AddrId, Key) ->
     %% Do retry when being invoked as usual method
     head(AddrId, Key, true).
 
 -spec(head(AddrId, Key, CanRetry) ->
-             {ok, #?METADATA{}} | {error, any} when AddrId::integer(),
+             {ok, #?METADATA{}} | {error, any} when AddrId::non_neg_integer(),
                                                     Key::binary(),
                                                     CanRetry::boolean()).
 head(AddrId, Key, false) ->
@@ -645,7 +645,7 @@ head_1([_|Rest], AddrId, Key) ->
 %%
 -spec(head_with_calc_md5(AddrId, Key, MD5Context) ->
              {ok, #?METADATA{}, any()} |
-             {error, any()} when AddrId::integer(),
+             {error, any()} when AddrId::non_neg_integer(),
                                  Key::binary(),
                                  MD5Context::any()).
 head_with_calc_md5(AddrId, Key, MD5Context) ->
@@ -707,7 +707,7 @@ replicate(Object) ->
              ok |
              not_found |
              {error, any()} when DestNodes::[atom()],
-                                 AddrId::integer(),
+                                 AddrId::non_neg_integer(),
                                  Key::binary()).
 replicate(DestNodes, AddrId, Key) ->
     case leo_object_storage_api:head({AddrId, Key}) of
