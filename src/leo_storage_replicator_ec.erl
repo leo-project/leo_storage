@@ -69,7 +69,6 @@ replicate(Method, Quorum, Nodes, [#?OBJECT{addr_id = AddrId,
                                          #?OBJECT{cindex = FId} = FObj}, Acc) ->
                                             dict:append({Node, Available}, {FId, FObj}, Acc)
                                     end, dict:new(), lists:zip(Nodes, Fragments))),
-            ?debugVal(NodeWithFragmentL),
             Key_1 = begin
                         {Pos,_} = lists:last(binary:matches(Key, [<<"\n">>], [])),
                         binary:part(Key, 0, Pos)

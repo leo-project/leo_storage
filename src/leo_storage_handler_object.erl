@@ -246,13 +246,16 @@ put({Object, Ref}) ->
                     case binary_to_term(MetaBin) of
                         #?METADATA{cnumber = 0} ->
                             put_fun(Ref, AddrId, Key, Object_1);
-                        #?METADATA{cnumber = CNumber} ->
+                        #?METADATA{rep_method = ?REP_COPY,
+                                   cnumber = CNumber} ->
                             case delete_chunked_objects(CNumber, Key) of
                                 ok ->
                                     put_fun(Ref, AddrId, Key, Object_1);
                                 {error, Cause} ->
                                     {error, Ref, Cause}
                             end;
+                        #?METADATA{} ->
+                            {ok, Ref, {etag, 0}};
                         _ ->
                             {error, Ref, 'invalid_data'}
                     end;
@@ -277,8 +280,7 @@ put(Object, ReqId) ->
     Object_2 = Object_1#?OBJECT{method = ?CMD_PUT,
                                 clock = leo_date:clock(),
                                 req_id = ReqId},
-    #?OBJECT{key = Key,
-             data = Bin,
+    #?OBJECT{data = Bin,
              dsize = DSize,
              rep_method = RepMethod,
              ec_method = ECMethod,
@@ -296,16 +298,7 @@ put(Object, ReqId) ->
                     ParentObj = Object_2#?OBJECT{data = <<>>,
                                                  cnumber = erlang:length(IdWithBlockL),
                                                  checksum = Checksum},
-                    Fragments = [begin
-                                     FId_1 = FId + 1,
-                                     FIdBin = list_to_binary(integer_to_list(FId_1)),
-                                     Object_2#?OBJECT{key = << Key/binary,
-                                                               "\n",
-                                                               FIdBin/binary >>,
-                                                      data = FBin,
-                                                      cindex = FId_1,
-                                                      csize = byte_size(FBin)}
-                                 end || {FId, FBin} <- IdWithBlockL],
+                    Fragments = gen_fragments(Object_2, IdWithBlockL),
                     replicate_fun(?REP_LOCAL, ?CMD_PUT, {ParentObj, Fragments});
                 Error ->
                     Error
@@ -422,6 +415,38 @@ put_fun(Ref, AddrId, Key, Object) ->
     end.
 
 
+%% @doc Generate fragmengs
+%% @private
+-spec(gen_fragments(Object, IdWithBlockL) ->
+             [#?OBJECT{}] when Object::#?OBJECT{},
+                               IdWithBlockL::{non_neg_integer(), binary()}).
+gen_fragments(#?OBJECT{key = Key} = Object, IdWithBlockL) ->
+    [begin
+         FId_1 = FId + 1,
+         FIdBin = list_to_binary(integer_to_list(FId_1)),
+         Object#?OBJECT{key = << Key/binary,
+                                 "\n",
+                                 FIdBin/binary >>,
+                        data = FBin,
+                        cindex = FId_1,
+                        csize = byte_size(FBin)}
+     end || {FId, FBin} <- IdWithBlockL].
+
+-spec(gen_fragments(Object) ->
+             [#?OBJECT{}] when Object::#?OBJECT{}).
+gen_fragments(#?OBJECT{ec_params = ECParams} = Object) ->
+    {ECParam_K, ECParam_M,_} = ECParams,
+    TotalFragments = ECParam_K + ECParam_M,
+    IdWithBlockL = gen_fragments_1(TotalFragments, []),
+    gen_fragments(Object, IdWithBlockL).
+
+%% @private
+gen_fragments_1(0, Acc) ->
+    Acc;
+gen_fragments_1(TotalFramgments, Acc) ->
+    FId = TotalFramgments - 1,
+    gen_fragments_1(TotalFramgments - 1, [{FId, <<>>}|Acc]).
+
 
 %% Remove chunked objects from the object-storage
 %% @private
@@ -498,29 +523,63 @@ delete(Object, ReqId) ->
              ok | {error, any()} when Object::#?OBJECT{},
                                       ReqId::integer()|reference(),
                                       CheckUnderDir::boolean()).
-delete(Object, ReqId, CheckUnderDir) ->
+delete(#?OBJECT{addr_id = AddrId,
+                key = Key} = Object, ReqId, CheckUnderDir) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
-    case replicate_fun(?REP_LOCAL, ?CMD_DELETE,
-                       Object#?OBJECT{method = ?CMD_DELETE,
-                                      data = <<>>,
-                                      dsize = 0,
-                                      clock = leo_date:clock(),
-                                      req_id = ReqId,
-                                      del = ?DEL_TRUE}) of
-        {ok,_} ->
-            delete_1(ok, Object, CheckUnderDir);
-        {error, not_found = Cause} ->
-            delete_1({error, Cause}, Object, CheckUnderDir);
-        {error, Cause} ->
-            {error, Cause}
+
+    %% Check replication method of the object
+    case ?MODULE:head(AddrId, Key, false) of
+        {ok, Metadata} ->
+            Object_1 = leo_object_storage_transformer:transform_object(Object),
+            Object_2 = Object_1#?OBJECT{method = ?CMD_DELETE,
+                                        data = <<>>,
+                                        dsize = 0,
+                                        clock = leo_date:clock(),
+                                        req_id = ReqId,
+                                        del = ?DEL_TRUE},
+
+            case leo_object_storage_transformer:transform_metadata(Metadata) of
+                #?METADATA{rep_method = ?REP_ERASURE_CODE,
+                           cnumber = TotalFragments,
+                           ec_method = ECMethod,
+                           ec_params = ECParams} ->
+                    Object_3 = Object_2#?OBJECT{rep_method = ?REP_ERASURE_CODE,
+                                                cnumber = TotalFragments,
+                                                ec_method = ECMethod,
+                                                ec_params = ECParams},
+                    Fragments = gen_fragments(Object_3),
+                    Ret = replicate_fun(?REP_LOCAL, ?CMD_DELETE,
+                                        {Object_3, Fragments}),
+                    delete_1(Ret, Object_3, false);
+                _ ->
+                    Ret = replicate_fun(?REP_LOCAL, ?CMD_DELETE, Object_2),
+                    delete_1(Ret, Object_2, CheckUnderDir)
+            end;
+        Error ->
+            Error
     end.
 
 %% @private
-delete_1(Ret,_Object, false) ->
-    Ret;
-delete_1(Ret, Object, true) ->
-    ok = leo_storage_handler_directory:delete_objects_under_dir(Object),
-    Ret.
+-spec(delete_1(Ret, Object, CheckUnderDir) ->
+             ok | {error, Cause} when Ret::{ok, term()} | {error, Cause},
+                                      Object::#?OBJECT{},
+                                      CheckUnderDir::boolean(),
+                                      Cause::any()).
+delete_1(Ret, Object, CheckUnderDir) ->
+    Ret_1 = case Ret of
+                {ok,_} ->
+                    ok;
+                Ret ->
+                    Ret
+            end,
+    case CheckUnderDir of
+        true when Ret_1 == ok orelse
+                  Ret_1 == {error, not_found} ->
+            ok = leo_storage_handler_directory:delete_objects_under_dir(Object);
+        _ ->
+            void
+    end,
+    Ret_1.
 
 
 %%--------------------------------------------------------------------
@@ -862,6 +921,7 @@ replicate_fun(?REP_LOCAL, Method,
     case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
         not_found ->
             TotalReplicas = CodingParam_K + CodingParam_M,
+
             case leo_redundant_manager_api:collect_redundancies_by_key(Key, TotalReplicas) of
                 {ok, {Options, RedundantNodeL}}
                   when TotalReplicas == erlang:length(RedundantNodeL) ->
@@ -893,7 +953,6 @@ replicate_fun(?REP_LOCAL, Method,
                               Ret = leo_storage_replicator_ec:replicate(
                                       Method, QuorumForFrL, RedundantNodeL, Fragments,
                                       replicate_callback(erlang:hd(Fragments))),
-                              ?debugVal(Ret),
                               erlang:send(Self, {fragments, Ref, Ret})
                       end),
                     replicate_fun_loop(Ref, []);
@@ -944,7 +1003,6 @@ replicate_fun(_,_,_) ->
 replicate_fun_loop(_,Acc) when erlang:length(Acc) == 2 ->
     RetFrL = leo_misc:get_value('fragments', Acc),
     RetMeta = leo_misc:get_value('parent', Acc),
-    ?debugVal({RetFrL, RetMeta}),
 
     case (element(1, RetFrL) == ok andalso
           element(1, RetMeta) == ok) of
