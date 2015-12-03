@@ -217,7 +217,7 @@ get_fun(AddrId, Key, StartPos, EndPos, IsForcedCheck) ->
              {error, reference(), any()}
                  when ObjAndRef::{#?OBJECT{}, reference()}|
                                  {[#?OBJECT{}], reference()}).
-put({[{_,#?OBJECT{rep_method = ?REP_ERASURE_CODE}}|_] = Fragments, Ref}) ->
+put({[{_,#?OBJECT{redundancy_method = ?RED_ERASURE_CODE}}|_] = Fragments, Ref}) ->
     %% method: ERASURE_CODE
     case lists:foldl(fun({FId, #?OBJECT{} = Object}, {Acc_1, Acc_2}) ->
                              case put({Object, Ref}) of
@@ -246,7 +246,7 @@ put({Object, Ref}) ->
                     case binary_to_term(MetaBin) of
                         #?METADATA{cnumber = 0} ->
                             put_fun(Ref, AddrId, Key, Object_1);
-                        #?METADATA{rep_method = ?REP_COPY,
+                        #?METADATA{redundancy_method = ?RED_COPY,
                                    cnumber = CNumber} ->
                             case delete_chunked_objects(CNumber, Key) of
                                 ok ->
@@ -254,7 +254,7 @@ put({Object, Ref}) ->
                                 {error, Cause} ->
                                     {error, Ref, Cause}
                             end;
-                        #?METADATA{rep_method = ?REP_ERASURE_CODE} ->
+                        #?METADATA{redundancy_method = ?RED_ERASURE_CODE} ->
                             {ok, Ref, {etag, 0}};
                         _ ->
                             {error, Ref, 'invalid_data'}
@@ -282,13 +282,13 @@ put(Object, ReqId) ->
                                 req_id = ReqId},
     #?OBJECT{data = Bin,
              dsize = DSize,
-             rep_method = RepMethod,
+             redundancy_method = RepMethod,
              ec_method = ECMethod,
              ec_params = ECParams} = Object_2,
     MinObjSizeForEC = ?env_erasure_coding_min_object_size(),
 
     case RepMethod of
-        ?REP_ERASURE_CODE when DSize >= MinObjSizeForEC ->
+        ?RED_ERASURE_CODE when DSize >= MinObjSizeForEC ->
             %% Execute encoding object,
             %%   then generate the plural OBJECTs,
             %%   then replicate them into the cluster
@@ -303,8 +303,8 @@ put(Object, ReqId) ->
                 Error ->
                     Error
             end;
-        ?REP_ERASURE_CODE ->
-            Object_3 = Object_2#?OBJECT{rep_method = ?REP_ERASURE_CODE,
+        ?RED_ERASURE_CODE ->
+            Object_3 = Object_2#?OBJECT{redundancy_method = ?RED_ERASURE_CODE,
                                         ec_method = undefined,
                                         ec_params = undefined},
             replicate_fun(?REP_LOCAL, ?CMD_PUT, Object_3);
@@ -322,7 +322,7 @@ put(Object, ReqId) ->
                                  Object::#?OBJECT{}|[{non_neg_integer(), #?OBJECT{}}],
                                  ReqId::non_neg_integer()).
 %% for erasure-coding
-put(Ref, From, [{_,#?OBJECT{rep_method = ?REP_ERASURE_CODE}}|_] = Fragments, ReqId) ->
+put(Ref, From, [{_,#?OBJECT{redundancy_method = ?RED_ERASURE_CODE}}|_] = Fragments, ReqId) ->
     case lists:foldl(
            fun({FId, #?OBJECT{} = Object}, {Acc_1, Acc_2}) ->
                    case put(Ref, From, Object, ReqId, false) of
@@ -539,11 +539,11 @@ delete(#?OBJECT{addr_id = AddrId,
                                         del = ?DEL_TRUE},
 
             case leo_object_storage_transformer:transform_metadata(Metadata) of
-                #?METADATA{rep_method = ?REP_ERASURE_CODE,
+                #?METADATA{redundancy_method = ?RED_ERASURE_CODE,
                            cnumber = TotalFragments,
                            ec_method = ECMethod,
                            ec_params = ECParams} ->
-                    Object_3 = Object_2#?OBJECT{rep_method = ?REP_ERASURE_CODE,
+                    Object_3 = Object_2#?OBJECT{redundancy_method = ?RED_ERASURE_CODE,
                                                 cnumber = TotalFragments,
                                                 ec_method = ECMethod,
                                                 ec_params = ECParams},
@@ -885,7 +885,7 @@ read_and_repair_3(_,_,_) ->
              {ok, ETag} | {error, any()} when ETag::{etag, integer()}).
 replicate_fun(?REP_LOCAL, Method,
               #?OBJECT{addr_id = AddrId,
-                       rep_method = ?REP_COPY} = Object) ->
+                       redundancy_method = ?RED_COPY} = Object) ->
     %% Replicate an object into the cluster
     case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
         not_found ->
@@ -913,7 +913,7 @@ replicate_fun(?REP_LOCAL, Method,
     end;
 
 replicate_fun(?REP_LOCAL, Method,
-              {ParentObj, [#?OBJECT{rep_method = ?REP_ERASURE_CODE,
+              {ParentObj, [#?OBJECT{redundancy_method = ?RED_ERASURE_CODE,
                                     key = Key,
                                     ec_params = {CodingParam_K,
                                                  CodingParam_M,_}}|_] = Fragments}) ->

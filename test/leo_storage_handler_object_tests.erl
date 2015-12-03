@@ -326,7 +326,7 @@ put_3_({TestNode_1, TestNode_2}) ->
                 end),
 
     Ret = leo_storage_handler_object:put(
-            #?OBJECT{rep_method = ?REP_ERASURE_CODE,
+            #?OBJECT{redundancy_method = ?RED_ERASURE_CODE,
                      method = put,
                      addr_id = 123,
                      key = ?TEST_KEY_3,
@@ -447,7 +447,7 @@ delete_2_({TestNode_1, TestNode_2}) ->
     meck:expect(leo_object_storage_api, head,
                 fun({_AddrId,_Key}) ->
                         {ok, term_to_binary(#?METADATA{key = ?TEST_KEY_3,
-                                                       rep_method = ?REP_ERASURE_CODE,
+                                                       redundancy_method = ?RED_ERASURE_CODE,
                                                        cnumber = 6,
                                                        ec_method = 'vandrs',
                                                        ec_params = {4,2,8}})}
@@ -659,7 +659,7 @@ gen_mock([{H, Case}|T]) when H /= node() ->
                    [leo_storage_handler_object, [no_link, non_strict]]),
     catch rpc:call(H, meck, expect,
                    [leo_storage_handler_object, put,
-                    fun({[{_,#?OBJECT{rep_method = ?REP_ERASURE_CODE}}|_] = Fragments, Ref}) ->
+                    fun({[{_,#?OBJECT{redundancy_method = ?RED_ERASURE_CODE}}|_] = Fragments, Ref}) ->
                             case Case of
                                 ok ->
                                     FIdL = [FId || {FId,_Object} <- Fragments],
