@@ -282,12 +282,12 @@ put(Object, ReqId) ->
                                 req_id = ReqId},
     #?OBJECT{data = Bin,
              dsize = DSize,
-             redundancy_method = RepMethod,
+             redundancy_method = RedMethod,
              ec_method = ECMethod,
              ec_params = ECParams} = Object_2,
     MinObjSizeForEC = ?env_erasure_coding_min_object_size(),
 
-    case RepMethod of
+    case RedMethod of
         ?RED_ERASURE_CODE when DSize >= MinObjSizeForEC ->
             %% Execute encoding object,
             %%   then generate the plural OBJECTs,
@@ -304,7 +304,7 @@ put(Object, ReqId) ->
                     Error
             end;
         ?RED_ERASURE_CODE ->
-            Object_3 = Object_2#?OBJECT{redundancy_method = ?RED_ERASURE_CODE,
+            Object_3 = Object_2#?OBJECT{redundancy_method = ?RED_COPY,
                                         ec_method = undefined,
                                         ec_params = undefined},
             replicate_fun(?REP_LOCAL, ?CMD_PUT, Object_3);
@@ -1014,7 +1014,9 @@ replicate_fun(?REP_REMOTE, Method, Object) ->
             ?warn("replicate_fun/3", [{cause, Cause}]),
             {error, Cause}
     end;
-replicate_fun(_,_,_) ->
+replicate_fun(_T,_M,_Obj) ->
+    ?warn("replicate_fun/3", [{cause, badargs},
+                              {type,_T},{method,_M}]),
     {error, badargs}.
 
 
