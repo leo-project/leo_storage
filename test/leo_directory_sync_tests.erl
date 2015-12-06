@@ -166,6 +166,7 @@ stack_(_) ->
     {ok, Bin_5} = leo_backend_db_api:get(?DIR_DB_ID, <<"a/b/c/d/", "\t", Key_5/binary >>),
     {ok, Bin_6} = leo_backend_db_api:get(?DIR_DB_ID, <<"a/b/c/",   "\t", Key_6/binary >>),
     {ok, Bin_7} = leo_backend_db_api:get(?DIR_DB_ID, <<"a/b/",     "\t", Key_7/binary >>),
+
     ?assertEqual(Metadata_5, binary_to_term(Bin_5)),
     ?assertEqual(Metadata_6, binary_to_term(Bin_6)),
     ?assertEqual(Metadata_7, binary_to_term(Bin_7)),

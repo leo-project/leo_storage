@@ -676,9 +676,18 @@ replicate(Object) ->
     %% Retrieve redudancies
     case leo_redundant_manager_api:get_redundancies_by_addr_id(AddrId) of
         {ok, #redundancies{nodes = Redundancies,
+                           n = TotalReplicas,
                            w = WriteQuorum,
+                           r = ReadQuorum,
                            d = DeleteQuorum}} ->
             %% Replicate an object into the storage cluster
+            Object_1 = case Object#?OBJECT.cp_params of
+                           undefined ->
+                               Object#?OBJECT{cp_params = {TotalReplicas, WriteQuorum,
+                                                           ReadQuorum, DeleteQuorum}};
+                           _ ->
+                               Object
+                       end,
             Redundancies_1 = lists:sublist(Redundancies, NumOfReplicas),
             Quorum_1 = ?quorum(Method, WriteQuorum, DeleteQuorum),
             Quorum_2 = case (NumOfReplicas < Quorum_1) of
@@ -692,7 +701,7 @@ replicate(Object) ->
             case get_active_redundancies(Quorum_2, Redundancies_1) of
                 {ok, Redundancies_2} ->
                     leo_storage_replicator_cp:replicate(Method, Quorum_2, Redundancies_2,
-                                                        Object, replicate_callback());
+                                                        Object_1, replicate_callback());
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -891,14 +900,25 @@ replicate_fun(?REP_LOCAL, Method,
         not_found ->
             case leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
                 {ok, #redundancies{nodes = Redundancies,
+                                   n = TotalReplicas,
                                    w = WriteQuorum,
+                                   r = ReadQuorum,
                                    d = DeleteQuorum,
                                    ring_hash = RingHash}} ->
+                    Object_1 =  Object#?OBJECT{ring_hash = RingHash},
+                    Object_2 = case Object_1#?OBJECT.cp_params of
+                                   undefined ->
+                                       Object_1#?OBJECT{cp_params = {TotalReplicas, WriteQuorum,
+                                                                   ReadQuorum, DeleteQuorum}};
+                                   _ ->
+                                       Object_1
+                               end,
                     Quorum = ?quorum(Method, WriteQuorum, DeleteQuorum),
+
                     case get_active_redundancies(Quorum, Redundancies) of
                         {ok, Redundancies_1} ->
                             leo_storage_replicator_cp:replicate(
-                              Method, Quorum, Redundancies_1, Object#?OBJECT{ring_hash = RingHash},
+                              Method, Quorum, Redundancies_1, Object_2,
                               replicate_callback(Object));
                         {error, Reason} ->
                             {error, Reason}
