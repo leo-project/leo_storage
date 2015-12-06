@@ -194,7 +194,7 @@ subscribe_0_({Test0Node, Test1Node}) ->
     meck:new(leo_object_storage_api, [non_strict]),
     meck:expect(leo_object_storage_api, head,
                 fun({_AddrId, _Key}) ->
-                        {ok, term_to_binary(#?METADATA{num_of_replicas = 0})}
+                        {ok, term_to_binary(#?METADATA{cp_params = {0,0,0,0}})}
                 end),
 
     timer:sleep(100),
@@ -232,7 +232,7 @@ subscribe_1_({Test0Node, Test1Node}) ->
     meck:new(leo_object_storage_api, [non_strict]),
     meck:expect(leo_object_storage_api, head,
                 fun({_AddrId, _Key}) ->
-                        {ok, term_to_binary(#?METADATA{num_of_replicas = 0})}
+                        {ok, term_to_binary(#?METADATA{cp_params = {0,0,0,0}})}
                 end),
 
     timer:sleep(100),
@@ -266,7 +266,7 @@ subscribe_2_({Test0Node, _Test1Node}) ->
     meck:new(leo_object_storage_api, [non_strict]),
     meck:expect(leo_object_storage_api, head,
                 fun({_AddrId, _Key}) ->
-                        {ok, term_to_binary(#?METADATA{num_of_replicas = 0})}
+                        {ok, term_to_binary(#?METADATA{cp_params = {0,0,0,0}})}
                 end),
 
     timer:sleep(100),

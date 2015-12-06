@@ -81,7 +81,7 @@ defer_stack(#?OBJECT{addr_id = AddrId,
                               {error, Cause}->
                                   ?warn("defer_stack/1",
                                         [{key, binary_to_list(Object#?OBJECT.key)},
-                                                 {cause, Cause}]),
+                                         {cause, Cause}]),
                                   QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
                                   case leo_storage_mq:publish(
                                          QId, AddrId, Key) of
@@ -344,17 +344,16 @@ handle_fail(UId, [{AddrId, Key}|Rest] = _StackInfo) ->
 -spec(stack_fun(atom(), #?OBJECT{}) ->
              ok | {error, any()}).
 stack_fun(ClusterId, #?OBJECT{addr_id = AddrId,
-                              key     = Key} = Object) ->
+                              key = Key} = Object) ->
     case leo_cluster_tbl_conf:get() of
         {ok, #?SYSTEM_CONF{
                  cluster_id = MDC_ClusterId,
                  num_of_dc_replicas = MDC_NumOfReplicas}} ->
             CMetaBin = leo_object_storage_transformer:list_to_cmeta_bin(
-                         [{?PROP_CMETA_CLUSTER_ID, MDC_ClusterId},
-                          {?PROP_CMETA_NUM_OF_REPLICAS, MDC_NumOfReplicas}]),
+                         [{?PROP_CMETA_NUM_OF_REPLICAS, MDC_NumOfReplicas}]),
             CMetaLen = byte_size(CMetaBin),
             Object_1 =  Object#?OBJECT{cluster_id = MDC_ClusterId,
-                                       num_of_replicas = MDC_NumOfReplicas,
+                                       cp_params = {MDC_NumOfReplicas,0,0,0},
                                        msize = CMetaLen,
                                        meta  = CMetaBin},
             ObjBin  = term_to_binary(Object_1),
@@ -433,7 +432,7 @@ replicate(ClusterId, Object) ->
     Ret = case leo_mdcr_tbl_cluster_info:get(ClusterId) of
               {ok, #?CLUSTER_INFO{num_of_dc_replicas = NumOfReplicas}} ->
                   Object_1 = Object#?OBJECT{cluster_id = ClusterId,
-                                            num_of_replicas = NumOfReplicas},
+                                            cp_params = {NumOfReplicas,0,0,0}},
                   case leo_storage_handler_object:replicate(Object_1) of
                       {ok, _ETag} ->
                           {ok, leo_object_storage_transformer:object_to_metadata(Object)};

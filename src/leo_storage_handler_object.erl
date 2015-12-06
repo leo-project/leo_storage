@@ -670,7 +670,7 @@ replicate(Object) ->
                  ?DEL_FALSE ->
                      ?CMD_PUT
              end,
-    NumOfReplicas = Object#?OBJECT.num_of_replicas,
+    {NumOfReplicas,_,_,_} = Object#?OBJECT.cp_params,
     AddrId = Metadata#?METADATA.addr_id,
 
     %% Retrieve redudancies

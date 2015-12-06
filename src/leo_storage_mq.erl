@@ -797,11 +797,19 @@ rebalance_2({ok, Redundancies}, #rebalance_message{node = Node,
 get_redundancies_with_replicas(AddrId, Key, Redundancies) ->
     %% Retrieve redundancies with a number of replicas
     case leo_object_storage_api:head({AddrId, Key}) of
-        {ok, MetaBin} ->
-            case binary_to_term(MetaBin) of
-                #?METADATA{num_of_replicas = 0} ->
+        {ok, MetadataBin} ->
+            #?METADATA{cp_params = CPParams} =
+                leo_object_storage_transformer:transform_metadata(
+                  binary_to_term(MetadataBin)),
+
+            case CPParams of
+                undefined ->
                     Redundancies;
-                #?METADATA{num_of_replicas = NumOfReplicas} ->
+                {0,0,0,0} ->
+                    Redundancies;
+                {NumOfReplicas,_,_,_} when length(Redundancies) == NumOfReplicas ->
+                    Redundancies;
+                {NumOfReplicas,_,_,_}  ->
                     lists:sublist(Redundancies, NumOfReplicas)
             end;
         _ ->
