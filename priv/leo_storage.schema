@@ -465,7 +465,7 @@
 %%      default:134217728(B) - 128MB
 {mapping,
  "watchdog.io.threshold_input_per_sec",
- "leo_watchdog.io__threshold_input_per_sec",
+ "leo_watchdog.io_threshold_input_per_sec",
  [
   {datatype, integer},
   {default, 134217728}
