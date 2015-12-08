@@ -243,8 +243,8 @@ put({Object, Ref}) ->
         ?DEL_TRUE->
             %% Removing an object
             case leo_object_storage_api:head({AddrId, Key}) of
-                {ok, MetaBin} ->
-                    case binary_to_term(MetaBin) of
+                {ok, MetadataBin} ->
+                    case binary_to_term(MetadataBin) of
                         #?METADATA{cnumber = 0} ->
                             put_fun(Ref, AddrId, Key, Object_1);
                         #?METADATA{redundancy_method = ?RED_COPY,
@@ -256,7 +256,7 @@ put({Object, Ref}) ->
                                     {error, Ref, Cause}
                             end;
                         #?METADATA{redundancy_method = ?RED_ERASURE_CODE} ->
-                            {ok, Ref, {etag, 0}};
+                            put_fun(Ref, AddrId, Key, Object_1);
                         _ ->
                             {error, Ref, 'invalid_data'}
                     end;
@@ -295,13 +295,14 @@ put(Object, ReqId) ->
             %%   then generate the plural OBJECTs,
             %%   then replicate them into the cluster
             {ECParams_K, ECParams_M} = ECParams,
+            TotalFragments = ECParams_K + ECParams_M,
             ECParams_1 = {ECParams_K, ECParams_M, ?coding_params_w(ECMethod)},
 
             case leo_erasure:encode(ECMethod, ECParams_1, Bin) of
                 {ok, IdWithBlockL} ->
                     Checksum = leo_hex:raw_binary_to_integer(crypto:hash(md5, Bin)),
                     ParentObj = Object_2#?OBJECT{data = <<>>,
-                                                 cnumber = erlang:length(IdWithBlockL),
+                                                 cnumber = TotalFragments,
                                                  checksum = Checksum},
                     Fragments = gen_fragments(Object_2, IdWithBlockL),
                     replicate_fun(?REP_LOCAL, ?CMD_PUT, {ParentObj, Fragments});
@@ -434,9 +435,9 @@ gen_fragments(#?OBJECT{key = Key} = Object, IdWithBlockL) ->
          Object#?OBJECT{key = << Key/binary,
                                  "\n",
                                  FIdBin/binary >>,
+                        dsize = byte_size(FBin),
                         data = FBin,
-                        cindex = FId_1,
-                        csize = byte_size(FBin)}
+                        cindex = FId_1}
      end || {FId, FBin} <- IdWithBlockL].
 
 -spec(gen_fragments(Object) ->
@@ -496,8 +497,8 @@ delete({Object, Ref}) ->
     case leo_object_storage_api:head({AddrId, Key}) of
         not_found = Cause ->
             {error, Ref, Cause};
-        {ok, MetaBin} ->
-            case catch binary_to_term(MetaBin) of
+        {ok, MetadataBin} ->
+            case catch binary_to_term(MetadataBin) of
                 {'EXIT', Cause} ->
                     {error, Cause};
                 #?METADATA{del = ?DEL_TRUE} ->
@@ -513,7 +514,7 @@ delete({Object, Ref}) ->
                             {error, Ref, Why}
                     end
             end;
-        {error, _Cause} ->
+        {error,_Cause} ->
             {error, Ref, ?ERROR_COULD_NOT_GET_META}
     end.
 
@@ -535,7 +536,7 @@ delete(#?OBJECT{addr_id = AddrId,
     ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
 
     %% Check replication method of the object
-    case ?MODULE:head(AddrId, Key, false) of
+    case ?MODULE:head(AddrId, Key) of
         {ok, Metadata} ->
             Object_1 = leo_object_storage_transformer:transform_object(Object),
             Object_2 = Object_1#?OBJECT{method = ?CMD_DELETE,
@@ -544,20 +545,15 @@ delete(#?OBJECT{addr_id = AddrId,
                                         clock = leo_date:clock(),
                                         req_id = ReqId,
                                         del = ?DEL_TRUE},
-
             case leo_object_storage_transformer:transform_metadata(Metadata) of
                 #?METADATA{redundancy_method = ?RED_ERASURE_CODE,
-                           cnumber = TotalFragments,
+                           cnumber = TotalChunks,
                            ec_method = ECMethod,
                            ec_params = ECParams} ->
-                    Object_3 = Object_2#?OBJECT{redundancy_method = ?RED_ERASURE_CODE,
-                                                cnumber = TotalFragments,
-                                                ec_method = ECMethod,
-                                                ec_params = ECParams},
-                    Fragments = gen_fragments(Object_3),
-                    Ret = replicate_fun(?REP_LOCAL, ?CMD_DELETE,
-                                        {Object_3, Fragments}),
-                    delete_1(Ret, Object_3, false);
+                    delete_fragments(Object_2#?OBJECT{redundancy_method = ?RED_ERASURE_CODE,
+                                                      cnumber = TotalChunks,
+                                                      ec_method = ECMethod,
+                                                      ec_params = ECParams});
                 _ ->
                     Ret = replicate_fun(?REP_LOCAL, ?CMD_DELETE, Object_2),
                     delete_1(Ret, Object_2, CheckUnderDir)
@@ -588,6 +584,37 @@ delete_1(Ret, Object, CheckUnderDir) ->
     end,
     Ret_1.
 
+%% @private
+delete_fragments(#?OBJECT{cnumber = TotalChunks} = Object) ->
+    case replicate_fun(?REP_LOCAL, ?CMD_DELETE, Object) of
+        {ok,_ETag} when TotalChunks > 0 ->
+            delete_fragments_1(TotalChunks, Object);
+        {ok,_ETag} ->
+            %% @TODO
+            ok;
+        Error ->
+            Error
+    end.
+
+%% @private
+delete_fragments_1(0,_Object) ->
+    ok;
+delete_fragments_1(CIndex, #?OBJECT{key = Key} = Object) ->
+    CIndexBin = list_to_binary(integer_to_list(CIndex)),
+    Key_1 = << Key/binary, "\n", CIndexBin/binary >>,
+    AddrId = leo_redundant_manager_chash:vnode_id(Key_1),
+    Object_1 = Object#?OBJECT{addr_id = AddrId,
+                              key = Key_1},
+    Fragments = gen_fragments(Object_1),
+
+    case replicate_fun(?REP_LOCAL, ?CMD_DELETE,
+                       {Object_1, Fragments}) of
+        {ok,_} ->
+            delete_fragments_1(CIndex - 1, Object);
+        Error ->
+            Error
+    end.
+
 
 %%--------------------------------------------------------------------
 %% API - HEAD
@@ -608,8 +635,8 @@ head(AddrId, Key) ->
 head(AddrId, Key, false) ->
     %% No retry when being invoked from recover/rebalance
     case leo_object_storage_api:head({AddrId, Key}) of
-        {ok, MetaBin} ->
-            {ok, binary_to_term(MetaBin)};
+        {ok, MetadataBin} ->
+            {ok, binary_to_term(MetadataBin)};
         Error ->
             Error
     end;
@@ -627,8 +654,8 @@ head_1([],_,_) ->
 head_1([#redundant_node{node = Node,
                         available = true}|Rest], AddrId, Key) when Node == erlang:node() ->
     case leo_object_storage_api:head({AddrId, Key}) of
-        {ok, MetaBin} ->
-            {ok, binary_to_term(MetaBin)};
+        {ok, MetadataBin} ->
+            {ok, binary_to_term(MetadataBin)};
         _Other ->
             head_1(Rest, AddrId, Key)
     end;
@@ -636,8 +663,8 @@ head_1([#redundant_node{node = Node,
                         available = true}|Rest], AddrId, Key) ->
     RPCKey = rpc:async_call(Node, leo_object_storage_api, head, [{AddrId, Key}]),
     case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
-        {value, {ok, MetaBin}} ->
-            {ok, binary_to_term(MetaBin)};
+        {value, {ok, MetadataBin}} ->
+            {ok, binary_to_term(MetadataBin)};
         _ ->
             head_1(Rest, AddrId, Key)
     end;
@@ -727,9 +754,9 @@ replicate(Object) ->
                                  Key::binary()).
 replicate(DestNodes, AddrId, Key) ->
     case leo_object_storage_api:head({AddrId, Key}) of
-        {ok, MetaBin} ->
+        {ok, MetadataBin} ->
             Ref = make_ref(),
-            case binary_to_term(MetaBin) of
+            case binary_to_term(MetadataBin) of
                 #?METADATA{del = ?DEL_FALSE} = Metadata ->
                     case ?MODULE:get({Ref, Key}) of
                         {ok, Ref, Metadata, Bin} ->
@@ -823,8 +850,8 @@ read_and_repair_2(#?READ_PARAMETER{addr_id = AddrId,
     %%     then compare it with requested 'Etag'
     HeadRet =
         case leo_object_storage_api:head({AddrId, Key}) of
-            {ok, MetaBin} ->
-                Metadata = binary_to_term(MetaBin),
+            {ok, MetadataBin} ->
+                Metadata = binary_to_term(MetadataBin),
                 case Metadata#?METADATA.checksum of
                     ETag ->
                         {ok, match};
@@ -948,7 +975,6 @@ replicate_fun(?REP_LOCAL, Method,
             case leo_redundant_manager_api:collect_redundancies_by_key(Key, TotalReplicas) of
                 {ok, {Options, RedundantNodeL}}
                   when TotalReplicas == erlang:length(RedundantNodeL) ->
-
                     NumOfReplicas = leo_misc:get_value(?PROP_N, Options),
                     WQuorum = leo_misc:get_value(?PROP_W, Options),
                     DQuorum = leo_misc:get_value(?PROP_D, Options),

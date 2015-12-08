@@ -86,7 +86,6 @@ object_handler_test_() ->
                            fun put_2_/1,
                            fun put_3_/1,
                            fun delete_1_/1,
-                           fun delete_2_/1,
                            fun head_/1,
                            fun copy_/1
                           ]]}.
@@ -333,7 +332,7 @@ put_3_({TestNode_1, TestNode_2}) ->
                      data = Bin,
                      dsize = DSize,
                      ec_method = 'vandrs',
-                     ec_params = {4,2,8}}, 1),
+                     ec_params = {4,2}}, 1),
     ?assertEqual({ok,{etag,Checksum}}, Ret),
     ok.
 
@@ -437,69 +436,6 @@ delete_1_({TestNode_1, TestNode_2}) ->
                         del = 1},
     Res_2 = leo_storage_handler_object:delete(Object_2, 0),
     ?assertEqual(ok, Res_2),
-    ok.
-
-
-%% @doc remove an object for the erasure-coding
-delete_2_({TestNode_1, TestNode_2}) ->
-    %% Create mocks
-    meck:new(leo_object_storage_api, [non_strict]),
-    meck:expect(leo_object_storage_api, head,
-                fun({_AddrId,_Key}) ->
-                        {ok, term_to_binary(#?METADATA{key = ?TEST_KEY_3,
-                                                       redundancy_method = ?RED_ERASURE_CODE,
-                                                       cnumber = 6,
-                                                       ec_method = 'vandrs',
-                                                       ec_params = {4,2,8}})}
-                end),
-    meck:expect(leo_object_storage_api, put,
-                fun(_Key,_ObjPool) ->
-                        {ok, 1}
-                end),
-    meck:expect(leo_object_storage_api, delete,
-                fun(_) ->
-                        ok
-                end),
-
-    meck:new(leo_watchdog_state, [non_strict]),
-    meck:expect(leo_watchdog_state, find_not_safe_items,
-                fun(_) ->
-                        not_found
-                end),
-
-    meck:new(leo_metrics_req, [non_strict]),
-    meck:expect(leo_metrics_req, notify, fun(_) -> ok end),
-
-    meck:new(leo_redundant_manager_api, [non_strict]),
-    meck:expect(leo_redundant_manager_api, collect_redundancies_by_key,
-                fun(_Key,_TotalReplicas) ->
-                        {ok, {[{n, 2},
-                               {w, 1},
-                               {r, 1},
-                               {d, 1}], ?TEST_REDUNDANCIES_1}}
-                end),
-
-    meck:new(leo_storage_event_notifier, [non_strict]),
-    meck:expect(leo_storage_event_notifier, operate,
-                fun(_,_) ->
-                        ok
-                end),
-
-    gen_mock([{TestNode_1, ok},{TestNode_2, ok}]),
-
-    %% Execute the erasure-coding
-    meck:new(leo_storage_replicator_cp, [non_strict]),
-    meck:expect(leo_storage_replicator_cp, replicate,
-                fun(_,_,_,_,_) ->
-                        {ok,{etag,0}}
-                end),
-
-    Ret = leo_storage_handler_object:delete(
-            #?OBJECT{method = delete,
-                     addr_id = 123,
-                     key = ?TEST_KEY_3,
-                     data = <<>>}, 1),
-    ?assertEqual(ok, Ret),
     ok.
 
 
