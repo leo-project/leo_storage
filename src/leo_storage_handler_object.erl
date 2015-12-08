@@ -26,6 +26,7 @@
 
 -include("leo_storage.hrl").
 -include_lib("leo_commons/include/leo_commons.hrl").
+-include_lib("leo_erasure/include/leo_erasure.hrl").
 -include_lib("leo_logger/include/leo_logger.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
 -include_lib("leo_ordning_reda/include/leo_ordning_reda.hrl").
@@ -288,11 +289,15 @@ put(Object, ReqId) ->
     MinObjSizeForEC = ?env_erasure_coding_min_object_size(),
 
     case RedMethod of
-        ?RED_ERASURE_CODE when DSize >= MinObjSizeForEC ->
+        ?RED_ERASURE_CODE when DSize >= MinObjSizeForEC andalso
+                               Bin /= <<>> ->
             %% Execute encoding object,
             %%   then generate the plural OBJECTs,
             %%   then replicate them into the cluster
-            case leo_erasure:encode(ECMethod, ECParams, Bin) of
+            {ECParams_K, ECParams_M} = ECParams,
+            ECParams_1 = {ECParams_K, ECParams_M, ?coding_params_w(ECMethod)},
+
+            case leo_erasure:encode(ECMethod, ECParams_1, Bin) of
                 {ok, IdWithBlockL} ->
                     Checksum = leo_hex:raw_binary_to_integer(crypto:hash(md5, Bin)),
                     ParentObj = Object_2#?OBJECT{data = <<>>,
@@ -303,6 +308,8 @@ put(Object, ReqId) ->
                 Error ->
                     Error
             end;
+        ?RED_ERASURE_CODE when DSize >= MinObjSizeForEC ->
+            replicate_fun(?REP_LOCAL, ?CMD_PUT, Object_2);
         ?RED_ERASURE_CODE ->
             Object_3 = Object_2#?OBJECT{redundancy_method = ?RED_COPY,
                                         ec_method = undefined,
@@ -435,7 +442,7 @@ gen_fragments(#?OBJECT{key = Key} = Object, IdWithBlockL) ->
 -spec(gen_fragments(Object) ->
              [#?OBJECT{}] when Object::#?OBJECT{}).
 gen_fragments(#?OBJECT{ec_params = ECParams} = Object) ->
-    {ECParam_K, ECParam_M,_} = ECParams,
+    {ECParam_K, ECParam_M} = ECParams,
     TotalFragments = ECParam_K + ECParam_M,
     IdWithBlockL = gen_fragments_1(TotalFragments, []),
     gen_fragments(Object, IdWithBlockL).
@@ -892,9 +899,7 @@ read_and_repair_3(_,_,_) ->
 %% @private
 -spec(replicate_fun(replication(), request_verb(), #?OBJECT{}|{#?OBJECT{},[#?OBJECT{}]}) ->
              {ok, ETag} | {error, any()} when ETag::{etag, integer()}).
-replicate_fun(?REP_LOCAL, Method,
-              #?OBJECT{addr_id = AddrId,
-                       redundancy_method = ?RED_COPY} = Object) ->
+replicate_fun(?REP_LOCAL, Method, #?OBJECT{addr_id = AddrId} = Object) ->
     %% Replicate an object into the cluster
     case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
         not_found ->
@@ -909,7 +914,7 @@ replicate_fun(?REP_LOCAL, Method,
                     Object_2 = case Object_1#?OBJECT.cp_params of
                                    undefined ->
                                        Object_1#?OBJECT{cp_params = {TotalReplicas, WriteQuorum,
-                                                                   ReadQuorum, DeleteQuorum}};
+                                                                     ReadQuorum, DeleteQuorum}};
                                    _ ->
                                        Object_1
                                end,
@@ -933,10 +938,8 @@ replicate_fun(?REP_LOCAL, Method,
     end;
 
 replicate_fun(?REP_LOCAL, Method,
-              {ParentObj, [#?OBJECT{redundancy_method = ?RED_ERASURE_CODE,
-                                    key = Key,
-                                    ec_params = {CodingParam_K,
-                                                 CodingParam_M,_}}|_] = Fragments}) ->
+              {ParentObj, [#?OBJECT{key = Key,
+                                    ec_params = {CodingParam_K, CodingParam_M}}|_] = Fragments}) ->
     %% Store encoded objects for the erasure-coding support
     case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
         not_found ->
@@ -945,8 +948,11 @@ replicate_fun(?REP_LOCAL, Method,
             case leo_redundant_manager_api:collect_redundancies_by_key(Key, TotalReplicas) of
                 {ok, {Options, RedundantNodeL}}
                   when TotalReplicas == erlang:length(RedundantNodeL) ->
+
                     NumOfReplicas = leo_misc:get_value(?PROP_N, Options),
-                    QuorumForRep = [],
+                    WQuorum = leo_misc:get_value(?PROP_W, Options),
+                    DQuorum = leo_misc:get_value(?PROP_D, Options),
+                    QuorumForRep = ?quorum(Method, WQuorum, DQuorum),
                     QuorumForFrL = ?quorum_of_fragments(
                                       Method, NumOfReplicas,
                                       leo_misc:get_value(?PROP_W, Options),
