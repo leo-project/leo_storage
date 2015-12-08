@@ -174,7 +174,7 @@ loop(N, W, ResL, Ref, From, #state{method = Method,
                         {W_1, State}
                 end,
             loop(N - 1, W_2, ResL_1, Ref, From, State_1);
-        {Ref, {error, {_Node, not_found}}} when Method == 'delete'->
+        {Ref, {error, {_Node, not_found}}} when Method == ?CMD_DELETE ->
             {W_1, State_1} =
                 case ((W - 1) < 1) of
                     true when IsReply == false ->

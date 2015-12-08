@@ -590,8 +590,7 @@ delete_fragments(#?OBJECT{cnumber = TotalChunks} = Object) ->
         {ok,_ETag} when TotalChunks > 0 ->
             delete_fragments_1(TotalChunks, Object);
         {ok,_ETag} ->
-            %% @TODO
-            ok;
+            replicate_fun(?REP_LOCAL, ?CMD_DELETE, Object);
         Error ->
             Error
     end.
@@ -599,18 +598,41 @@ delete_fragments(#?OBJECT{cnumber = TotalChunks} = Object) ->
 %% @private
 delete_fragments_1(0,_Object) ->
     ok;
-delete_fragments_1(CIndex, #?OBJECT{key = Key} = Object) ->
+delete_fragments_1(CIndex, #?OBJECT{addr_id = AddrId,
+                                    key = Key} = Object) ->
     CIndexBin = list_to_binary(integer_to_list(CIndex)),
     Key_1 = << Key/binary, "\n", CIndexBin/binary >>,
-    AddrId = leo_redundant_manager_chash:vnode_id(Key_1),
-    Object_1 = Object#?OBJECT{addr_id = AddrId,
-                              key = Key_1},
-    Fragments = gen_fragments(Object_1),
+    Object_1 = Object#?OBJECT{key = Key_1},
 
-    case replicate_fun(?REP_LOCAL, ?CMD_DELETE,
-                       {Object_1, Fragments}) of
-        {ok,_} ->
-            delete_fragments_1(CIndex - 1, Object);
+    case ?MODULE:head(AddrId, Key_1) of
+        {ok, Metadata} ->
+            case leo_object_storage_transformer:transform_metadata(Metadata) of
+                #?METADATA{cnumber = 0} ->
+                    case replicate_fun(?REP_LOCAL, ?CMD_DELETE, Object_1) of
+                        {ok,_} ->
+                            delete_fragments_1(CIndex - 1, Object);
+                        Error ->
+                            Error
+                    end;
+                #?METADATA{addr_id = AddrId_1,
+                           cnumber = TotalChunks,
+                           ec_method = ECMethod,
+                           ec_params = ECParams} ->
+                    Object_2 = Object_1#?OBJECT{addr_id = AddrId_1,
+                                                cnumber = TotalChunks,
+                                                ec_method = ECMethod,
+                                                ec_params = ECParams},
+                    Fragments = gen_fragments(Object_2),
+                    case replicate_fun(?REP_LOCAL,
+                                       ?CMD_DELETE, {Object_2, Fragments}) of
+                        {ok,_} ->
+                            delete_fragments_1(CIndex - 1, Object);
+                        Error ->
+                            Error
+                    end
+            end;
+        not_found = Cause ->
+            {error, Cause};
         Error ->
             Error
     end.
@@ -964,15 +986,16 @@ replicate_fun(?REP_LOCAL, Method, #?OBJECT{addr_id = AddrId} = Object) ->
             {error, unavailable}
     end;
 
-replicate_fun(?REP_LOCAL, Method,
-              {ParentObj, [#?OBJECT{key = Key,
-                                    ec_params = {CodingParam_K, CodingParam_M}}|_] = Fragments}) ->
+replicate_fun(?REP_LOCAL, Method, {#?OBJECT{key = Key} = ParentObj,
+                                   [#?OBJECT{ec_params = {CodingParam_K,
+                                                          CodingParam_M}}|_] = Fragments}) ->
     %% Store encoded objects for the erasure-coding support
     case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
         not_found ->
             TotalReplicas = CodingParam_K + CodingParam_M,
 
-            case leo_redundant_manager_api:collect_redundancies_by_key(Key, TotalReplicas) of
+            case leo_redundant_manager_api:collect_redundancies_by_key(
+                   Key, TotalReplicas) of
                 {ok, {Options, RedundantNodeL}}
                   when TotalReplicas == erlang:length(RedundantNodeL) ->
                     NumOfReplicas = leo_misc:get_value(?PROP_N, Options),
@@ -990,9 +1013,11 @@ replicate_fun(?REP_LOCAL, Method,
                     Ref = erlang:make_ref(),
                     spawn(
                       fun() ->
+                              RedundantNodeL_1 =
+                                  lists:sublist(RedundantNodeL, NumOfReplicas),
                               Ret = leo_storage_replicator_cp:replicate(
                                       Method, QuorumForRep,
-                                      lists:sublist(RedundantNodeL, NumOfReplicas),
+                                      RedundantNodeL_1,
                                       ParentObj#?OBJECT{ring_hash = leo_misc:get_value(
                                                                       ?PROP_RING_HASH, Options)},
                                       replicate_callback(ParentObj)),
