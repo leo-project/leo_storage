@@ -459,20 +459,20 @@ gen_fragments(#?OBJECT{key = Key} = Object, IdWithBlockL) ->
                         has_children = false}
      end || {FId, FBin} <- IdWithBlockL].
 
--spec(gen_fragments(Object) ->
-             [#?OBJECT{}] when Object::#?OBJECT{}).
-gen_fragments(#?OBJECT{ec_params = ECParams} = Object) ->
-    {ECParam_K, ECParam_M} = ECParams,
-    TotalFragments = ECParam_K + ECParam_M,
-    IdWithBlockL = gen_fragments_1(TotalFragments, []),
-    gen_fragments(Object, IdWithBlockL).
+%% -spec(gen_fragments(Object) ->
+%%              [#?OBJECT{}] when Object::#?OBJECT{}).
+%% gen_fragments(#?OBJECT{ec_params = ECParams} = Object) ->
+%%     {ECParam_K, ECParam_M} = ECParams,
+%%     TotalFragments = ECParam_K + ECParam_M,
+%%     IdWithBlockL = gen_fragments_1(TotalFragments, []),
+%%     gen_fragments(Object, IdWithBlockL).
 
-%% @private
-gen_fragments_1(0, Acc) ->
-    Acc;
-gen_fragments_1(TotalFramgments, Acc) ->
-    FId = TotalFramgments - 1,
-    gen_fragments_1(TotalFramgments - 1, [{FId, <<>>}|Acc]).
+%% %% @private
+%% gen_fragments_1(0, Acc) ->
+%%     Acc;
+%% gen_fragments_1(TotalFramgments, Acc) ->
+%%     FId = TotalFramgments - 1,
+%%     gen_fragments_1(TotalFramgments - 1, [{FId, <<>>}|Acc]).
 
 
 %% Remove chunked objects from the object-storage
@@ -551,30 +551,21 @@ delete(Object, ReqId) ->
                                       ReqId::non_neg_integer(),
                                       CheckUnderDir::boolean()).
 delete(#?OBJECT{addr_id = AddrId,
-                key = Key} = Object, ReqId, CheckUnderDir) ->
+                key = Key}, ReqId, CheckUnderDir) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
 
     %% Check replication method of the object
     case ?MODULE:head(AddrId, Key) of
         {ok, Metadata} ->
-            Object_1 = leo_object_storage_transformer:transform_object(Object),
-            Object_2 = Object_1#?OBJECT{method = ?CMD_DELETE,
-                                        data = <<>>,
-                                        dsize = 0,
-                                        clock = leo_date:clock(),
-                                        req_id = ReqId,
-                                        del = ?DEL_TRUE},
-            case leo_object_storage_transformer:transform_metadata(Metadata) of
-                #?METADATA{redundancy_method = ?RED_ERASURE_CODE,
-                           ec_method = ECMethod,
-                           ec_params = ECParams} ->
-                    delete_fragments(Object_2#?OBJECT{redundancy_method = ?RED_ERASURE_CODE,
-                                                      ec_method = ECMethod,
-                                                      ec_params = ECParams});
-                _ ->
-                    Ret = replicate_fun(?REP_LOCAL, ?CMD_DELETE, Object_2),
-                    delete_1(Ret, Object_2, CheckUnderDir)
-            end;
+            Object = leo_object_storage_transformer:metadata_to_object(Metadata),
+            Object_1 = Object#?OBJECT{method = ?CMD_DELETE,
+                                      data = <<>>,
+                                      dsize = 0,
+                                      clock = leo_date:clock(),
+                                      req_id = ReqId,
+                                      del = ?DEL_TRUE},
+            Ret = replicate_fun(?REP_LOCAL, ?CMD_DELETE, Object_1),
+            delete_1(Ret, Object_1, CheckUnderDir);
         Error ->
             Error
     end.
@@ -600,60 +591,6 @@ delete_1(Ret, Object, CheckUnderDir) ->
             void
     end,
     Ret_1.
-
-%% @private
-delete_fragments(#?OBJECT{ec_params = {ECParam_K, ECParam_M}} = Object) ->
-    TotalChunks = ECParam_K + ECParam_M,
-    case replicate_fun(?REP_LOCAL, ?CMD_DELETE, Object) of
-        {ok,_ETag} when TotalChunks > 0 ->
-            delete_fragments_1(TotalChunks, Object);
-        {ok,_ETag} ->
-            replicate_fun(?REP_LOCAL, ?CMD_DELETE, Object);
-        Error ->
-            Error
-    end.
-
-%% @private
-delete_fragments_1(0,_Object) ->
-    ok;
-delete_fragments_1(CIndex, #?OBJECT{addr_id = AddrId,
-                                    key = Key} = Object) ->
-    CIndexBin = list_to_binary(integer_to_list(CIndex)),
-    Key_1 = << Key/binary, "\n", CIndexBin/binary >>,
-    Object_1 = Object#?OBJECT{key = Key_1},
-
-    case ?MODULE:head(AddrId, Key_1) of
-        {ok, Metadata} ->
-            case leo_object_storage_transformer:transform_metadata(Metadata) of
-                #?METADATA{cnumber = 0} ->
-                    case replicate_fun(?REP_LOCAL, ?CMD_DELETE, Object_1) of
-                        {ok,_} ->
-                            delete_fragments_1(CIndex - 1, Object);
-                        Error ->
-                            Error
-                    end;
-                #?METADATA{addr_id = AddrId_1,
-                           cnumber = TotalChunks,
-                           ec_method = ECMethod,
-                           ec_params = ECParams} ->
-                    Object_2 = Object_1#?OBJECT{addr_id = AddrId_1,
-                                                cnumber = TotalChunks,
-                                                ec_method = ECMethod,
-                                                ec_params = ECParams},
-                    Fragments = gen_fragments(Object_2),
-                    case replicate_fun(?REP_LOCAL,
-                                       ?CMD_DELETE, {Object_2, Fragments}) of
-                        {ok,_} ->
-                            delete_fragments_1(CIndex - 1, Object);
-                        Error ->
-                            Error
-                    end
-            end;
-        not_found = Cause ->
-            {error, Cause};
-        Error ->
-            Error
-    end.
 
 
 %%--------------------------------------------------------------------
