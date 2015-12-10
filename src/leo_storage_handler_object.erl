@@ -63,8 +63,9 @@
 %% @doc get object (from storage-node#1).
 %%
 -spec(get(RefAndKey) ->
-             {ok, reference(), binary(), binary(), binary()} |
-             {error, reference(), any()} when RefAndKey::{reference(), binary()}).
+             {ok, reference(), #?METADATA{}, binary()} |
+             {error, reference(), any()} when RefAndKey::{reference(), binary()}|
+                                                         {reference(), pid(), [#?OBJECT{}]}).
 get({Ref, Key}) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_GET),
     case leo_redundant_manager_api:get_redundancies_by_key(get, Key) of
@@ -78,7 +79,22 @@ get({Ref, Key}) ->
             end;
         _ ->
             {error, Ref, ?ERROR_COULD_NOT_GET_REDUNDANCY}
-    end.
+    end;
+get({Ref, From, [{_FId, #?OBJECT{redundancy_method = ?RED_ERASURE_CODE}}|_] = Fragments}) ->
+    RetL = [begin
+                case get_fun(AddrId, Key, true) of
+                    {ok, Metadata, #?OBJECT{data = Bin}} ->
+                        {'fragments', FId, {ok, {Metadata, Bin}}};
+                    {error, FId, Cause} ->
+                        {'fragments', FId, {error, Cause}}
+                end
+            end || {FId, #?OBJECT{addr_id = AddrId,
+                                  key = Key}} <- Fragments],
+    erlang:send(From, {'fragments', Ref, RetL});
+get(_Args) ->
+    {error, badarg}.
+
+
 
 %% @doc get object (from storage-node#2).
 %%
@@ -118,9 +134,9 @@ get(ReadParameter, Redundancies) ->
                                  ReqId::non_neg_integer()).
 get(AddrId, Key, ReqId) ->
     get(#?READ_PARAMETER{ref = make_ref(),
-                         addr_id   = AddrId,
-                         key       = Key,
-                         req_id    = ReqId}, []).
+                         addr_id = AddrId,
+                         key = Key,
+                         req_id = ReqId}, []).
 
 %% @doc Retrieve an object which is requested from gateway w/etag.
 %%
@@ -133,10 +149,10 @@ get(AddrId, Key, ReqId) ->
                                  ReqId::non_neg_integer()).
 get(AddrId, Key, ETag, ReqId) ->
     get(#?READ_PARAMETER{ref = make_ref(),
-                         addr_id   = AddrId,
-                         key       = Key,
-                         etag      = ETag,
-                         req_id    = ReqId}, []).
+                         addr_id = AddrId,
+                         key = Key,
+                         etag = ETag,
+                         req_id = ReqId}, []).
 
 %% @doc Retrieve a part of an object.
 %%
@@ -150,11 +166,11 @@ get(AddrId, Key, ETag, ReqId) ->
                                  ReqId::non_neg_integer()).
 get(AddrId, Key, StartPos, EndPos, ReqId) ->
     get(#?READ_PARAMETER{ref = make_ref(),
-                         addr_id   = AddrId,
-                         key       = Key,
+                         addr_id = AddrId,
+                         key = Key,
                          start_pos = StartPos,
-                         end_pos   = EndPos,
-                         req_id    = ReqId}, []).
+                         end_pos = EndPos,
+                         req_id = ReqId}, []).
 
 
 %% @doc read data (common).
@@ -295,16 +311,17 @@ put(Object, ReqId) ->
             %%   then generate the plural OBJECTs,
             %%   then replicate them into the cluster
             {ECParams_K, ECParams_M} = ECParams,
-            TotalFragments = ECParams_K + ECParams_M,
             ECParams_1 = {ECParams_K, ECParams_M, ?coding_params_w(ECMethod)},
 
             case leo_erasure:encode(ECMethod, ECParams_1, Bin) of
                 {ok, IdWithBlockL} ->
                     Checksum = leo_hex:raw_binary_to_integer(crypto:hash(md5, Bin)),
                     ParentObj = Object_2#?OBJECT{data = <<>>,
-                                                 cnumber = TotalFragments,
+                                                 has_children = true,
+                                                 cnumber = ECParams_K + ECParams_M,
                                                  checksum = Checksum},
                     Fragments = gen_fragments(Object_2, IdWithBlockL),
+                    %% ?debugVal(Fragments),
                     replicate_fun(?REP_LOCAL, ?CMD_PUT, {ParentObj, Fragments});
                 Error ->
                     Error
@@ -437,7 +454,9 @@ gen_fragments(#?OBJECT{key = Key} = Object, IdWithBlockL) ->
                                  FIdBin/binary >>,
                         dsize = byte_size(FBin),
                         data = FBin,
-                        cindex = FId_1}
+                        cindex = FId_1,
+                        cnumber = 0,
+                        has_children = false}
      end || {FId, FBin} <- IdWithBlockL].
 
 -spec(gen_fragments(Object) ->
@@ -547,11 +566,9 @@ delete(#?OBJECT{addr_id = AddrId,
                                         del = ?DEL_TRUE},
             case leo_object_storage_transformer:transform_metadata(Metadata) of
                 #?METADATA{redundancy_method = ?RED_ERASURE_CODE,
-                           cnumber = TotalChunks,
                            ec_method = ECMethod,
                            ec_params = ECParams} ->
                     delete_fragments(Object_2#?OBJECT{redundancy_method = ?RED_ERASURE_CODE,
-                                                      cnumber = TotalChunks,
                                                       ec_method = ECMethod,
                                                       ec_params = ECParams});
                 _ ->
@@ -585,7 +602,8 @@ delete_1(Ret, Object, CheckUnderDir) ->
     Ret_1.
 
 %% @private
-delete_fragments(#?OBJECT{cnumber = TotalChunks} = Object) ->
+delete_fragments(#?OBJECT{ec_params = {ECParam_K, ECParam_M}} = Object) ->
+    TotalChunks = ECParam_K + ECParam_M,
     case replicate_fun(?REP_LOCAL, ?CMD_DELETE, Object) of
         {ok,_ETag} when TotalChunks > 0 ->
             delete_fragments_1(TotalChunks, Object);
@@ -823,10 +841,12 @@ get_active_redundancies(Quorum, Redundancies) ->
 %% @doc read reapir - compare with remote-node's meta-data.
 %% @private
 -spec(read_and_repair(ReadParams, Redundancies) ->
-             {ok, #?METADATA{}, binary()} |
+             {ok, Metadata, Bin} |
              {ok, match} |
              {error, any()} when ReadParams::#?READ_PARAMETER{},
-                                 Redundancies::[#redundant_node{}]).
+                                 Redundancies::[#redundant_node{}],
+                                 Metadata::#?METADATA{},
+                                 Bin::binary()).
 read_and_repair(#?READ_PARAMETER{quorum = Q} = ReadParams, Redundancies) ->
     case get_active_redundancies(Q, Redundancies) of
         {ok, AvailableNodes} ->
@@ -848,11 +868,13 @@ read_and_repair_1(ReadParams, [Node|Rest], AvailableNodes, Errors) ->
 
 %% @private
 -spec(read_and_repair_2(ReadParams, Redundancies, Redundancies) ->
-             {ok, #?METADATA{}, binary()} |
+             {ok, Metadata, Bin} |
              {ok, match} |
              {error, any()} when ReadParams::#?READ_PARAMETER{},
-                                 Redundancies::[atom()]).
-read_and_repair_2(_, [], _) ->
+                                 Redundancies::[atom()],
+                                 Metadata::#?METADATA{},
+                                 Bin::binary()).
+read_and_repair_2(_,[],_) ->
     {error, not_found};
 read_and_repair_2(#?READ_PARAMETER{addr_id = AddrId,
                                    key = Key,
@@ -860,7 +882,8 @@ read_and_repair_2(#?READ_PARAMETER{addr_id = AddrId,
                                    start_pos = StartPos,
                                    end_pos = EndPos} = ReadParameter,
                   #redundant_node{node = Node}, Redundancies) when Node == erlang:node() ->
-    read_and_repair_3(get_fun(AddrId, Key, StartPos, EndPos), ReadParameter, Redundancies);
+    read_and_repair_3(
+      get_fun(AddrId, Key, StartPos, EndPos), ReadParameter, Redundancies);
 
 read_and_repair_2(#?READ_PARAMETER{addr_id = AddrId,
                                    key = Key,
@@ -873,11 +896,13 @@ read_and_repair_2(#?READ_PARAMETER{addr_id = AddrId,
     HeadRet =
         case leo_object_storage_api:head({AddrId, Key}) of
             {ok, MetadataBin} ->
-                Metadata = binary_to_term(MetadataBin),
-                case Metadata#?METADATA.checksum of
-                    ETag ->
+                #?METADATA{checksum = Checksum} =
+                    leo_object_storage_transformer:transform_metadata(
+                      binary_to_term(MetadataBin)),
+                case (Checksum == ETag) of
+                    true ->
                         {ok, match};
-                    _ ->
+                    false ->
                         []
                 end;
             _ ->
@@ -887,8 +912,8 @@ read_and_repair_2(#?READ_PARAMETER{addr_id = AddrId,
     %% If the result is 'match', then response it,
     %% not the case, retrieve an object by key
     case HeadRet of
-        {ok, match} = Reply ->
-            Reply;
+        {ok, match} ->
+            HeadRet;
         _ ->
             read_and_repair_3(
               get_fun(AddrId, Key, StartPos, EndPos), ReadParameter, Redundancies)
@@ -916,32 +941,175 @@ read_and_repair_2(ReadParameter, #redundant_node{node = Node}, Redundancies) ->
     read_and_repair_3(RetRPC, ReadParameter, Redundancies).
 
 %% @private
-read_and_repair_3({ok, Metadata, #?OBJECT{data = Bin}}, #?READ_PARAMETER{}, []) ->
-    {ok, Metadata, Bin};
-read_and_repair_3({ok, Metadata, #?OBJECT{data = Bin}}, #?READ_PARAMETER{num_of_replicas = 1},_Redundancies) ->
-    {ok, Metadata, Bin};
 read_and_repair_3({ok, match} = Reply, #?READ_PARAMETER{},_Redundancies) ->
     Reply;
+read_and_repair_3({ok, Metadata, #?OBJECT{data = Bin}}, #?READ_PARAMETER{}, []) ->
+    {ok, Metadata, Bin};
+read_and_repair_3({ok, Metadata, #?OBJECT{redundancy_method = ?RED_ERASURE_CODE} = Object},
+                  #?READ_PARAMETER{num_of_replicas = 1} = ReadParms, Redundancies) ->
+    read_and_repair_for_ec(Metadata, Object, ReadParms, Redundancies);
 read_and_repair_3({ok, Metadata, #?OBJECT{data = Bin}},
-                  #?READ_PARAMETER{quorum = Quorum} = ReadParameter, Redundancies) ->
+                  #?READ_PARAMETER{num_of_replicas = 1},_Redundancies) ->
+    {ok, Metadata, Bin};
+read_and_repair_3({ok, Metadata, #?OBJECT{redundancy_method = ?RED_ERASURE_CODE} = Object},
+                  ReadParams, Redundancies) ->
+    read_and_repair_for_ec(Metadata, Object, ReadParams, Redundancies);
+
+read_and_repair_3({ok, Metadata, #?OBJECT{} = Object},
+                  ReadParams, Redundancies) ->
+    read_and_repair_4(Metadata, Object, ReadParams, Redundancies);
+read_and_repair_3({error, not_found = Cause}, #?READ_PARAMETER{}, _Redundancies) ->
+    {error, Cause};
+read_and_repair_3({error, timeout = Cause}, #?READ_PARAMETER{key = _K}, _Redundancies) ->
+    ?output_warn("read_and_repair_3/3",_K, Cause),
+    {error, Cause};
+read_and_repair_3({error, Cause}, #?READ_PARAMETER{key = _K}, _Redundancies) ->
+    ?output_warn("read_and_repair_3/3",_K, Cause),
+    {error, Cause};
+read_and_repair_3(_Arg1,_,_) ->
+    {error, invalid_request}.
+
+%% @private
+read_and_repair_4(Metadata, Object, ReadParams, Redundancies) ->
     Fun = fun(ok) ->
-                  {ok, Metadata, Bin};
+                  {ok, Metadata, Object};
              ({error,_Cause}) ->
                   {error, ?ERROR_RECOVER_FAILURE}
           end,
-    ReadParameter_1 = ReadParameter#?READ_PARAMETER{quorum = Quorum},
-    leo_storage_read_repairer:repair(ReadParameter_1, Redundancies, Metadata, Fun);
+    leo_storage_read_repairer:repair(
+      ReadParams, Redundancies, Metadata, Fun).
 
-read_and_repair_3({error, not_found = Cause}, #?READ_PARAMETER{key = _K}, _Redundancies) ->
-    {error, Cause};
-read_and_repair_3({error, timeout = Cause}, #?READ_PARAMETER{key = _K}, _Redundancies) ->
-    ?output_warn("read_and_repair_3/3", _K, Cause),
-    {error, Cause};
-read_and_repair_3({error, Cause}, #?READ_PARAMETER{key = _K}, _Redundancies) ->
-    ?output_warn("read_and_repair_3/3", _K, Cause),
-    {error, Cause};
-read_and_repair_3(_,_,_) ->
-    {error, invalid_request}.
+
+%% @doc Read and repair for the erasure-coding
+%% @private
+read_and_repair_for_ec(#?METADATA{key = Key,
+                                  csize = CSize,
+                                  has_children = HasChildren,
+                                  ec_method = _ECMethod,
+                                  ec_params = ECParams} = Metadata, Object,
+                       #?READ_PARAMETER{
+                           num_of_replicas = NumOfReplicas} = ReadParams, Redundancies) ->
+    case (CSize > 0 andalso HasChildren) of
+        true ->
+            {ok, Metadata, <<>>};
+        false ->
+            Self = erlang:self(),
+            Ref = erlang:make_ref(),
+
+            %% read-and-repair of the metadata
+            spawn(
+              fun() ->
+                      case (NumOfReplicas > 1) of
+                          true ->
+                              Ret = read_and_repair_4(
+                                      Metadata, Object, ReadParams, Redundancies),
+                              erlang:send(Self, {parent, Ref, Ret});
+                          false ->
+                              erlang:send(Self, {parent, Ref, ok})
+                      end
+              end),
+
+            %% read-and-repair of the fragments
+            {ECParams_K, ECParams_M} = ECParams,
+            TotalFragments = ECParams_K + ECParams_M,
+
+            NodeAndFrL =
+                case leo_redundant_manager_api:collect_redundancies_by_key(
+                       Key, TotalFragments) of
+                    {ok, {_Options, RedNodeL}}
+                      when TotalFragments == erlang:length(RedNodeL)  ->
+                        Fragments = [ begin
+                                          FIdBin = list_to_binary(integer_to_list(FId)),
+                                          FrKey = << Key/binary, "\n", FIdBin/binary >>,
+                                          Object#?OBJECT{key = FrKey,
+                                                         data = <<>>,
+                                                         dsize = 0,
+                                                         cindex = FId}
+                                      end || FId <- lists:seq(1, TotalFragments) ],
+
+                        dict:to_list(
+                          lists:foldl(
+                            fun({#redundant_node{node = Node,
+                                                 available = Available},
+                                 #?OBJECT{cindex = FId} = FObj}, Acc) ->
+                                    dict:append({Node, Available}, {FId, FObj}, Acc)
+                            end, dict:new(), lists:zip(RedNodeL, Fragments)));
+                    _ ->
+                        []
+                end,
+
+            [begin
+                 spawn(
+                   fun() ->
+                           case Available of
+                               true ->
+                                   true = rpc:cast(Node, leo_storage_handler_object,
+                                                   get, [{Ref, Self, Fragments_1}]);
+                               false ->
+                                   erlang:send(Self, {fragments, Ref, {error, Fragments_1}})
+                           end
+                   end)
+             end || {{Node, Available}, Fragments_1} <- NodeAndFrL],
+            read_and_repair_for_ec_loop(Ref, Metadata, TotalFragments + 1, [])
+    end.
+
+
+%% @doc
+%% @private
+read_and_repair_for_ec_loop(_,_,1,_) ->
+    %% @TODO
+    {error, []};
+read_and_repair_for_ec_loop(_, #?METADATA{dsize = DSize,
+                                          ec_method = ECMethod,
+                                          ec_params = ECParams} = Metadata,
+                            TotalRes, Acc) when erlang:length(Acc) == TotalRes ->
+    case leo_misc:get_value('parent', Acc) of
+        ok ->
+            %% decoding the object
+            {ECParams_K, ECParams_M} = ECParams,
+            ECParams_1 = {ECParams_K, ECParams_M, ?coding_params_w(ECMethod)},
+            IdWithBlockL = lists:sort([{FId - 1, Bin} ||
+                                          {'fragments', FId, {ok, {_Metadata, Bin}}} <- Acc]),
+            %% ?debugVal(IdWithBlockL),
+
+            case (erlang:length(IdWithBlockL) >= ECParams_M) of
+                true ->
+                    case leo_erasure:decode(ECMethod, ECParams_1,
+                                            IdWithBlockL, DSize) of
+                        {ok, Bin} when erlang:byte_size(Bin) == DSize ->
+                            %% [ ?debugVal(_Item) ||
+                            %%     _Item <- lists:zip(record_info(fields, ?METADATA),
+                            %%                        tl(tuple_to_list(Metadata))) ],
+                            {ok, Metadata#?METADATA{cnumber = 0}, Bin};
+                        {ok,_Bin} ->
+                            %% @TODO
+                            {error, []};
+                        {error, Cause} ->
+                            {error, Cause}
+                    end;
+                false ->
+                    %% @TODO
+                    {error, []}
+            end;
+        _ ->
+            %% @TODO
+            {error, []}
+    end;
+read_and_repair_for_ec_loop(Ref, Metadata, TotalRes, Acc) ->
+    receive
+        {parent, Ref, Ret} ->
+            read_and_repair_for_ec_loop(
+              Ref, Metadata, TotalRes, [{parent, Ret}|Acc]);
+        {fragments, Ref, RetL} ->
+            read_and_repair_for_ec_loop(
+              Ref, Metadata, TotalRes, lists:append([RetL, Acc]));
+        _ ->
+            read_and_repair_for_ec_loop(
+              Ref, Metadata, TotalRes, Acc)
+    after
+        ?DEF_REQ_TIMEOUT ->
+            {error, timeout}
+    end.
 
 
 %% @doc Replicate/Store an object from local-node to remote node
@@ -996,8 +1164,8 @@ replicate_fun(?REP_LOCAL, Method, {#?OBJECT{key = Key} = ParentObj,
 
             case leo_redundant_manager_api:collect_redundancies_by_key(
                    Key, TotalReplicas) of
-                {ok, {Options, RedundantNodeL}}
-                  when TotalReplicas == erlang:length(RedundantNodeL) ->
+                {ok, {Options, RedNodeL}}
+                  when TotalReplicas == erlang:length(RedNodeL) ->
                     NumOfReplicas = leo_misc:get_value(?PROP_N, Options),
                     WQuorum = leo_misc:get_value(?PROP_W, Options),
                     DQuorum = leo_misc:get_value(?PROP_D, Options),
@@ -1013,11 +1181,11 @@ replicate_fun(?REP_LOCAL, Method, {#?OBJECT{key = Key} = ParentObj,
                     Ref = erlang:make_ref(),
                     spawn(
                       fun() ->
-                              RedundantNodeL_1 =
-                                  lists:sublist(RedundantNodeL, NumOfReplicas),
+                              RedNodeL_1 =
+                                  lists:sublist(RedNodeL, NumOfReplicas),
                               Ret = leo_storage_replicator_cp:replicate(
                                       Method, QuorumForRep,
-                                      RedundantNodeL_1,
+                                      RedNodeL_1,
                                       ParentObj#?OBJECT{ring_hash = leo_misc:get_value(
                                                                       ?PROP_RING_HASH, Options)},
                                       replicate_callback(ParentObj)),
@@ -1028,7 +1196,7 @@ replicate_fun(?REP_LOCAL, Method, {#?OBJECT{key = Key} = ParentObj,
                     spawn(
                       fun() ->
                               Ret = leo_storage_replicator_ec:replicate(
-                                      Method, QuorumForFrL, RedundantNodeL, Fragments,
+                                      Method, QuorumForFrL, RedNodeL, Fragments,
                                       replicate_callback(erlang:hd(Fragments))),
                               erlang:send(Self, {fragments, Ref, Ret})
                       end),
@@ -1081,12 +1249,12 @@ replicate_fun(_T,_M,_Obj) ->
 %% @private
 replicate_fun_loop(_,Acc) when erlang:length(Acc) == 2 ->
     RetFrL = leo_misc:get_value('fragments', Acc),
-    RetMeta = leo_misc:get_value('parent', Acc),
+    RetParent = leo_misc:get_value('parent', Acc),
 
     case (element(1, RetFrL) == ok andalso
-          element(1, RetMeta) == ok) of
+          element(1, RetParent) == ok) of
         true ->
-            RetMeta;
+            RetParent;
         false ->
             %% @TODO
             {error, []}
