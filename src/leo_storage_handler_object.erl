@@ -459,21 +459,6 @@ gen_fragments(#?OBJECT{key = Key} = Object, IdWithBlockL) ->
                         has_children = false}
      end || {FId, FBin} <- IdWithBlockL].
 
-%% -spec(gen_fragments(Object) ->
-%%              [#?OBJECT{}] when Object::#?OBJECT{}).
-%% gen_fragments(#?OBJECT{ec_params = ECParams} = Object) ->
-%%     {ECParam_K, ECParam_M} = ECParams,
-%%     TotalFragments = ECParam_K + ECParam_M,
-%%     IdWithBlockL = gen_fragments_1(TotalFragments, []),
-%%     gen_fragments(Object, IdWithBlockL).
-
-%% %% @private
-%% gen_fragments_1(0, Acc) ->
-%%     Acc;
-%% gen_fragments_1(TotalFramgments, Acc) ->
-%%     FId = TotalFramgments - 1,
-%%     gen_fragments_1(TotalFramgments - 1, [{FId, <<>>}|Acc]).
-
 
 %% Remove chunked objects from the object-storage
 %% @private
@@ -1007,9 +992,10 @@ read_and_repair_for_ec_loop(_, #?METADATA{dsize = DSize,
             ECParams_1 = {ECParams_K, ECParams_M, ?coding_params_w(ECMethod)},
             IdWithBlockL = lists:sort([{FId - 1, Bin} ||
                                           {'fragments', FId, {ok, {_Metadata, Bin}}} <- Acc]),
+            LenIdWithBlockL = erlang:length(IdWithBlockL),
             %% ?debugVal(IdWithBlockL),
 
-            case (erlang:length(IdWithBlockL) >= ECParams_M) of
+            case (LenIdWithBlockL >= ECParams_M) of
                 true ->
                     case leo_erasure:decode(ECMethod, ECParams_1,
                                             IdWithBlockL, DSize) of
@@ -1017,6 +1003,13 @@ read_and_repair_for_ec_loop(_, #?METADATA{dsize = DSize,
                             %% [ ?debugVal(_Item) ||
                             %%     _Item <- lists:zip(record_info(fields, ?METADATA),
                             %%                        tl(tuple_to_list(Metadata))) ],
+                            case (LenIdWithBlockL == (ECParams_K + ECParams_M)) of
+                                true ->
+                                    void;
+                                false ->
+                                    %% @TODO: Repair encoded object(s)
+                                    ok
+                            end,
                             {ok, Metadata#?METADATA{cnumber = 0}, Bin};
                         {ok,_Bin} ->
                             %% @TODO
@@ -1034,9 +1027,15 @@ read_and_repair_for_ec_loop(_, #?METADATA{dsize = DSize,
     end;
 read_and_repair_for_ec_loop(Ref, Metadata, TotalRes, Acc) ->
     receive
-        {parent, Ref, Ret} ->
+        {parent, Ref, ok} ->
             read_and_repair_for_ec_loop(
-              Ref, Metadata, TotalRes, [{parent, Ret}|Acc]);
+              Ref, Metadata, TotalRes, [{parent, ok}|Acc]);
+        {parent, Ref, {ok,_,_}} ->
+            read_and_repair_for_ec_loop(
+              Ref, Metadata, TotalRes, [{parent, ok}|Acc]);
+        {parent, Ref, Other} ->
+            read_and_repair_for_ec_loop(
+              Ref, Metadata, TotalRes, [{parent, Other}|Acc]);
         {fragments, Ref, RetL} ->
             read_and_repair_for_ec_loop(
               Ref, Metadata, TotalRes, lists:append([RetL, Acc]));
