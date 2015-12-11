@@ -331,7 +331,7 @@ put_3_({TestNode_1, TestNode_2}) ->
                      key = ?TEST_KEY_3,
                      data = Bin,
                      dsize = DSize,
-                     ec_method = 'vandrs',
+                     ec_lib = 'vandrs',
                      ec_params = {4,2}}, 1),
     ?assertEqual({ok,{etag,Checksum}}, Ret),
     ok.

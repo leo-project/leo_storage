@@ -300,7 +300,7 @@ put(Object, ReqId) ->
     #?OBJECT{data = Bin,
              dsize = DSize,
              redundancy_method = RedMethod,
-             ec_method = ECMethod,
+             ec_lib = ECLib,
              ec_params = ECParams} = Object_2,
     MinObjSizeForEC = ?env_erasure_coding_min_object_size(),
 
@@ -311,9 +311,9 @@ put(Object, ReqId) ->
             %%   then generate the plural OBJECTs,
             %%   then replicate them into the cluster
             {ECParams_K, ECParams_M} = ECParams,
-            ECParams_1 = {ECParams_K, ECParams_M, ?coding_params_w(ECMethod)},
+            ECParams_1 = {ECParams_K, ECParams_M, ?coding_params_w(ECLib)},
 
-            case leo_erasure:encode(ECMethod, ECParams_1, Bin) of
+            case leo_erasure:encode(ECLib, ECParams_1, Bin) of
                 {ok, IdWithBlockL} ->
                     Checksum = leo_hex:raw_binary_to_integer(crypto:hash(md5, Bin)),
                     ParentObj = Object_2#?OBJECT{data = <<>>,
@@ -330,7 +330,7 @@ put(Object, ReqId) ->
             replicate_fun(?REP_LOCAL, ?CMD_PUT, Object_2);
         ?RED_ERASURE_CODE ->
             Object_3 = Object_2#?OBJECT{redundancy_method = ?RED_COPY,
-                                        ec_method = undefined,
+                                        ec_lib = undefined,
                                         ec_params = undefined},
             replicate_fun(?REP_LOCAL, ?CMD_PUT, Object_3);
         _ ->
@@ -907,7 +907,7 @@ read_and_repair_4(Metadata, Object, ReadParams, Redundancies) ->
 read_and_repair_for_ec(#?METADATA{key = Key,
                                   csize = CSize,
                                   has_children = HasChildren,
-                                  ec_method = _ECMethod,
+                                  ec_lib = _ECLib,
                                   ec_params = ECParams} = Metadata, Object,
                        #?READ_PARAMETER{
                            num_of_replicas = NumOfReplicas} = ReadParams, Redundancies) ->
@@ -982,14 +982,14 @@ read_and_repair_for_ec_loop(_,_,1,_) ->
     %% @TODO
     {error, []};
 read_and_repair_for_ec_loop(_, #?METADATA{dsize = DSize,
-                                          ec_method = ECMethod,
+                                          ec_lib = ECLib,
                                           ec_params = ECParams} = Metadata,
                             TotalRes, Acc) when erlang:length(Acc) == TotalRes ->
     case leo_misc:get_value('parent', Acc) of
         ok ->
             %% decoding the object
             {ECParams_K, ECParams_M} = ECParams,
-            ECParams_1 = {ECParams_K, ECParams_M, ?coding_params_w(ECMethod)},
+            ECParams_1 = {ECParams_K, ECParams_M, ?coding_params_w(ECLib)},
             IdWithBlockL = lists:sort([{FId - 1, Bin} ||
                                           {'fragments', FId, {ok, {_Metadata, Bin}}} <- Acc]),
             LenIdWithBlockL = erlang:length(IdWithBlockL),
@@ -997,7 +997,7 @@ read_and_repair_for_ec_loop(_, #?METADATA{dsize = DSize,
 
             case (LenIdWithBlockL >= ECParams_M) of
                 true ->
-                    case leo_erasure:decode(ECMethod, ECParams_1,
+                    case leo_erasure:decode(ECLib, ECParams_1,
                                             IdWithBlockL, DSize) of
                         {ok, Bin} when erlang:byte_size(Bin) == DSize ->
                             %% [ ?debugVal(_Item) ||
