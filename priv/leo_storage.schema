@@ -235,8 +235,8 @@
 %% @doc Default coder of erasure-code
 %% @since (v1.4.0-pre3)
 {mapping,
- "erasure_code.coder",
- "leo_erasure.default_coder",
+ "erasure_code.lib",
+ "leo_storage.erasure_code_lib",
  [
   {datatype, atom},
   {default, vandrs} %% [vandrs | cauchyrs | liberation | isars]
