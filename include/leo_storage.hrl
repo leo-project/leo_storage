@@ -626,14 +626,23 @@
 
 
 %% @doc For the erasure-coding support
--define(DEF_ERASURE_CODING_MIN_OBJ_SIZE, 262144).
+-define(DEF_ERASURE_CODE_LIB, 'vandrs').
+-define(DEF_ERASURE_CODE_MIN_OBJ_SIZE, 262144).
 
--define(env_erasure_coding_min_object_size(),
+-define(env_erasure_code_lib(),
+        case application:get_env(leo_storage, erasure_code_lib) of
+            {ok, EnvErasureCondeLib} ->
+                EnvErasureCondeLib;
+            _ ->
+                ?DEF_ERASURE_CODE_LIB
+        end).
+
+-define(env_erasure_code_min_object_size(),
         case application:get_env(leo_storage, min_object_size_for_ec) of
             {ok, EnvErasureCondingMinObjSize} ->
                 EnvErasureCondingMinObjSize;
             _ ->
-                ?DEF_ERASURE_CODING_MIN_OBJ_SIZE
+                ?DEF_ERASURE_CODE_MIN_OBJ_SIZE
         end).
 
 

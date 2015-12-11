@@ -300,9 +300,9 @@ put(Object, ReqId) ->
     #?OBJECT{data = Bin,
              dsize = DSize,
              redundancy_method = RedMethod,
-             ec_lib = ECLib,
              ec_params = ECParams} = Object_2,
-    MinObjSizeForEC = ?env_erasure_coding_min_object_size(),
+    ECLib = ?env_erasure_code_lib(),
+    MinObjSizeForEC = ?env_erasure_code_min_object_size(),
 
     case RedMethod of
         ?RED_ERASURE_CODE when DSize >= MinObjSizeForEC andalso
