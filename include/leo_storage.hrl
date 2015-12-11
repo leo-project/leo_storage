@@ -631,8 +631,8 @@
 
 -define(env_erasure_code_lib(),
         case application:get_env(leo_storage, erasure_code_lib) of
-            {ok, EnvErasureCondeLib} ->
-                EnvErasureCondeLib;
+            {ok, EnvErasureCodeLib} ->
+                EnvErasureCodeLib;
             _ ->
                 ?DEF_ERASURE_CODE_LIB
         end).
