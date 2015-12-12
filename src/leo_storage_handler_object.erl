@@ -892,9 +892,9 @@ read_and_repair_3(_Arg1,_,_) ->
     {error, invalid_request}.
 
 %% @private
-read_and_repair_4(Metadata, Object, ReadParams, Redundancies) ->
+read_and_repair_4(Metadata, #?OBJECT{data = Bin}, ReadParams, Redundancies) ->
     Fun = fun(ok) ->
-                  {ok, Metadata, Object};
+                  {ok, Metadata, Bin};
              ({error,_Cause}) ->
                   {error, ?ERROR_RECOVER_FAILURE}
           end,
