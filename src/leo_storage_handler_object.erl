@@ -321,7 +321,6 @@ put(Object, ReqId) ->
                                                  cnumber = ECParams_K + ECParams_M,
                                                  checksum = Checksum},
                     Fragments = gen_fragments(Object_2, IdWithBlockL),
-                    %% ?debugVal(Fragments),
                     replicate_fun(?REP_LOCAL, ?CMD_PUT, {ParentObj, Fragments});
                 Error ->
                     Error
@@ -979,9 +978,10 @@ read_and_repair_for_ec(#?METADATA{key = Key,
 %% @doc
 %% @private
 read_and_repair_for_ec_loop(_,_,1,_) ->
-    %% @TODO
-    {error, []};
-read_and_repair_for_ec_loop(_, #?METADATA{dsize = DSize,
+    {error, ?ERROR_COULD_NOT_GET_DATA};
+read_and_repair_for_ec_loop(_, #?METADATA{addr_id = AddrId,
+                                          key = Key,
+                                          dsize = DSize,
                                           ec_lib = ECLib,
                                           ec_params = ECParams} = Metadata,
                             TotalRes, Acc) when erlang:length(Acc) == TotalRes ->
@@ -993,37 +993,33 @@ read_and_repair_for_ec_loop(_, #?METADATA{dsize = DSize,
             IdWithBlockL = lists:sort([{FId - 1, Bin} ||
                                           {'fragments', FId, {ok, {_Metadata, Bin}}} <- Acc]),
             LenIdWithBlockL = erlang:length(IdWithBlockL),
-            %% ?debugVal(IdWithBlockL),
 
             case (LenIdWithBlockL >= ECParams_M) of
                 true ->
                     case leo_erasure:decode(ECLib, ECParams_1,
                                             IdWithBlockL, DSize) of
                         {ok, Bin} when erlang:byte_size(Bin) == DSize ->
-                            %% [ ?debugVal(_Item) ||
-                            %%     _Item <- lists:zip(record_info(fields, ?METADATA),
-                            %%                        tl(tuple_to_list(Metadata))) ],
-                            case (LenIdWithBlockL == (ECParams_K + ECParams_M)) of
-                                true ->
+                            case (ECParams_K + ECParams_M) of
+                                LenIdWithBlockL ->
                                     void;
-                                false ->
-                                    %% @TODO: Repair encoded object(s)
-                                    ok
+                                _ ->
+                                    {IdL,_BlockL} = lists:unzip(IdWithBlockL),
+                                    CompleteL = lists:seq(0, ECParams_K + ECParams_M - 1),
+                                    RepairIdL = lists:subtract(CompleteL, IdL),
+                                    ok = leo_storage_mq:publish(
+                                           ?QUEUE_TYPE_PER_FRAGMENT, AddrId, Key, RepairIdL)
                             end,
                             {ok, Metadata#?METADATA{cnumber = 0}, Bin};
                         {ok,_Bin} ->
-                            %% @TODO
-                            {error, []};
+                            {error, ?ERROR_COULD_NOT_GET_DATA};
                         {error, Cause} ->
                             {error, Cause}
                     end;
                 false ->
-                    %% @TODO
-                    {error, []}
+                    {error, ?ERROR_COULD_NOT_GET_DATA}
             end;
         _ ->
-            %% @TODO
-            {error, []}
+            {error, ?ERROR_COULD_NOT_GET_DATA}
     end;
 read_and_repair_for_ec_loop(Ref, Metadata, TotalRes, Acc) ->
     receive
@@ -1192,8 +1188,7 @@ replicate_fun_loop(_,Acc) when erlang:length(Acc) == 2 ->
         true ->
             RetParent;
         false ->
-            %% @TODO
-            {error, []}
+            {error, ?ERROR_COULD_NOT_GET_DATA}
     end;
 replicate_fun_loop(Ref, Acc) ->
     receive
