@@ -432,10 +432,45 @@ handle_call({consume, ?QUEUE_ID_PER_FRAGMENT, MessageBin}) ->
         #miss_storing_fragment{addr_id = AddrId,
                                key = Key,
                                fragment_id_list = FragmentIdL} ->
-            %% @TODO - Recover fragment(s)
-            ?debugVal({AddrId, Key, FragmentIdL}),
-            %% publish(?QUEUE_TYPE_PER_FRAGMENT, AddrId, Key, FragmentIdL)
-            ok;
+            Ret = case leo_storage_handler_object:head(AddrId, Key, false) of
+                      {ok, #?METADATA{redundancy_method = ?RED_ERASURE_CODE,
+                                      ec_lib = _ECLib,
+                                      ec_params = {ECParams_K, ECParams_M}}} ->
+                          TotalFragments = ECParams_K + ECParams_M,
+                          case leo_redundant_manager_api:collect_redundancies_by_key(
+                                 Key, TotalFragments) of
+                              {ok, {_Option, RedundanciesL}} ->
+                                  RepairTargetIdWithRedL =
+                                      [begin
+                                           FId_1 = FId + 1,
+                                           {FId_1, lists:nth(FId_1, RedundanciesL)}
+                                       end || FId <- FragmentIdL],
+                                  case repair_fragments(RepairTargetIdWithRedL,
+                                                        AddrId, Key, {[],[]}) of
+                                      {ok, {_,[]}} ->
+                                          ok;
+                                      {ok, {_, FragmentIdL}} ->
+                                          {error, FragmentIdL};
+                                      Error ->
+                                          Error
+                                  end;
+                              _ ->
+                                  {error, FragmentIdL}
+                          end;
+                      {ok,_} ->
+                          ok;
+                      not_found ->
+                          ok;
+                      _Other ->
+                          {error, FragmentIdL}
+                  end,
+            case Ret of
+                ok ->
+                    ok;
+                {error, FragmentIdL_1} ->
+                    publish(?QUEUE_TYPE_PER_FRAGMENT,
+                            AddrId, Key, FragmentIdL_1)
+            end;
         _ ->
             ok
     end;
@@ -882,6 +917,48 @@ fix_consistency_between_clusters(#inconsistent_data_with_dc{
     leo_sync_remote_cluster:stack(Object#?OBJECT{data = <<>>}).
 
 
+%% @doc Repair fragments (erasure-coding)
+-spec(repair_fragments([{FId, RedundantNode}], AddrId, Key, Acc) ->
+             ok when FId::non_neg_integer(),
+                     RedundantNode::#redundant_node{},
+                     AddrId::non_neg_integer(),
+                     Key::binary(),
+                     Acc::[{FId, Node}],
+                     Node::atom()).
+repair_fragments([],_,_,{[], BadFragmentIdL}) ->
+    {error, BadFragmentIdL};
+repair_fragments([],_,_,{FragmentIdL, BadFragmentIdL}) ->
+    %% @TODO: repair bad fragments
+    ?debugVal({FragmentIdL, BadFragmentIdL}),
+    {ok, {FragmentIdL, BadFragmentIdL}};
+repair_fragments([{FId, #redundant_node{node = Node,
+                                        available = false}}|Rest],
+                 AddrId, Key, {Acc_1, Acc_2}) ->
+    repair_fragments(Rest, AddrId, Key, {Acc_1, [{FId, Node}|Acc_2]});
+repair_fragments([{FId, #redundant_node{node = Node,
+                                        available = true}}|Rest],
+                 AddrId, Key, {Acc_1, Acc_2}) ->
+    NeedRepair =
+        case leo_misc:node_existence(Node) of
+            true ->
+                case rpc:call(Node, leo_storage_handler_object,
+                              head, [AddrId, Key, false]) of
+                    not_found ->
+                        true;
+                    _ ->
+                        false
+                end;
+            false ->
+                false
+        end,
+    case NeedRepair of
+        true ->
+            repair_fragments(Rest, AddrId, Key, {[{FId, Node}|Acc_1], Acc_2});
+        false ->
+            repair_fragments(Rest, AddrId, Key, {Acc_1, [{FId, Node}|Acc_2]})
+    end.
+
+
 %%--------------------------------------------------------------------
 %% INNTERNAL FUNCTIONS-2
 %%--------------------------------------------------------------------
@@ -934,4 +1011,6 @@ queue_id(?QUEUE_TYPE_COMP_META_WITH_DC) ->
 queue_id(?QUEUE_TYPE_ASYNC_DELETE_DIR) ->
     ?QUEUE_ID_ASYNC_DELETE_DIR;
 queue_id(?QUEUE_TYPE_ASYNC_RECOVER_DIR) ->
-    ?QUEUE_ID_ASYNC_RECOVER_DIR.
+    ?QUEUE_ID_ASYNC_RECOVER_DIR;
+queue_id(?QUEUE_TYPE_PER_FRAGMENT) ->
+    ?QUEUE_ID_PER_FRAGMENT.
