@@ -64,8 +64,20 @@
 %%
 -spec(get(RefAndKey) ->
              {ok, reference(), #?METADATA{}, binary()} |
+             {ok, {'fragments', reference(), [term()]}} |
              {error, reference(), any()} when RefAndKey::{reference(), binary()}|
-                                                         {reference(), pid(), [#?OBJECT{}]}).
+                                                         {reference(), [#?OBJECT{}]}).
+get({Ref, [{_FId, #?OBJECT{redundancy_method = ?RED_ERASURE_CODE}}|_] = Fragments}) ->
+    RetL = [begin
+                case get_fun(AddrId, Key, true) of
+                    {ok, Metadata, #?OBJECT{data = Bin}} ->
+                        {FId, {ok, {Metadata, Bin}}};
+                    {error, FId, Cause} ->
+                        {FId, {error, Cause}}
+                end
+            end || {FId, #?OBJECT{addr_id = AddrId,
+                                  key = Key}} <- Fragments],
+    {ok, {'fragments', Ref, RetL}};
 get({Ref, Key}) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_GET),
     case leo_redundant_manager_api:get_redundancies_by_key(get, Key) of
@@ -80,17 +92,6 @@ get({Ref, Key}) ->
         _ ->
             {error, Ref, ?ERROR_COULD_NOT_GET_REDUNDANCY}
     end;
-get({Ref, From, [{_FId, #?OBJECT{redundancy_method = ?RED_ERASURE_CODE}}|_] = Fragments}) ->
-    RetL = [begin
-                case get_fun(AddrId, Key, true) of
-                    {ok, Metadata, #?OBJECT{data = Bin}} ->
-                        {'fragments', FId, {ok, {Metadata, Bin}}};
-                    {error, FId, Cause} ->
-                        {'fragments', FId, {error, Cause}}
-                end
-            end || {FId, #?OBJECT{addr_id = AddrId,
-                                  key = Key}} <- Fragments],
-    erlang:send(From, {'fragments', Ref, RetL});
 get(_Args) ->
     {error, badarg}.
 
@@ -962,12 +963,23 @@ read_and_repair_for_ec(#?METADATA{key = Key,
             [begin
                  spawn(
                    fun() ->
-                           case Available of
-                               true ->
-                                   true = rpc:cast(Node, leo_storage_handler_object,
-                                                   get, [{Ref, Self, Fragments_1}]);
-                               false ->
-                                   erlang:send(Self, {fragments, Ref, {error, Fragments_1}})
+                           IsAlive = leo_misc:node_existence(Node),
+                           Ret = case Available of
+                                     true when IsAlive ->
+                                         rpc:call(Node, leo_storage_handler_object,
+                                                  get, [{Ref, Fragments_1}],
+                                                  ?DEF_REQ_TIMEOUT);
+                                     _ ->
+                                         {error, []}
+                                 end,
+                           case Ret of
+                               {ok, Reply} ->
+                                   erlang:send(Self, Reply);
+                               _ ->
+                                   ErrorL = [{FId, {error, ?ERROR_COULD_NOT_GET_DATA}}
+                                             || {FId,_FObj} <- Fragments_1],
+                                   ?debugVal(ErrorL),
+                                   erlang:send(Self, {'fragments', Ref, ErrorL})
                            end
                    end)
              end || {{Node, Available}, Fragments_1} <- NodeAndFrL],
@@ -991,7 +1003,7 @@ read_and_repair_for_ec_loop(_, #?METADATA{addr_id = AddrId,
             {ECParams_K, ECParams_M} = ECParams,
             ECParams_1 = {ECParams_K, ECParams_M, ?coding_params_w(ECLib)},
             IdWithBlockL = lists:sort([{FId - 1, Bin} ||
-                                          {'fragments', FId, {ok, {_Metadata, Bin}}} <- Acc]),
+                                          {FId, {ok, {_Metadata, Bin}}} <- Acc]),
             LenIdWithBlockL = erlang:length(IdWithBlockL),
 
             case (LenIdWithBlockL >= ECParams_M) of
@@ -1004,8 +1016,9 @@ read_and_repair_for_ec_loop(_, #?METADATA{addr_id = AddrId,
                                     void;
                                 _ ->
                                     {IdL,_BlockL} = lists:unzip(IdWithBlockL),
-                                    CompleteL = lists:seq(0, ECParams_K + ECParams_M - 1),
-                                    RepairIdL = lists:subtract(CompleteL, IdL),
+                                    CompleteIdL = lists:seq(0, ECParams_K + ECParams_M - 1),
+                                    RepairIdL = lists:subtract(CompleteIdL, IdL),
+                                    ?debugVal(RepairIdL),
                                     ok = leo_storage_mq:publish(
                                            ?QUEUE_TYPE_PER_FRAGMENT, AddrId, Key, RepairIdL)
                             end,
