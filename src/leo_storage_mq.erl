@@ -29,6 +29,7 @@
 
 -include("leo_storage.hrl").
 -include_lib("leo_commons/include/leo_commons.hrl").
+-include_lib("leo_erasure/include/leo_erasure.hrl").
 -include_lib("leo_logger/include/leo_logger.hrl").
 -include_lib("leo_mq/include/leo_mq.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
@@ -334,14 +335,14 @@ handle_call({consume, ?QUEUE_ID_ASYNC_DELETE_OBJ, MessageBin}) ->
             ?error("handle_call/1 - QUEUE_ID_ASYNC_DELETE_OBJ",
                    [{cause, Cause}]),
             {error, Cause};
-        #async_deletion_message{addr_id  = AddrId,
-                                key      = Key} ->
+        #async_deletion_message{addr_id = AddrId,
+                                key = Key} ->
             case catch leo_storage_handler_object:delete(
-                         #?OBJECT{addr_id   = AddrId,
-                                  key       = Key,
-                                  clock     = leo_date:clock(),
+                         #?OBJECT{addr_id = AddrId,
+                                  key = Key,
+                                  clock = leo_date:clock(),
                                   timestamp = leo_date:now(),
-                                  del       = ?DEL_TRUE
+                                  del = ?DEL_TRUE
                                  }, 0, false) of
                 ok ->
                     ok;
@@ -435,8 +436,9 @@ handle_call({consume, ?QUEUE_ID_PER_FRAGMENT, MessageBin}) ->
             Ret = case leo_storage_handler_object:head(AddrId, Key, false) of
                       {ok, #?METADATA{redundancy_method = ?RED_ERASURE_CODE,
                                       ec_lib = _ECLib,
-                                      ec_params = {ECParams_K, ECParams_M}}} ->
+                                      ec_params = {ECParams_K, ECParams_M}} = Metadata} ->
                           TotalFragments = ECParams_K + ECParams_M,
+
                           case leo_redundant_manager_api:collect_redundancies_by_key(
                                  Key, TotalFragments) of
                               {ok, {_Option, RedundanciesL}} ->
@@ -445,14 +447,13 @@ handle_call({consume, ?QUEUE_ID_PER_FRAGMENT, MessageBin}) ->
                                            FId_1 = FId + 1,
                                            {FId_1, lists:nth(FId_1, RedundanciesL)}
                                        end || FId <- FragmentIdL],
+
                                   case repair_fragments(RepairTargetIdWithRedL,
-                                                        AddrId, Key, {[],[]}) of
-                                      {ok, {_,[]}} ->
+                                                        Metadata, {[],[]}) of
+                                      {ok, []} ->
                                           ok;
-                                      {ok, {_, FragmentIdL}} ->
-                                          {error, FragmentIdL};
-                                      Error ->
-                                          Error
+                                      {ok, BadFragmentIdL} ->
+                                          {error, BadFragmentIdL}
                                   end;
                               _ ->
                                   {error, FragmentIdL}
@@ -467,9 +468,9 @@ handle_call({consume, ?QUEUE_ID_PER_FRAGMENT, MessageBin}) ->
             case Ret of
                 ok ->
                     ok;
-                {error, FragmentIdL_1} ->
+                {error, BadFragmentIdL_1} ->
                     publish(?QUEUE_TYPE_PER_FRAGMENT,
-                            AddrId, Key, FragmentIdL_1)
+                            AddrId, Key, BadFragmentIdL_1)
             end;
         _ ->
             ok
@@ -918,27 +919,56 @@ fix_consistency_between_clusters(#inconsistent_data_with_dc{
 
 
 %% @doc Repair fragments (erasure-coding)
--spec(repair_fragments([{FId, RedundantNode}], AddrId, Key, Acc) ->
+-spec(repair_fragments([{FId, RedundantNode}], Metadata, Acc) ->
              ok when FId::non_neg_integer(),
                      RedundantNode::#redundant_node{},
-                     AddrId::non_neg_integer(),
-                     Key::binary(),
+                     Metadata::#?METADATA{},
+                     %% AddrId::non_neg_integer(),
+                     %% Key::binary(),
                      Acc::[{FId, Node}],
                      Node::atom()).
-repair_fragments([],_,_,{[], BadFragmentIdL}) ->
-    {error, BadFragmentIdL};
-repair_fragments([],_,_,{FragmentIdL, BadFragmentIdL}) ->
-    %% @TODO: repair bad fragments
-    ?debugVal({FragmentIdL, BadFragmentIdL}),
-    {ok, {FragmentIdL, BadFragmentIdL}};
+repair_fragments([],_,{[], BadFragmentIdL}) ->
+    BadFragmentIdL_1 = get_fragment_id_list(BadFragmentIdL, []),
+    {ok, BadFragmentIdL_1};
+repair_fragments([], #?METADATA{ec_lib = ECLib,
+                                ec_params = ECparams} = Metadata,
+                 {FragmentIdL, BadFragmentIdL}) ->
+    {ECParams_K, ECParams_M} = ECparams,
+    Object = leo_object_storage_transformer:metadata_to_object(Metadata),
+    Fun = fun(_Metadata, Acc) ->
+                  IdWithBlockL = lists:sort([{FId - 1, Bin}
+                                             || {FId, {ok, {_, Bin}}} <- Acc]),
+
+                  case leo_erasure:repair(ECLib, {ECParams_K, ECParams_M,
+                                                  ?coding_params_w(ECLib)}, IdWithBlockL) of
+                      {ok, RepairedIdWithBlockL}
+                        when erlang:length(RepairedIdWithBlockL) ==
+                             erlang:length(FragmentIdL) ->
+                          RepairedIdWithBlockL_1 =
+                              lists:zip(FragmentIdL, RepairedIdWithBlockL),
+                          case repair_fragments_1(RepairedIdWithBlockL_1,
+                                                  make_ref(), Metadata, []) of
+                              {ok, []} ->
+                                  {ok, BadFragmentIdL};
+                              {ok, BadFragmentIdL_1} ->
+                                  {ok, lists:append(
+                                         [BadFragmentIdL, BadFragmentIdL_1])}
+                          end;
+                      _Error ->
+                          {ok, BadFragmentIdL}
+                  end
+          end,
+    leo_storage_handler_object:get_fragments(Metadata, Object, false, Fun);
+
 repair_fragments([{FId, #redundant_node{node = Node,
                                         available = false}}|Rest],
-                 AddrId, Key, {Acc_1, Acc_2}) ->
-    repair_fragments(Rest, AddrId, Key, {Acc_1, [{FId, Node}|Acc_2]});
+                 Metadata, {Acc_1, Acc_2}) ->
+    repair_fragments(Rest, Metadata, {Acc_1, [{Node, FId}|Acc_2]});
 repair_fragments([{FId, #redundant_node{node = Node,
                                         available = true}}|Rest],
-                 AddrId, Key, {Acc_1, Acc_2}) ->
-    NeedRepair =
+                 #?METADATA{addr_id = AddrId,
+                            key = Key} = Metadata, {Acc_1, Acc_2}) ->
+    AbleToRepair =
         case leo_misc:node_existence(Node) of
             true ->
                 case rpc:call(Node, leo_storage_handler_object,
@@ -951,12 +981,62 @@ repair_fragments([{FId, #redundant_node{node = Node,
             false ->
                 false
         end,
-    case NeedRepair of
+    case AbleToRepair of
         true ->
-            repair_fragments(Rest, AddrId, Key, {[{FId, Node}|Acc_1], Acc_2});
+            repair_fragments(Rest, Metadata, {[{Node, FId}|Acc_1], Acc_2});
         false ->
-            repair_fragments(Rest, AddrId, Key, {Acc_1, [{FId, Node}|Acc_2]})
+            repair_fragments(Rest, Metadata, {Acc_1, [{Node, FId}|Acc_2]})
     end.
+
+%% @private
+repair_fragments_1([],_Ref,_Metadata,Acc) ->
+    {ok, Acc};
+repair_fragments_1([{{Node,_}, {FId, FBin}}|Rest],
+                   Ref, #?METADATA{key = Key} = Metadata, Acc) ->
+    FId_1 = FId + 1,
+    FIdBin = list_to_binary(integer_to_list(FId_1)),
+    KeyBin = << Key/binary, "\n", FIdBin/binary >>,
+    Object = leo_object_storage_transformer:metadata_to_object(Metadata),
+    Object_1 = Object#?OBJECT{method = ?CMD_PUT,
+                              key = KeyBin,
+                              dsize = byte_size(FBin),
+                              ksize = byte_size(KeyBin),
+                              data = FBin,
+                              offset = 0,
+                              ring_hash = 0,
+                              cindex = FId_1,
+                              cnumber = 0,
+                              has_children = false,
+                              checksum = 0
+                             },
+    Ret = case rpc:call(Node, leo_storage_handler_object,
+                        put, [{Object_1, Ref}], ?DEF_REQ_TIMEOUT) of
+              {ok, Ref,_ETag} ->
+                  ok;
+              {error, Ref, Cause} ->
+                  {error, Cause};
+              timeout = Cause ->
+                  {error, Cause};
+              {badrpc, Cause} ->
+                  {error, Cause}
+          end,
+    Acc_1 = case Ret of
+                ok ->
+                    Acc;
+                {error,_Reason} ->
+                    [FId|Acc]
+            end,
+    repair_fragments_1(Rest, Ref, Metadata, Acc_1).
+
+
+%% @doc Retrieve fragment-id list
+%% @private
+get_fragment_id_list([], []) ->
+    [];
+get_fragment_id_list([], Acc) ->
+    lists:reverse(Acc);
+get_fragment_id_list([{_Node, FId}|Rest], Acc) ->
+    get_fragment_id_list(Rest, [FId - 1|Acc]).
 
 
 %%--------------------------------------------------------------------

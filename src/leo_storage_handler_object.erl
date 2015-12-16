@@ -352,9 +352,9 @@ put(Ref, From, [{_,#?OBJECT{redundancy_method = ?RED_ERASURE_CODE}}|_] = Fragmen
            fun({FId, #?OBJECT{} = Object}, {Acc_1, Acc_2}) ->
                    case put(Ref, From, Object, ReqId, false) of
                        {ok,_} ->
-                           {[{FId, ok}|Acc_1], Acc_2};
-                       {error, Cause} ->
-                           {Acc_1, [{FId, Cause}|Acc_2]}
+                           {[FId|Acc_1], Acc_2};
+                       {error,_Cause} ->
+                           {Acc_1, [FId|Acc_2]}
                    end
            end, {[],[]}, Fragments) of
         {[], ErrorL} ->
@@ -449,11 +449,12 @@ gen_fragments(#?OBJECT{key = Key} = Object, IdWithBlockL) ->
     [begin
          FId_1 = FId + 1,
          FIdBin = list_to_binary(integer_to_list(FId_1)),
-         Object#?OBJECT{key = << Key/binary,
-                                 "\n",
-                                 FIdBin/binary >>,
+         KeyBin = << Key/binary, "\n", FIdBin/binary >>,
+         Object#?OBJECT{key = KeyBin,
                         dsize = byte_size(FBin),
+                        ksize = byte_size(KeyBin),
                         data = FBin,
+                        offset = 0,
                         cindex = FId_1,
                         cnumber = 0,
                         has_children = false}
@@ -988,8 +989,9 @@ get_fragments(Metadata, #?OBJECT{key = Key,
                                                        Metadata::#?METADATA{},
                                                        Bin::binary(),
                                                        Cause::any()).
-get_fragments_1(Self, Ref, RedNodeL, Metadata, #?OBJECT{key = Key,
-                                                        ec_params = ECParams} = Object, NeedParent, Callback) ->
+get_fragments_1(Self, Ref, RedNodeL, Metadata,
+                #?OBJECT{key = Key,
+                         ec_params = ECParams} = Object, NeedParent, Callback) ->
     {ECParams_K, ECParams_M} = ECParams,
     TotalFragments = ECParams_K + ECParams_M,
     Fragments = [ begin
@@ -1037,8 +1039,8 @@ get_fragments_1(Self, Ref, RedNodeL, Metadata, #?OBJECT{key = Key,
                            false ->
                                TotalFragments
                        end,
-    read_and_repair_for_ec_loop(Ref, Metadata,
-                                TotalFragments_1, Callback, []).
+    get_fragments_loop(Ref, Metadata,
+                       TotalFragments_1, Callback, []).
 
 
 %% @doc
@@ -1072,6 +1074,7 @@ get_fragments_callback(#?METADATA{addr_id = AddrId,
                                     {IdL,_BlockL} = lists:unzip(IdWithBlockL),
                                     CompleteIdL = lists:seq(0, ECParams_K + ECParams_M - 1),
                                     RepairIdL = lists:subtract(CompleteIdL, IdL),
+
                                     ok = leo_storage_mq:publish(
                                            ?QUEUE_TYPE_PER_FRAGMENT, AddrId, Key, RepairIdL)
                             end,
@@ -1091,27 +1094,27 @@ get_fragments_callback(#?METADATA{addr_id = AddrId,
 
 %% @doc Receiver of the read and repair for the erasure-coding
 %% @private
-read_and_repair_for_ec_loop(_,_,1,_,_) ->
+get_fragments_loop(_,_,1,_,_) ->
     {error, ?ERROR_COULD_NOT_GET_DATA};
-read_and_repair_for_ec_loop(_, Metadata,
-                            TotalRes, Callback, Acc) when erlang:length(Acc) == TotalRes ->
+get_fragments_loop(_, Metadata,
+                   TotalRes, Callback, Acc) when erlang:length(Acc) == TotalRes ->
     Callback(Metadata, Acc);
-read_and_repair_for_ec_loop(Ref, Metadata, TotalRes, Callback, Acc) ->
+get_fragments_loop(Ref, Metadata, TotalRes, Callback, Acc) ->
     receive
         {parent, Ref, ok} ->
-            read_and_repair_for_ec_loop(
+            get_fragments_loop(
               Ref, Metadata, TotalRes, Callback, [{parent, ok}|Acc]);
         {parent, Ref, {ok,_,_}} ->
-            read_and_repair_for_ec_loop(
+            get_fragments_loop(
               Ref, Metadata, TotalRes, Callback, [{parent, ok}|Acc]);
         {parent, Ref, Other} ->
-            read_and_repair_for_ec_loop(
+            get_fragments_loop(
               Ref, Metadata, TotalRes, Callback, [{parent, Other}|Acc]);
         {fragments, Ref, RetL} ->
-            read_and_repair_for_ec_loop(
+            get_fragments_loop(
               Ref, Metadata, TotalRes, Callback, lists:append([RetL, Acc]));
         _ ->
-            read_and_repair_for_ec_loop(
+            get_fragments_loop(
               Ref, Metadata, TotalRes, Callback, Acc)
     after
         ?DEF_REQ_TIMEOUT ->

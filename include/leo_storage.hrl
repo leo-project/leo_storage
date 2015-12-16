@@ -100,6 +100,7 @@
 -define(ERROR_COULD_NOT_GET_SYSTEM_CONF,"Could not get the system configuration").
 -define(ERROR_RECOVER_FAILURE,          "Recover failure").
 -define(ERROR_REPLICATE_FAILURE,        "Replicate failure").
+-define(ERROR_WRITE_FAILURE,            "Write failure").
 -define(ERROR_COULD_NOT_GET_REDUNDANCY, "Could not get redundancy").
 -define(ERROR_COULD_NOT_CONNECT,        "Could not connect").
 -define(ERROR_COULD_NOT_MATCH,          "Could not match").

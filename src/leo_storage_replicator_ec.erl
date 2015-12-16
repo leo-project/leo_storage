@@ -139,7 +139,8 @@ replicate_1([{{Node, true}, IdWithFragmentL}|Rest],
 
 %% An unavailable node
 replicate_1([{{Node, false}, IdWithFragmentL}|Rest], Ref, Observer, State) ->
-    erlang:send(Observer, {Ref, {error, {Node, nodedown, IdWithFragmentL}}}),
+    FIdL = [FId || {FId,_Object} <- IdWithFragmentL],
+    erlang:send(Observer, {Ref, {error, {Node, FIdL}}}),
     replicate_1(Rest, Ref, Observer, State).
 
 
@@ -179,14 +180,12 @@ loop(N, W, Ref, From, #state{method = Method,
                 end,
 
             %% enqueue error fragments
-            {ok, {_FragmentIdL,_CauseL}} = enqueue(Method, AddrId, Key, ErrorL),
+            ok = enqueue(Method, AddrId, Key, ErrorL),
             loop(N - NumOfFragments, W_2, Ref, From, State_1);
 
         {Ref, {error, {Node, ErrorL}}} ->
-            %% enqueue error fragments
-            {ok, {_FragmentIdL, CauseL}} = enqueue(Method, AddrId, Key, ErrorL),
-            State_1 = State#state{errors = [{Node, CauseL}|E]},
-
+            ok = enqueue(Method, AddrId, Key, ErrorL),
+            State_1 = State#state{errors = [{Node, ?ERROR_WRITE_FAILURE}|E]},
             NumOfFragments = erlang:length(ErrorL),
             loop(N - NumOfFragments, W, Ref, From, State_1)
     after
@@ -205,54 +204,34 @@ loop(N, W, Ref, From, #state{method = Method,
 
 %% @doc Enqueue error fragments
 %% @private
--spec(enqueue(Method, AddrId, Key, ErrorL) ->
-             {ok, {FragmentIdL, CauseL}} when Method::type_of_method(),
-                                              AddrId::non_neg_integer(),
-                                              Key::binary(),
-                                              ErrorL::[{non_neg_integer(), any()}],
-                                              FragmentIdL::[non_neg_integer()],
-                                              CauseL::[any()]).
-enqueue(_,_,_,[]) ->
-    {ok, {[],[]}};
-enqueue(Method, AddrId, Key, ErrorL) ->
-    {FragmentIdL, CauseL} =
-        lists:foldl(fun({FId, Cause}, {Acc_1, Acc_2}) ->
-                            {[FId|Acc_1], [{FId, Cause}|Acc_2]}
-                    end, {[],[]}, ErrorL),
-
-    FragmentIdL_1 = lists:reverse(FragmentIdL),
-    ok = enqueue_1(Method, AddrId, Key, FragmentIdL_1),
-    {ok, {FragmentIdL, lists:reverse(CauseL)}}.
-
-%% @private
--spec(enqueue_1(Method, AddrId, Key, FragmentIdL) ->
+-spec(enqueue(Method, AddrId, Key, FragmentIdL) ->
              ok when Method::type_of_method(),
                      AddrId::non_neg_integer(),
                      Key::binary(),
                      FragmentIdL::[non_neg_integer()]).
-enqueue_1(?CMD_PUT, AddrId, Key, FragmentIdL) ->
+enqueue(?CMD_PUT, AddrId, Key, FragmentIdL) ->
     QId = ?QUEUE_TYPE_PER_FRAGMENT,
     case leo_storage_mq:publish(QId, AddrId, Key, FragmentIdL) of
         ok ->
             ok;
         {error, Cause} ->
-            ?warn("enqueue_1/4",
+            ?warn("enqueue/4",
                   [{qid, QId}, {addr_id, AddrId},
                    {key, Key}, {fragment_id_list, FragmentIdL},
                    {cause, Cause}]),
             ok
     end;
-enqueue_1(?CMD_DELETE, AddrId, Key, FragmentIdL) ->
+enqueue(?CMD_DELETE, AddrId, Key, FragmentIdL) ->
     QId = ?QUEUE_TYPE_PER_FRAGMENT,
     case leo_storage_mq:publish(QId, AddrId, Key, FragmentIdL) of
         ok ->
             ok;
         {error, Cause} ->
-            ?warn("enqueue_1/4",
+            ?warn("enqueue/4",
                   [{qid, QId}, {addr_id, AddrId},
                    {key, Key}, {fragment_id_list, FragmentIdL},
                    {cause, Cause}]),
             ok
     end;
-enqueue_1(_,_,_,_) ->
+enqueue(_,_,_,_) ->
     ok.
