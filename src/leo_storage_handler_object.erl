@@ -41,7 +41,7 @@
          head/2, head/3,
          head_with_calc_md5/3,
          replicate/1, replicate/3,
-         get_fragments/6
+         get_fragments/4, get_fragments/6
         ]).
 
 -define(REP_LOCAL, 'local').
@@ -906,71 +906,108 @@ read_and_repair_4(Metadata, #?OBJECT{data = Bin}, ReadParams, Redundancies) ->
 %% @private
 read_and_repair_for_ec(#?METADATA{csize = CSize,
                                   has_children = HasChildren} = Metadata, Object,
-                       #?READ_PARAMETER{
-                           num_of_replicas = NumOfReplicas} = ReadParams, Redundancies) ->
+                       ReadParams, Redundancies) ->
     case (CSize > 0 andalso HasChildren) of
         true ->
             {ok, Metadata, <<>>};
         false ->
-            Self = erlang:self(),
-            Ref = erlang:make_ref(),
-            %% for retrieving and recovering the metadata
-            spawn(
-              fun() ->
-                      case (NumOfReplicas > 1) of
-                          true ->
-                              Ret = read_and_repair_4(
-                                      Metadata, Object, ReadParams, Redundancies),
-                              erlang:send(Self, {parent, Ref, Ret});
-                          false ->
-                              erlang:send(Self, {parent, Ref, ok})
-                      end
-              end),
-            %% for retrieving the fragments
-            get_fragments(Self, Ref,
-                          Metadata, Object, true, fun get_fragments_callback/2)
+            get_fragments(Metadata, Object, ReadParams, Redundancies,
+                          true, fun get_fragments_callback/2)
     end.
 
 
 %% @doc Retrieve fragments for the erasure-coding
--spec(get_fragments(Self, Ref, Metadata, Object, NeedParent, Callback) ->
-             ok when Self::pid(),
-                     Ref::reference(),
-                     Metadata::#?METADATA{},
-                     Object::#?OBJECT{},
-                     NeedParent::boolean(),
-                     Callback::function()).
-get_fragments(Self, Ref, Metadata,
-              #?OBJECT{key = Key,
-                       ec_params = ECParams} = Object, NeedParent, Callback) ->
+-spec(get_fragments(Metadata, Object, NeedParent, Callback) ->
+             {ok, Metadata, Bin} | {error, Cause} when Metadata::#?METADATA{},
+                                                       Object::#?OBJECT{},
+                                                       NeedParent::boolean(),
+                                                       Callback::function(),
+                                                       Metadata::#?METADATA{},
+                                                       Bin::binary(),
+                                                       Cause::any()).
+get_fragments(Metadata, Object, false = NeedParent, Callback) ->
+    get_fragments(Metadata, Object, undefined, [], NeedParent, Callback);
+get_fragments(_,_,_,_) ->
+    {error, badarg}.
+
+-spec(get_fragments(Metadata, Object, ReadParams, Redundancies, NeedParent, Callback) ->
+             {ok, Metadata, Bin} | {error, Cause} when Metadata::#?METADATA{},
+                                                       Object::#?OBJECT{},
+                                                       ReadParams::#?READ_PARAMETER{},
+                                                       Redundancies::[],
+                                                       NeedParent::boolean(),
+                                                       Callback::function(),
+                                                       Metadata::#?METADATA{},
+                                                       Bin::binary(),
+                                                       Cause::any()).
+get_fragments(Metadata, #?OBJECT{key = Key,
+                                 ec_params = ECParams} = Object,
+              ReadParams, Redundancies, NeedParent, Callback) ->
+    Self = erlang:self(),
+    Ref = erlang:make_ref(),
+
     {ECParams_K, ECParams_M} = ECParams,
     TotalFragments = ECParams_K + ECParams_M,
 
+    case leo_redundant_manager_api:collect_redundancies_by_key(
+           Key, TotalFragments) of
+        {ok, {Options, RedNodeL}}
+          when TotalFragments == erlang:length(RedNodeL)  ->
+            case NeedParent of
+                true ->
+                    spawn(
+                      fun() ->
+                              NumOfReplicas = leo_misc:get_value('n', Options),
+                              case (NumOfReplicas > 1) of
+                                  true ->
+                                      Ret = read_and_repair_4(
+                                              Metadata, Object, ReadParams, Redundancies),
+                                      erlang:send(Self, {parent, Ref, Ret});
+                                  false ->
+                                      erlang:send(Self, {parent, Ref, ok})
+                              end
+                      end);
+                false ->
+                    void
+            end,
+            get_fragments_1(Self, Ref, RedNodeL,
+                            Metadata, Object, NeedParent, Callback);
+        _ ->
+            {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
+    end.
+
+%% @private
+-spec(get_fragments_1(Self, Ref, RedNodeL, Metadata, Object, NeedParent, Callback) ->
+             {ok, Metadata, Bin} | {error, Cause} when Self::pid(),
+                                                       Ref::reference(),
+                                                       RedNodeL::[#redundant_node{}],
+                                                       Metadata::#?METADATA{},
+                                                       Object::#?OBJECT{},
+                                                       NeedParent::boolean(),
+                                                       Callback::function(),
+                                                       Metadata::#?METADATA{},
+                                                       Bin::binary(),
+                                                       Cause::any()).
+get_fragments_1(Self, Ref, RedNodeL, Metadata, #?OBJECT{key = Key,
+                                                        ec_params = ECParams} = Object, NeedParent, Callback) ->
+    {ECParams_K, ECParams_M} = ECParams,
+    TotalFragments = ECParams_K + ECParams_M,
+    Fragments = [ begin
+                      FIdBin = list_to_binary(integer_to_list(FId)),
+                      FrKey = << Key/binary, "\n", FIdBin/binary >>,
+                      Object#?OBJECT{key = FrKey,
+                                     data = <<>>,
+                                     dsize = 0,
+                                     cindex = FId}
+                  end || FId <- lists:seq(1, TotalFragments) ],
     NodeAndFrL =
-        case leo_redundant_manager_api:collect_redundancies_by_key(
-               Key, TotalFragments) of
-            {ok, {_Options, RedNodeL}}
-              when TotalFragments == erlang:length(RedNodeL)  ->
-                Fragments = [ begin
-                                  FIdBin = list_to_binary(integer_to_list(FId)),
-                                  FrKey = << Key/binary, "\n", FIdBin/binary >>,
-                                  Object#?OBJECT{key = FrKey,
-                                                 data = <<>>,
-                                                 dsize = 0,
-                                                 cindex = FId}
-                              end || FId <- lists:seq(1, TotalFragments) ],
-
-                dict:to_list(
-                  lists:foldl(
-                    fun({#redundant_node{node = Node,
-                                         available = Available},
-                         #?OBJECT{cindex = FId} = FObj}, Acc) ->
-                            dict:append({Node, Available}, {FId, FObj}, Acc)
-                    end, dict:new(), lists:zip(RedNodeL, Fragments)));
-            _ ->
-                []
-        end,
-
+        dict:to_list(
+          lists:foldl(
+            fun({#redundant_node{node = Node,
+                                 available = Available},
+                 #?OBJECT{cindex = FId} = FObj}, Acc) ->
+                    dict:append({Node, Available}, {FId, FObj}, Acc)
+            end, dict:new(), lists:zip(RedNodeL, Fragments))),
     [begin
          spawn(
            fun() ->
