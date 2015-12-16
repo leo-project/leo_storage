@@ -191,7 +191,7 @@ replicate_obj_3_({TestNode_1, TestNode_2}) ->
                                   CodingParam_M, TotalReplicas),
     Ret = leo_storage_replicator_ec:replicate(
             put, Quorum, ?TEST_REDUNDANCIES_1, Fragments, F),
-    ?assertEqual({error,[{testnode_11@P30088,?ERROR_WRITE_FAILURE}]}, Ret),
+    ?assertEqual({error,[{TestNode_1, ?ERROR_WRITE_FAILURE}]}, Ret),
     timer:sleep(100),
     ok.
 
