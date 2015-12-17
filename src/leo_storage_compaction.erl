@@ -43,10 +43,10 @@
 %% @doc Check the owner of the object by key
 -spec(has_charge_of_node(Metadata::#?METADATA{}, NumOfReplicas::pos_integer()) ->
                  boolean()).
-has_charge_of_node(#?METADATA{addr_id = AddrId,
+has_charge_of_node(#?METADATA{addr_id = _AddrId,
                               key = Key,
                               redundancy_method = RedMethod,
-                              ec_params = ECParams,
+                              ec_params = _ECParams,
                               cindex = CIndex}, NumOfReplicas) ->
     case RedMethod of
         %% for chunk-object
