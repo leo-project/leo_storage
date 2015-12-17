@@ -239,7 +239,7 @@
  "leo_storage.erasure_code_lib",
  [
   {datatype, atom},
-  {default, vandrs} %% [vandrs | cauchyrs | liberation | isars]
+  {default, isars} %% [vandrs | cauchyrs | liberation | isars]
  ]}.
 
 
