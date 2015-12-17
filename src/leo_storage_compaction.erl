@@ -41,10 +41,21 @@
 %% API
 %%--------------------------------------------------------------------
 %% @doc Check the owner of the object by key
--spec(has_charge_of_node(Key::binary(), NumOfReplicas::pos_integer()) ->
+-spec(has_charge_of_node(Metadata::#?METADATA{}, NumOfReplicas::pos_integer()) ->
                  boolean()).
-has_charge_of_node(Key, NumOfReplicas) ->
-    leo_redundant_manager_api:has_charge_of_node(Key, NumOfReplicas).
+has_charge_of_node(#?METADATA{addr_id = AddrId,
+                              key = Key,
+                              redundancy_method = RedMethod,
+                              ec_params = ECParams,
+                              cindex = CIndex}, NumOfReplicas) ->
+    case RedMethod of
+        %% for chunk-object
+        ?RED_ERASURE_CODE when CIndex > 0 ->
+            %% @TODO:
+            true;
+        _ ->
+            leo_redundant_manager_api:has_charge_of_node(Key, NumOfReplicas)
+    end.
 
 
 %% @doc Update a metadata (during the data-compaction processing)
@@ -52,8 +63,3 @@ has_charge_of_node(Key, NumOfReplicas) ->
                  ok | {error, any()}).
 update_metadata(_Method,_Key, Metadata) ->
     leo_directory_sync:append(Metadata, ?DIR_ASYNC).
-
-
-%%--------------------------------------------------------------------
-%% Internal Function
-%%--------------------------------------------------------------------
