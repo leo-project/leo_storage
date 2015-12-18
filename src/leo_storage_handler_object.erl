@@ -320,6 +320,7 @@ put(Object, ReqId) ->
                     ParentObj = Object_2#?OBJECT{data = <<>>,
                                                  has_children = true,
                                                  cnumber = ECParams_K + ECParams_M,
+                                                 cindex = 0,
                                                  checksum = Checksum},
                     Fragments = gen_fragments(Object_2, IdWithBlockL),
                     replicate_fun(?REP_LOCAL, ?CMD_PUT, {ParentObj, Fragments});
@@ -819,13 +820,15 @@ read_and_repair_2(#?READ_PARAMETER{addr_id = AddrId,
     HeadRet =
         case leo_object_storage_api:head({AddrId, Key}) of
             {ok, MetadataBin} ->
-                #?METADATA{checksum = Checksum} =
+                #?METADATA{checksum = Checksum,
+                           cnumber = CNumber} =
                     leo_object_storage_transformer:transform_metadata(
                       binary_to_term(MetadataBin)),
+
                 case (Checksum == ETag) of
-                    true ->
+                    true when CNumber == 0 ->
                         {ok, match};
-                    false ->
+                    _ ->
                         []
                 end;
             _ ->

@@ -46,7 +46,8 @@
              boolean()).
 has_charge_of_node(#?METADATA{key = Key,
                               redundancy_method = RedMethod,
-                              cindex = CIndex}, NumOfReplicas) ->
+                              cindex = CIndex,
+                              ec_params = ECParams}, NumOfReplicas) ->
     case RedMethod of
         %% for an encoded object
         ?RED_ERASURE_CODE when CIndex > 0 ->
@@ -54,14 +55,21 @@ has_charge_of_node(#?METADATA{key = Key,
                             {Pos,_} = lists:last(binary:matches(Key, [<<"\n">>], [])),
                             binary:part(Key, 0, Pos)
                         end,
-            case leo_redundant_manager_api:collect_redundancies_by_key(ParentKey) of
-                {ok, {_Option, RedNodeL}} ->
-                    ?debugVal(RedNodeL),
-                    case lists:nth(CIndex, RedNodeL) of
-                        #redundant_node{node = Node} when Node == erlang:node() ->
-                            true;
+            case ECParams of
+                {ECParams_K, ECParams_M} ->
+                    TotalFragments = ECParams_K + ECParams_M,
+
+                    case leo_redundant_manager_api:collect_redundancies_by_key(
+                           ParentKey, TotalFragments) of
+                        {ok, {_Option, RedNodeL}} when erlang:length(RedNodeL) == TotalFragments ->
+                            case lists:nth(CIndex, RedNodeL) of
+                                #redundant_node{node = Node} when Node == erlang:node() ->
+                                    true;
+                                _ ->
+                                    false
+                            end;
                         _ ->
-                            false
+                            true
                     end;
                 _ ->
                     true
