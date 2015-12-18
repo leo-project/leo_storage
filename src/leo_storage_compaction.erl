@@ -29,6 +29,7 @@
 
 -include("leo_storage.hrl").
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
+-include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 %% callback
@@ -42,17 +43,31 @@
 %%--------------------------------------------------------------------
 %% @doc Check the owner of the object by key
 -spec(has_charge_of_node(Metadata::#?METADATA{}, NumOfReplicas::pos_integer()) ->
-                 boolean()).
-has_charge_of_node(#?METADATA{addr_id = _AddrId,
-                              key = Key,
+             boolean()).
+has_charge_of_node(#?METADATA{key = Key,
                               redundancy_method = RedMethod,
-                              ec_params = _ECParams,
                               cindex = CIndex}, NumOfReplicas) ->
     case RedMethod of
-        %% for chunk-object
+        %% for an encoded object
         ?RED_ERASURE_CODE when CIndex > 0 ->
-            %% @TODO:
-            true;
+            ParentKey = begin
+                            {Pos,_} = lists:last(binary:matches(Key, [<<"\n">>], [])),
+                            binary:part(Key, 0, Pos)
+                        end,
+            case leo_redundant_manager_api:collect_redundancies_by_key(ParentKey) of
+                {ok, {_Option, RedNodeL}} ->
+                    ?debugVal(RedNodeL),
+                    case lists:nth(CIndex, RedNodeL) of
+                        #redundant_node{node = Node} when Node == erlang:node() ->
+                            true;
+                        _ ->
+                            false
+                    end;
+                _ ->
+                    true
+            end;
+        %% for a replicated object
+        %% OR a parent object of chunks
         _ ->
             leo_redundant_manager_api:has_charge_of_node(Key, NumOfReplicas)
     end.
@@ -60,6 +75,6 @@ has_charge_of_node(#?METADATA{addr_id = _AddrId,
 
 %% @doc Update a metadata (during the data-compaction processing)
 -spec(update_metadata(Method::put|delete, Key::binary(), Metadata::#?METADATA{}) ->
-                 ok | {error, any()}).
+             ok | {error, any()}).
 update_metadata(_Method,_Key, Metadata) ->
     leo_directory_sync:append(Metadata, ?DIR_ASYNC).
