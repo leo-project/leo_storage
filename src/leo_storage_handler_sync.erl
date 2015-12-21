@@ -114,7 +114,7 @@ send_addrid_and_key_to_remote_1([#mdc_replication_info{
 
 %% @private
 send_addrid_and_key_to_remote_2([], ClusterId, ListAddrIdAndKey,_RetryTimes) ->
-    QId = ?QUEUE_TYPE_COMP_META_WITH_DC,
+    QId = ?QUEUE_ID_COMP_META_WITH_DC,
     case leo_storage_mq:publish(
            QId, ClusterId, ListAddrIdAndKey) of
         ok ->

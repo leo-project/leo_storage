@@ -248,7 +248,7 @@ attach(SystemConf) ->
 -spec(synchronize(Node) ->
              ok | {error, any()} when Node::atom()).
 synchronize(Node) ->
-    leo_storage_mq:publish(?QUEUE_TYPE_RECOVERY_NODE, Node).
+    leo_storage_mq:publish(?QUEUE_ID_RECOVERY_NODE, Node).
 
 -spec(synchronize(SyncTarget, SyncVal) ->
              ok |
@@ -262,7 +262,7 @@ synchronize(InconsistentNodes, #?METADATA{addr_id = AddrId,
 synchronize(Key, ErrorType) ->
     {ok, #redundancies{vnode_id_to = VNodeId}} =
         leo_redundant_manager_api:get_redundancies_by_key(Key),
-    leo_storage_mq:publish(?QUEUE_TYPE_PER_OBJECT, VNodeId, Key, ErrorType).
+    leo_storage_mq:publish(?QUEUE_ID_PER_OBJECT, VNodeId, Key, ErrorType).
 
 
 %%--------------------------------------------------------------------
@@ -488,7 +488,7 @@ rebalance(RebalanceList, MembersCur, MembersPrev) ->
 rebalance_1([]) ->
     ok;
 rebalance_1([{VNodeId, Node}|T]) ->
-    QId = ?QUEUE_TYPE_SYNC_BY_VNODE_ID,
+    QId = ?QUEUE_ID_SYNC_BY_VNODE_ID,
     case leo_storage_mq:publish(QId, VNodeId, Node) of
         ok ->
             rebalance_1(T);

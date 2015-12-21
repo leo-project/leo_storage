@@ -241,7 +241,7 @@ replicate_fun(Ref, #req_params{pid = Pid,
                      AddrId::non_neg_integer(),
                      Key::binary()).
 enqueue(?CMD_PUT, ?ERR_TYPE_REPLICATE_DATA = Type,  AddrId, Key) ->
-    QId = ?QUEUE_TYPE_PER_OBJECT,
+    QId = ?QUEUE_ID_PER_OBJECT,
     case leo_storage_mq:publish(QId, AddrId, Key, Type) of
         ok ->
             ok;
@@ -252,7 +252,7 @@ enqueue(?CMD_PUT, ?ERR_TYPE_REPLICATE_DATA = Type,  AddrId, Key) ->
             ok
     end;
 enqueue(?CMD_DELETE, _Type,  AddrId, Key) ->
-    QId = ?QUEUE_TYPE_ASYNC_DELETE_OBJ,
+    QId = ?QUEUE_ID_ASYNC_DELETE_OBJ,
     case leo_storage_mq:publish(QId, AddrId, Key) of
         ok ->
             ok;

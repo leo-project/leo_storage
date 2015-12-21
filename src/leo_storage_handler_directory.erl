@@ -183,7 +183,7 @@ delete_objects_under_dir(Dir) ->
                                     {error, Cause}
                             end;
                         _ ->
-                            leo_storage_mq:publish(?QUEUE_TYPE_ASYNC_DELETE_DIR, [Dir])
+                            leo_storage_mq:publish(?QUEUE_ID_ASYNC_DELETE_DIR, [Dir])
                     end;
                 {error, Reason} ->
                     {error, Reason}
@@ -225,7 +225,7 @@ delete_objects_under_dir([Node|Rest], NumOfNodes, Ref, DirL, ErrorL) ->
             Other ->
                 %% Enqueue a failed message into the mq
                 ok = leo_storage_mq:publish(
-                       ?QUEUE_TYPE_ASYNC_DELETE_DIR, DirL),
+                       ?QUEUE_ID_ASYNC_DELETE_DIR, DirL),
                 Cause = case Other of
                             {value, {error, {Ref, Why}}} ->
                                 Why;
@@ -274,7 +274,7 @@ prefix_search_and_remove_objects(Dir) ->
                                 erlang:send(Pid, {append, Ref, Key}),
 
                                 %% Asynchronous deletion of an object
-                                QId = ?QUEUE_TYPE_ASYNC_DELETE_OBJ,
+                                QId = ?QUEUE_ID_ASYNC_DELETE_OBJ,
                                 case leo_storage_mq:publish(QId, AddrId, Key) of
                                     ok ->
                                         void;

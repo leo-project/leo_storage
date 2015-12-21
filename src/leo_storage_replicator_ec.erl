@@ -210,7 +210,7 @@ loop(N, W, Ref, From, #state{method = Method,
                      Key::binary(),
                      FragmentIdL::[non_neg_integer()]).
 enqueue(?CMD_PUT, AddrId, Key, FragmentIdL) ->
-    QId = ?QUEUE_TYPE_PER_FRAGMENT,
+    QId = ?QUEUE_ID_RECOVERY_FRAGMENT,
     case leo_storage_mq:publish(QId, AddrId, Key, FragmentIdL) of
         ok ->
             ok;
@@ -222,7 +222,7 @@ enqueue(?CMD_PUT, AddrId, Key, FragmentIdL) ->
             ok
     end;
 enqueue(?CMD_DELETE, AddrId, Key, FragmentIdL) ->
-    QId = ?QUEUE_TYPE_PER_FRAGMENT,
+    QId = ?QUEUE_ID_RECOVERY_FRAGMENT,
     case leo_storage_mq:publish(QId, AddrId, Key, FragmentIdL) of
         ok ->
             ok;

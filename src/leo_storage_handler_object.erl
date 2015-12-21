@@ -1079,7 +1079,7 @@ get_fragments_callback(#?METADATA{addr_id = AddrId,
                                     RepairIdL = lists:subtract(CompleteIdL, IdL),
 
                                     ok = leo_storage_mq:publish(
-                                           ?QUEUE_TYPE_PER_FRAGMENT, AddrId, Key, RepairIdL)
+                                           ?QUEUE_ID_RECOVERY_FRAGMENT, AddrId, Key, RepairIdL)
                             end,
                             {ok, Metadata#?METADATA{cnumber = 0}, Bin};
                         {ok,_Bin} ->

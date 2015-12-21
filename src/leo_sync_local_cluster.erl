@@ -136,7 +136,7 @@ handle_send_1(Node, CompressedObjs) ->
 handle_fail(_, []) ->
     ok;
 handle_fail(Node, [{AddrId, Key}|Rest]) ->
-    _ = leo_storage_mq:publish(?QUEUE_TYPE_PER_OBJECT,
+    _ = leo_storage_mq:publish(?QUEUE_ID_PER_OBJECT,
                                AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
     handle_fail(Node, Rest).
 
@@ -221,7 +221,7 @@ slice_and_replicate_1(#?METADATA{addr_id = AddrId,
         {ok, #?METADATA{clock = Clock_1}} when Clock == Clock_1 ->
             slice_and_replicate(StackedObject, Errors);
         {ok, #?METADATA{clock = Clock_1}} when Clock < Clock_1 ->
-            ok = leo_storage_mq:publish(?QUEUE_TYPE_PER_OBJECT,
+            ok = leo_storage_mq:publish(?QUEUE_ID_PER_OBJECT,
                                         AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
             slice_and_replicate(StackedObject, Errors);
         _ ->

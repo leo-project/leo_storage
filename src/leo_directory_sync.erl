@@ -358,7 +358,7 @@ delete_1(_,_,[]) ->
 delete_1(Dir, KeyL, [#redundant_node{available = false}|Rest]) ->
     %% Enqueue a message to fix an inconsistent dir
     _ = leo_storage_mq:publish(
-          ?QUEUE_TYPE_ASYNC_DELETE_DIR, [Dir]),
+          ?QUEUE_ID_ASYNC_DELETE_DIR, [Dir]),
     delete_1(Dir, KeyL, Rest);
 delete_1(Dir, KeyL, [#redundant_node{available = true,
                                      node = Node}|Rest]) ->
@@ -396,7 +396,7 @@ replicate_del_dir(Node, Dir, KeyL) ->
         {error, Reason} = Error ->
             ?warn("replicate_del_dir/2", [{cause, Reason}]),
             leo_storage_mq:publish(
-              ?QUEUE_TYPE_ASYNC_DELETE_DIR, [Dir]),
+              ?QUEUE_ID_ASYNC_DELETE_DIR, [Dir]),
             Error
     end.
 
@@ -425,7 +425,7 @@ replicate_del_dir_1([Path|Rest]) ->
         {error, Cause} ->
             ?warn("replicate_del_dir_1/1", [{cause, Cause}]),
             leo_storage_mq:publish(
-              ?QUEUE_TYPE_ASYNC_DELETE_DIR, [Path])
+              ?QUEUE_ID_ASYNC_DELETE_DIR, [Path])
     end,
     replicate_del_dir_1(Rest).
 
@@ -864,7 +864,7 @@ get_directories_from_stacked_info_1([Dir|Rest], Acc) ->
 enqueue(#?METADATA{key = Key} = Metadata) ->
     case leo_redundant_manager_api:get_redundancies_by_key(Key) of
         {ok, #redundancies{id = AddrId}} ->
-            case catch leo_storage_mq:publish(?QUEUE_TYPE_ASYNC_RECOVER_DIR,
+            case catch leo_storage_mq:publish(?QUEUE_ID_ASYNC_RECOVER_DIR,
                                               Metadata#?METADATA{addr_id = AddrId}) of
                 {'EXIT', Cause} ->
                     ?error("enqueue/1",

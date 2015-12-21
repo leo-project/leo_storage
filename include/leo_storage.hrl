@@ -58,18 +58,8 @@
 -define(QUEUE_ID_COMP_META_WITH_DC, 'leo_comp_meta_with_dc_queue').
 -define(QUEUE_ID_ASYNC_DELETE_DIR,  'leo_async_delete_dir_queue').
 -define(QUEUE_ID_ASYNC_RECOVER_DIR, 'leo_async_recover_dir_queue').
--define(QUEUE_ID_PER_FRAGMENT,      'leo_per_fragment_queue').
-
--define(QUEUE_TYPE_PER_OBJECT,        'queue_type_per_object').
--define(QUEUE_TYPE_SYNC_BY_VNODE_ID,  'queue_type_sync_by_vnode_id').
--define(QUEUE_TYPE_REBALANCE,         'queue_type_rebalance').
--define(QUEUE_TYPE_ASYNC_DELETE_OBJ,  'queue_type_async_deletion').
--define(QUEUE_TYPE_RECOVERY_NODE,     'queue_type_recovery_node').
--define(QUEUE_TYPE_SYNC_OBJ_WITH_DC,  'queue_type_sync_obj_with_dc').
--define(QUEUE_TYPE_COMP_META_WITH_DC, 'queue_type_comp_meta_with_dc').
--define(QUEUE_TYPE_ASYNC_DELETE_DIR,  'queue_type_async_delete_dir').
--define(QUEUE_TYPE_ASYNC_RECOVER_DIR, 'queue_type_async_recover_dir').
--define(QUEUE_TYPE_PER_FRAGMENT,      'queue_type_per_fragment').
+-define(QUEUE_ID_RECOVERY_FRAGMENT, 'leo_recovery_fragment_queue').
+-define(QUEUE_ID_TRANS_FRAGMENT,    'leo_trans_fragment_queue').
 
 -define(ERR_TYPE_REPLICATE_DATA,      'error_msg_replicate_data').
 -define(ERR_TYPE_RECOVER_DATA,        'error_msg_recover_data').
@@ -487,19 +477,6 @@
             _ -> ?DEF_RPC_LISTEN_PORT
         end).
 -endif.
-
-%% @doc types.
-%%
--type(queue_type() :: ?QUEUE_TYPE_PER_OBJECT  |
-                      ?QUEUE_TYPE_SYNC_BY_VNODE_ID  |
-                      ?QUEUE_TYPE_REBALANCE |
-                      ?QUEUE_TYPE_ASYNC_DELETE_OBJ |
-                      ?QUEUE_TYPE_RECOVERY_NODE |
-                      ?QUEUE_TYPE_SYNC_OBJ_WITH_DC |
-                      ?QUEUE_TYPE_COMP_META_WITH_DC |
-                      ?QUEUE_TYPE_ASYNC_DELETE_DIR |
-                      ?QUEUE_TYPE_ASYNC_RECOVER_DIR
-                      ).
 
 -type(queue_id()   :: ?QUEUE_ID_PER_OBJECT |
                       ?QUEUE_ID_SYNC_BY_VNODE_ID |
