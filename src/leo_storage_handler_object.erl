@@ -1124,14 +1124,14 @@ get_fragments_loop(Ref, Metadata, TotalRes, ProcL, Callback, Acc) ->
         {fragments, Ref, RetL} ->
             get_fragments_loop(
               Ref, Metadata, TotalRes, ProcL, Callback, lists:append([RetL, Acc]));
-        {'DOWN',_Ref,process,_Pid,normal} ->
-            Acc_1 = case leo_misc:get_value(_Ref, ProcL) of
+        {'DOWN', MonRef, process,_Pid, normal} ->
+            Acc_1 = case leo_misc:get_value(MonRef, ProcL) of
                         undefined ->
                             Acc;
                         parent ->
                             case leo_misc:get_value(parent, Acc) of
                                 undefined ->
-                                    [{parent, down}|Acc];
+                                    [{parent, {error, down}}|Acc];
                                 _ ->
                                     Acc
                             end;
