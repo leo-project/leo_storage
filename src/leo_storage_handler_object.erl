@@ -957,44 +957,49 @@ get_fragments(Metadata, #?OBJECT{key = Key,
            Key, TotalFragments) of
         {ok, {Options, RedNodeL}}
           when TotalFragments == erlang:length(RedNodeL)  ->
-            case NeedParent of
-                true ->
-                    spawn(
-                      fun() ->
-                              NumOfReplicas = leo_misc:get_value('n', Options),
-                              case (NumOfReplicas > 1) of
-                                  true ->
-                                      Ret = read_and_repair_4(
-                                              Metadata, Object, ReadParams, Redundancies),
-                                      erlang:send(Self, {parent, Ref, Ret});
-                                  false ->
-                                      erlang:send(Self, {parent, Ref, ok})
-                              end
-                      end);
-                false ->
-                    void
-            end,
+            ProcL =
+                case NeedParent of
+                    true ->
+                        Pid = spawn(
+                                fun() ->
+                                        NumOfReplicas = leo_misc:get_value('n', Options),
+                                        case (NumOfReplicas > 1) of
+                                            true ->
+                                                Ret = read_and_repair_4(
+                                                        Metadata, Object, ReadParams, Redundancies),
+                                                erlang:send(Self, {parent, Ref, Ret});
+                                            false ->
+                                                erlang:send(Self, {parent, Ref, ok})
+                                        end
+                                end),
+                        MonRef = erlang:monitor(process, Pid),
+                        [{MonRef, parent}];
+                    false ->
+                        []
+                end,
             get_fragments_1(Self, Ref, RedNodeL,
-                            Metadata, Object, NeedParent, Callback);
+                            Metadata, Object, NeedParent, ProcL, Callback);
         _ ->
             {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
     end.
 
 %% @private
--spec(get_fragments_1(Self, Ref, RedNodeL, Metadata, Object, NeedParent, Callback) ->
+-spec(get_fragments_1(Self, Ref, RedNodeL, Metadata, Object,
+                      NeedParent, ProcL, Callback) ->
              {ok, Metadata, Bin} | {error, Cause} when Self::pid(),
                                                        Ref::reference(),
                                                        RedNodeL::[#redundant_node{}],
                                                        Metadata::#?METADATA{},
                                                        Object::#?OBJECT{},
                                                        NeedParent::boolean(),
+                                                       ProcL::[{reference(), pid(), term()}],
                                                        Callback::function(),
                                                        Metadata::#?METADATA{},
                                                        Bin::binary(),
                                                        Cause::any()).
 get_fragments_1(Self, Ref, RedNodeL, Metadata,
                 #?OBJECT{key = Key,
-                         ec_params = ECParams} = Object, NeedParent, Callback) ->
+                         ec_params = ECParams} = Object, NeedParent, ProcL, Callback) ->
     {ECParams_K, ECParams_M} = ECParams,
     TotalFragments = ECParams_K + ECParams_M,
     Fragments = [ begin
@@ -1013,28 +1018,31 @@ get_fragments_1(Self, Ref, RedNodeL, Metadata,
                  #?OBJECT{cindex = FId} = FObj}, Acc) ->
                     dict:append({Node, Available}, {FId, FObj}, Acc)
             end, dict:new(), lists:zip(RedNodeL, Fragments))),
-    [begin
-         spawn(
-           fun() ->
-                   IsAlive = leo_misc:node_existence(Node),
-                   Ret = case Available of
-                             true when IsAlive ->
-                                 rpc:call(Node, leo_storage_handler_object,
-                                          get, [{Ref, Fragments_1}],
-                                          ?DEF_REQ_TIMEOUT);
-                             _ ->
-                                 {error, []}
-                         end,
-                   case Ret of
-                       {ok, Reply} ->
-                           erlang:send(Self, Reply);
-                       _ ->
-                           ErrorL = [{FId, {error, ?ERROR_COULD_NOT_GET_DATA}}
-                                     || {FId,_FObj} <- Fragments_1],
-                           erlang:send(Self, {'fragments', Ref, ErrorL})
-                   end
-           end)
-     end || {{Node, Available}, Fragments_1} <- NodeAndFrL],
+    ProcL_1 =
+        [begin
+             Pid = spawn(
+                     fun() ->
+                             IsAlive = leo_misc:node_existence(Node),
+                             Ret = case Available of
+                                       true when IsAlive ->
+                                           rpc:call(Node, leo_storage_handler_object,
+                                                    get, [{Ref, Fragments_1}],
+                                                    ?DEF_REQ_TIMEOUT);
+                                       _ ->
+                                           {error, []}
+                                   end,
+                             case Ret of
+                                 {ok, Reply} ->
+                                     erlang:send(Self, Reply);
+                                 _ ->
+                                     ErrorL = [{FId, {error, ?ERROR_COULD_NOT_GET_DATA}}
+                                               || {FId,_FObj} <- Fragments_1],
+                                     erlang:send(Self, {'fragments', Ref, ErrorL})
+                             end
+                     end),
+             MonRef = erlang:monitor(process, Pid),
+             {MonRef, erlang:element(1, lists:unzip(Fragments_1))}
+         end || {{Node, Available}, Fragments_1} <- NodeAndFrL],
 
     TotalFragments_1 = case NeedParent of
                            true ->
@@ -1042,8 +1050,8 @@ get_fragments_1(Self, Ref, RedNodeL, Metadata,
                            false ->
                                TotalFragments
                        end,
-    get_fragments_loop(Ref, Metadata,
-                       TotalFragments_1, Callback, []).
+    get_fragments_loop(Ref, Metadata, TotalFragments_1,
+                       lists:append([ProcL, ProcL_1]), Callback, []).
 
 
 %% @doc
@@ -1097,28 +1105,51 @@ get_fragments_callback(#?METADATA{addr_id = AddrId,
 
 %% @doc Receiver of the read and repair for the erasure-coding
 %% @private
-get_fragments_loop(_,_,1,_,_) ->
+get_fragments_loop(_,_,1,_,_,_) ->
     {error, ?ERROR_COULD_NOT_GET_DATA};
 get_fragments_loop(_, Metadata,
-                   TotalRes, Callback, Acc) when erlang:length(Acc) == TotalRes ->
+                   TotalRes,_ProcL,Callback, Acc) when erlang:length(Acc) == TotalRes ->
     Callback(Metadata, Acc);
-get_fragments_loop(Ref, Metadata, TotalRes, Callback, Acc) ->
+get_fragments_loop(Ref, Metadata, TotalRes, ProcL, Callback, Acc) ->
     receive
         {parent, Ref, ok} ->
             get_fragments_loop(
-              Ref, Metadata, TotalRes, Callback, [{parent, ok}|Acc]);
+              Ref, Metadata, TotalRes, ProcL, Callback, [{parent, ok}|Acc]);
         {parent, Ref, {ok,_,_}} ->
             get_fragments_loop(
-              Ref, Metadata, TotalRes, Callback, [{parent, ok}|Acc]);
+              Ref, Metadata, TotalRes, ProcL, Callback, [{parent, ok}|Acc]);
         {parent, Ref, Other} ->
             get_fragments_loop(
-              Ref, Metadata, TotalRes, Callback, [{parent, Other}|Acc]);
+              Ref, Metadata, TotalRes, ProcL, Callback, [{parent, Other}|Acc]);
         {fragments, Ref, RetL} ->
             get_fragments_loop(
-              Ref, Metadata, TotalRes, Callback, lists:append([RetL, Acc]));
+              Ref, Metadata, TotalRes, ProcL, Callback, lists:append([RetL, Acc]));
+        {'DOWN',_Ref,process,_Pid,normal} ->
+            Acc_1 = case leo_misc:get_value(_Ref, ProcL) of
+                        undefined ->
+                            Acc;
+                        parent ->
+                            case leo_misc:get_value(parent, Acc) of
+                                undefined ->
+                                    [{parent, down}|Acc];
+                                _ ->
+                                    Acc
+                            end;
+                        FIdL ->
+                            lists:foldl(fun(FId, Acc_1) ->
+                                                case leo_misc:get_value(FId, Acc_1) of
+                                                    undefined ->
+                                                        [{FId, {error, down}}|Acc_1];
+                                                    _Item ->
+                                                        Acc_1
+                                                end
+                                        end, Acc, FIdL)
+                    end,
+            get_fragments_loop(
+              Ref, Metadata, TotalRes, ProcL, Callback, Acc_1);
         _ ->
             get_fragments_loop(
-              Ref, Metadata, TotalRes, Callback, Acc)
+              Ref, Metadata, TotalRes, ProcL, Callback, Acc)
     after
         ?DEF_REQ_TIMEOUT ->
             {error, timeout}
