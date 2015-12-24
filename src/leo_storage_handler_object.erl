@@ -1223,28 +1223,31 @@ replicate_fun(?REP_LOCAL, Method, {#?OBJECT{key = Key} = ParentObj,
                     %% Replicate the parent object (metadata)
                     Self = erlang:self(),
                     Ref = erlang:make_ref(),
-                    spawn(
-                      fun() ->
-                              RedNodeL_1 =
-                                  lists:sublist(RedNodeL, NumOfReplicas),
-                              Ret = leo_storage_replicator_cp:replicate(
-                                      Method, QuorumForRep,
-                                      RedNodeL_1,
-                                      ParentObj#?OBJECT{ring_hash = leo_misc:get_value(
-                                                                      ?PROP_RING_HASH, Options)},
-                                      replicate_callback(ParentObj)),
-                              erlang:send(Self, {parent, Ref, Ret})
-                      end),
+                    Pid_1 = spawn(
+                              fun() ->
+                                      RedNodeL_1 =
+                                          lists:sublist(RedNodeL, NumOfReplicas),
+                                      Ret = leo_storage_replicator_cp:replicate(
+                                              Method, QuorumForRep,
+                                              RedNodeL_1,
+                                              ParentObj#?OBJECT{ring_hash = leo_misc:get_value(
+                                                                              ?PROP_RING_HASH, Options)},
+                                              replicate_callback(ParentObj)),
+                                      erlang:send(Self, {parent, Ref, Ret})
+                              end),
+                    MonRef_1 = erlang:monitor(process, Pid_1),
 
                     %% Store the fragments
-                    spawn(
-                      fun() ->
-                              Ret = leo_storage_replicator_ec:replicate(
-                                      Method, QuorumForFrL, RedNodeL, Fragments,
-                                      replicate_callback(erlang:hd(Fragments))),
-                              erlang:send(Self, {fragments, Ref, Ret})
-                      end),
-                    replicate_fun_loop(Ref, []);
+                    Pid_2 = spawn(
+                              fun() ->
+                                      Ret = leo_storage_replicator_ec:replicate(
+                                              Method, QuorumForFrL, RedNodeL, Fragments,
+                                              replicate_callback(erlang:hd(Fragments))),
+                                      erlang:send(Self, {fragments, Ref, Ret})
+                              end),
+                    MonRef_2 = erlang:monitor(process, Pid_2),
+                    replicate_fun_loop(Ref, [{MonRef_1, parent},
+                                             {MonRef_2, fragments}], []);
                 {ok,_} ->
                     {error, invalid_redundancies};
                 Error ->
@@ -1291,25 +1294,36 @@ replicate_fun(_T,_M,_Obj) ->
 
 %% @doc Receiver of a replicator's loop
 %% @private
-replicate_fun_loop(_,Acc) when erlang:length(Acc) == 2 ->
+replicate_fun_loop(_,_,Acc) when erlang:length(Acc) == 2 ->
     RetFrL = leo_misc:get_value('fragments', Acc),
     RetParent = leo_misc:get_value('parent', Acc),
 
-    case (element(1, RetFrL) == ok andalso
-          element(1, RetParent) == ok) of
+    case (erlang:element(1, RetFrL) == ok andalso
+          erlang:element(1, RetParent) == ok) of
         true ->
             RetParent;
         false ->
             {error, ?ERROR_COULD_NOT_GET_DATA}
     end;
-replicate_fun_loop(Ref, Acc) ->
+replicate_fun_loop(Ref, ProcL, Acc) ->
     receive
         {parent, Ref, Ret} ->
-            replicate_fun_loop(Ref, [{parent, Ret}|Acc]);
+            replicate_fun_loop(Ref, ProcL, [{parent, Ret}|Acc]);
         {fragments, Ref, Ret} ->
-            replicate_fun_loop(Ref, [{fragments, Ret}|Acc]);
+            replicate_fun_loop(Ref, ProcL, [{fragments, Ret}|Acc]);
+        {'DOWN', MonRef, process,_Pid, normal} ->
+            Type = leo_misc:get_value(MonRef, ProcL),
+            Acc_1 = case leo_misc:get_value(Type, Acc) of
+                        undefined when Type == parent ->
+                            [{parent, {error, down}}|Acc];
+                        undefined when Type == fragments ->
+                            [{fragments, {error, down}}|Acc];
+                        _Other ->
+                            Acc
+                    end,
+            replicate_fun_loop(Ref, ProcL, Acc_1);
         _ ->
-            replicate_fun_loop(Ref, Acc)
+            replicate_fun_loop(Ref, ProcL, Acc)
     after
         ?DEF_REQ_TIMEOUT ->
             {error, timeout}
