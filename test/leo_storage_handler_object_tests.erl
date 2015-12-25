@@ -299,7 +299,7 @@ put_3_({TestNode_1, TestNode_2}) ->
 
     meck:new(leo_redundant_manager_api, [non_strict]),
     meck:expect(leo_redundant_manager_api, collect_redundancies_by_key,
-                fun(_Key,_TotalReplicas) ->
+                fun(_Key,_TotalReplicas,_ECParamsM) ->
                         {ok, {[{n, 2},
                                {w, 1},
                                {r, 1},
