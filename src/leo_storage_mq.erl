@@ -100,7 +100,7 @@ start(RefSup, RootPath) ->
              {?QUEUE_ID_ASYNC_DELETE_DIR,  ?MSG_PATH_ASYNC_DELETE_DIR},
              {?QUEUE_ID_ASYNC_RECOVER_DIR, ?MSG_PATH_ASYNC_RECOVER_DIR},
              {?QUEUE_ID_RECOVERY_FRAGMENT, ?MSG_PATH_RECOVERY_FRAGMENT},
-             {?QUEUE_ID_TRANS_FRAGMENT, ?MSG_PATH_TRANS_FRAGMENT}
+             {?QUEUE_ID_TRANS_FRAGMENT,    ?MSG_PATH_TRANS_FRAGMENT}
             ], RefMQSup, RootPath_1).
 
 %% @private
@@ -152,8 +152,9 @@ publish(?QUEUE_ID_ASYNC_DELETE_DIR = Id, [Dir|Rest]) ->
 publish(?QUEUE_ID_TRANS_FRAGMENT = Id, #?METADATA{addr_id = AddrId,
                                                   key = Key,
                                                   redundancy_method = ?RED_ERASURE_CODE,
-                                                  cnumber = CNumber
-                                                 } = Metadata) when CNumber > 0 ->
+                                                  has_children = false,
+                                                  cindex = CIndex
+                                                 } = Metadata) when CIndex > 0 ->
     Clock = leo_date:clock(),
     KeyBin = term_to_binary({Clock, AddrId, Key}),
     MsgBin = term_to_binary(Metadata),
@@ -513,16 +514,29 @@ handle_call({consume, ?QUEUE_ID_TRANS_FRAGMENT, MessageBin}) ->
         #?METADATA{addr_id = AddrId,
                    key = Key,
                    redundancy_method = ?RED_ERASURE_CODE,
-                   cnumber = CNumber,
-                   ec_params = {ECParams_K, ECParams_M}} when CNumber > 0 ->
+                   has_children = false,
+                   cindex = CIndex,
+                   ec_params = {ECParams_K, ECParams_M}} when CIndex > 0 ->
             TotalFragments = ECParams_K + ECParams_M,
+            ParentKey = begin
+                            case binary:matches(Key, [<<"\n">>], []) of
+                                [] ->
+                                    Key;
+                                PosL ->
+                                    {Pos,_} = lists:last(PosL),
+                                    binary:part(Key, 0, Pos)
+                            end
+                        end,
+
             case catch leo_redundant_manager_api:collect_redundancies_by_key(
-                         Key, TotalFragments) of
+                         ParentKey, TotalFragments) of
                 {ok, {_Option, RedundantNodeL}}
                   when erlang:length(RedundantNodeL) == TotalFragments ->
                     case leo_object_storage_api:get({AddrId, Key}) of
-                        {ok, {_Metadata, Object}} ->
-                            DestNode = lists:nth(CNumber, RedundantNodeL),
+                        {ok, _Metadata, Object} ->
+                            #redundant_node{node = DestNode} =
+                                lists:nth(CIndex, RedundantNodeL),
+
                             Ref = make_ref(),
                             RPCKey = rpc:async_call(DestNode, leo_storage_handler_object,
                                                     put, [{Object, Ref}]),
@@ -645,20 +659,11 @@ sync_vnodes_callback(SyncTarget, Node, FromAddrId, ToAddrId)->
                 #?METADATA{addr_id = AddrId,
                            key = Key,
                            redundancy_method = RedMethod,
-                           cnumber = CNumber,
-                           ec_params = ECParams} = Metadata ->
-                    TotalFragments = case ECParams of
-                                         {ECParams_K, ECParams_M} ->
-                                             ECParams_K + ECParams_M;
-                                         _ ->
-                                             0
-                                     end,
+                           cnumber = CNumber} = Metadata
+                  when RedMethod == ?RED_COPY orelse
+                       (RedMethod == ?RED_ERASURE_CODE andalso CNumber > 0) ->
                     Ret = case (AddrId >= FromAddrId andalso
                                 AddrId =< ToAddrId) of
-                              %% for encodred object(s)
-                              true when RedMethod == ?RED_ERASURE_CODE andalso CNumber > 0 ->
-                                  ok = ?MODULE:publish(?QUEUE_ID_TRANS_FRAGMENT, Metadata),
-                                  false;
                               %% for replicated object(s) and parents
                               true ->
                                   case catch leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
@@ -671,21 +676,13 @@ sync_vnodes_callback(SyncTarget, Node, FromAddrId, ToAddrId)->
                               false ->
                                   false
                           end,
+
                     case Ret of
                         {true, NodeL_1} ->
                             case lists:member(Node, NodeL_1) of
                                 true when SyncTarget == ?SYNC_TARGET_OBJ ->
                                     %% the parent of encoderd-objects
                                     %%   need to check their consistency
-                                    case (RedMethod == ?RED_ERASURE_CODE
-                                          andalso CNumber == 0) of
-                                        true ->
-                                            ?MODULE:publish(
-                                               ?QUEUE_ID_RECOVERY_FRAGMENT, AddrId, Key,
-                                               lists:seq(1, TotalFragments));
-                                        false ->
-                                            void
-                                    end,
                                     ?MODULE:publish(?QUEUE_ID_REBALANCE, Node, ToAddrId, AddrId, Key);
                                 true when SyncTarget == ?SYNC_TARGET_DIR ->
                                     ?MODULE:publish(?QUEUE_ID_ASYNC_RECOVER_DIR, Metadata);

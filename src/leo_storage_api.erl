@@ -476,6 +476,7 @@ rebalance(RebalanceList, MembersCur, MembersPrev) ->
            ?SYNC_TARGET_BOTH, [{?VER_CUR,  MembersCur},
                                {?VER_PREV, MembersPrev}]) of
         {ok, Hashes} ->
+            ok = leo_storage_handler_object:trans_fragments(),
             ok = rebalance(RebalanceList),
             {ok, Hashes};
         Error ->

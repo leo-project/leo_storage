@@ -41,7 +41,8 @@
          head/2, head/3,
          head_with_calc_md5/3,
          replicate/1, replicate/3,
-         get_fragments/4, get_fragments/6
+         get_fragments/4, get_fragments/6,
+         trans_fragments/0
         ]).
 
 -define(REP_LOCAL, 'local').
@@ -821,12 +822,14 @@ read_and_repair_2(#?READ_PARAMETER{addr_id = AddrId,
         case leo_object_storage_api:head({AddrId, Key}) of
             {ok, MetadataBin} ->
                 #?METADATA{checksum = Checksum,
-                           cnumber = CNumber} =
+                           cnumber = CNumber,
+                           redundancy_method = RedMethod} =
                     leo_object_storage_transformer:transform_metadata(
                       binary_to_term(MetadataBin)),
 
                 case (Checksum == ETag) of
-                    true when CNumber == 0 ->
+                    true when CNumber == 0 andalso
+                              RedMethod == ?RED_COPY ->
                         {ok, match};
                     _ ->
                         []
@@ -1154,6 +1157,48 @@ get_fragments_loop(Ref, Metadata, TotalRes, ProcL, Callback, Acc) ->
         ?DEF_REQ_TIMEOUT ->
             {error, timeout}
     end.
+
+
+%% @doc Transmit encorded fragment
+%%        to fix inconsistency assignment of the node
+-spec(trans_fragments() ->
+             ok).
+trans_fragments() ->
+    DBInstance = ?DIR_DB_ID,
+    case leo_backend_db_api:has_instance(DBInstance) of
+        true ->
+            MetadataDbL =
+                [ leo_misc:get_value('metadata', ItemL)
+                  || {_, ItemL}
+                         <- ets:tab2list('leo_object_storage_containers') ],
+            [ begin
+                  leo_backend_db_api:fetch(DBName, <<>>, fun trans_fragments_1/3)
+              end
+              || DBName  <- MetadataDbL ];
+        false ->
+            void
+    end,
+    ok.
+
+%% @private
+trans_fragments_1(_K, V, Acc) ->
+    case catch binary_to_term(V) of
+        #?METADATA{key = Key,
+                   redundancy_method = ?RED_ERASURE_CODE,
+                   has_children = false,
+                   cindex = CIndex,
+                   ec_params = {ECParams_K, ECParams_M}} = Metadata when CIndex > 0 ->
+            case leo_redundant_manager_api:part_of_collect_redundancies_by_key(
+                   CIndex, Key, ECParams_K + ECParams_M) of
+                {ok,_} ->
+                    leo_storage_mq:publish(?QUEUE_ID_TRANS_FRAGMENT, Metadata);
+                _ ->
+                    void
+            end;
+        _Other ->
+            void
+    end,
+    Acc.
 
 
 %% @doc Replicate/Store an object from local-node to remote node
