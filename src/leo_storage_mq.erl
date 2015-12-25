@@ -466,7 +466,7 @@ handle_call({consume, ?QUEUE_ID_RECOVERY_FRAGMENT, MessageBin}) ->
                           TotalFragments = ECParams_K + ECParams_M,
 
                           case leo_redundant_manager_api:collect_redundancies_by_key(
-                                 Key, TotalFragments) of
+                                 Key, TotalFragments, ECParams_M) of
                               {ok, {_Option, RedundanciesL}} ->
                                   RepairTargetIdWithRedL =
                                       [begin
@@ -529,7 +529,7 @@ handle_call({consume, ?QUEUE_ID_TRANS_FRAGMENT, MessageBin}) ->
                         end,
 
             case catch leo_redundant_manager_api:collect_redundancies_by_key(
-                         ParentKey, TotalFragments) of
+                         ParentKey, TotalFragments, ECParams_M) of
                 {ok, {_Option, RedundantNodeL}}
                   when erlang:length(RedundantNodeL) == TotalFragments ->
                     case leo_object_storage_api:get({AddrId, Key}) of

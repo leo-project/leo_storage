@@ -60,7 +60,7 @@ has_charge_of_node(#?METADATA{key = Key,
                     TotalFragments = ECParams_K + ECParams_M,
 
                     case leo_redundant_manager_api:collect_redundancies_by_key(
-                           ParentKey, TotalFragments) of
+                           ParentKey, TotalFragments, ECParams_M) of
                         {ok, {_Option, RedNodeL}} when erlang:length(RedNodeL) == TotalFragments ->
                             case lists:nth(CIndex, RedNodeL) of
                                 #redundant_node{node = Node} when Node == erlang:node() ->

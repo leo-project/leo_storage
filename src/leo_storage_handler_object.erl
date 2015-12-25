@@ -957,7 +957,7 @@ get_fragments(Metadata, #?OBJECT{key = Key,
     TotalFragments = ECParams_K + ECParams_M,
 
     case leo_redundant_manager_api:collect_redundancies_by_key(
-           Key, TotalFragments) of
+           Key, TotalFragments, ECParams_M) of
         {ok, {Options, RedNodeL}}
           when TotalFragments == erlang:length(RedNodeL)  ->
             ProcL =
@@ -1189,7 +1189,7 @@ trans_fragments_1(_K, V, Acc) ->
                    cindex = CIndex,
                    ec_params = {ECParams_K, ECParams_M}} = Metadata when CIndex > 0 ->
             case leo_redundant_manager_api:part_of_collect_redundancies_by_key(
-                   CIndex, Key, ECParams_K + ECParams_M) of
+                   CIndex, Key, ECParams_K + ECParams_M, ECParams_M) of
                 {ok,_} ->
                     leo_storage_mq:publish(?QUEUE_ID_TRANS_FRAGMENT, Metadata);
                 _ ->
@@ -1252,7 +1252,7 @@ replicate_fun(?REP_LOCAL, Method, {#?OBJECT{key = Key} = ParentObj,
             TotalReplicas = CodingParam_K + CodingParam_M,
 
             case leo_redundant_manager_api:collect_redundancies_by_key(
-                   Key, TotalReplicas) of
+                   Key, TotalReplicas, CodingParam_M) of
                 {ok, {Options, RedNodeL}}
                   when TotalReplicas == erlang:length(RedNodeL) ->
                     NumOfReplicas = leo_misc:get_value(?PROP_N, Options),
