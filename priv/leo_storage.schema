@@ -785,7 +785,7 @@
  "leo_storage.mq_backend_db",
  [
   {datatype, atom},
-  {default, 'bitcask'}
+  {default, 'leveldb'}
  ]}.
 
 
