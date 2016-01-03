@@ -90,9 +90,9 @@ register_in_monitor_1([],_Pid,_RequestedTimes) ->
     false;
 register_in_monitor_1([Node|Rest], Pid, RequestedTimes) ->
     Node_1 = case is_atom(Node) of
-                true  -> Node;
-                false -> list_to_atom(Node)
-            end,
+                 true  -> Node;
+                 false -> list_to_atom(Node)
+             end,
 
     Ret = case leo_misc:node_existence(Node_1) of
               true ->
@@ -232,13 +232,13 @@ stop() ->
 attach(SystemConf) ->
     ok = leo_redundant_manager_api:set_options(
            [{cluster_id, SystemConf#?SYSTEM_CONF.cluster_id},
-            {dc_id,      SystemConf#?SYSTEM_CONF.dc_id},
+            {dc_id, SystemConf#?SYSTEM_CONF.dc_id},
             {n, SystemConf#?SYSTEM_CONF.n},
             {r, SystemConf#?SYSTEM_CONF.r},
             {w, SystemConf#?SYSTEM_CONF.w},
             {d, SystemConf#?SYSTEM_CONF.d},
             {bit_of_ring, SystemConf#?SYSTEM_CONF.bit_of_ring},
-            {num_of_dc_replicas,   SystemConf#?SYSTEM_CONF.num_of_dc_replicas},
+            {num_of_dc_replicas, SystemConf#?SYSTEM_CONF.num_of_dc_replicas},
             {num_of_rack_replicas, SystemConf#?SYSTEM_CONF.num_of_rack_replicas}]).
 
 
@@ -342,122 +342,155 @@ diagnose_data() ->
 -spec(get_node_status() ->
              {ok, [tuple()]}).
 get_node_status() ->
-    Version = case application:get_key(leo_storage, vsn) of
-                  {ok, _Version} -> _Version;
-                  _ -> "undefined"
-              end,
-
-    {RingHashCur, RingHashPrev} =
-        case leo_redundant_manager_api:checksum(?CHECKSUM_RING) of
-            {ok, {Chksum0, Chksum1}} -> {Chksum0, Chksum1};
-            _ -> {[], []}
-        end,
-
-    QueueDir  = case application:get_env(leo_storage, queue_dir) of
-                    {ok, EnvQueueDir} -> EnvQueueDir;
-                    _ -> []
-                end,
-    SNMPAgent = case application:get_env(leo_storage, snmp_agent) of
-                    {ok, EnvSNMPAgent} -> EnvSNMPAgent;
-                    _ -> []
-                end,
-    Directories = [{log,        ?env_log_dir(leo_storage)},
-                   {mnesia,     []},
-                   {queue,      QueueDir},
-                   {snmp_agent, SNMPAgent}
-                  ],
-    RingHashes  = [{ring_cur,  RingHashCur},
-                   {ring_prev, RingHashPrev }
-                  ],
-
-    NumOfQueue1 = case catch leo_mq_api:status(?QUEUE_ID_PER_OBJECT) of
-                      {ok, Res_1} ->
-                          leo_misc:get_value(?MQ_CNS_PROP_NUM_OF_MSGS, Res_1, 0);
-                      _ -> 0
-                  end,
-    NumOfQueue2 = case catch leo_mq_api:status(?QUEUE_ID_SYNC_BY_VNODE_ID) of
-                      {ok, Res_2} ->
-                          leo_misc:get_value(?MQ_CNS_PROP_NUM_OF_MSGS, Res_2, 0);
-                      _ -> 0
-                  end,
-    NumOfQueue3 = case catch leo_mq_api:status(?QUEUE_ID_REBALANCE) of
-                      {ok, Res_3} ->
-                          leo_misc:get_value(?MQ_CNS_PROP_NUM_OF_MSGS, Res_3, 0);
-                      _ -> 0
-                  end,
-
-    Statistics  = [{vm_version,       erlang:system_info(version)},
-                   {total_mem_usage,  erlang:memory(total)},
-                   {system_mem_usage, erlang:memory(system)},
-                   {proc_mem_usage,   erlang:memory(processes)},
-                   {ets_mem_usage,    erlang:memory(ets)},
-                   {num_of_procs,     erlang:system_info(process_count)},
-                   {process_limit,    erlang:system_info(process_limit)},
-                   {kernel_poll,      erlang:system_info(kernel_poll)},
-                   {thread_pool_size, erlang:system_info(thread_pool_size)},
-                   {storage,
-                    [
-                     {num_of_replication_msg, NumOfQueue1},
-                     {num_of_sync_vnode_msg,  NumOfQueue2},
-                     {num_of_rebalance_msg,   NumOfQueue3}
-                    ]}
-                  ],
-    {ok, [
-          {type,          storage},
-          {version,       Version},
+    Statistics = [{vm_version, erlang:system_info(version)},
+                  {total_mem_usage, erlang:memory(total)},
+                  {system_mem_usage, erlang:memory(system)},
+                  {proc_mem_usage, erlang:memory(processes)},
+                  {ets_mem_usage, erlang:memory(ets)},
+                  {num_of_procs, erlang:system_info(process_count)},
+                  {process_limit, erlang:system_info(process_limit)},
+                  {kernel_poll, erlang:system_info(kernel_poll)},
+                  {thread_pool_size, erlang:system_info(thread_pool_size)},
+                  {storage,
+                   [{num_of_replication_msg, get_info(num_of_queue_1)},
+                    {num_of_sync_vnode_msg, get_info(num_of_queue_2)},
+                    {num_of_rebalance_msg, get_info(num_of_queue_3)}
+                   ]}],
+    {ok, [{type, storage},
+          {version, get_info(version)},
           {num_of_vnodes, ?env_num_of_vnodes()},
-          {grp_level_2,   ?env_grp_level_2()},
-          {dirs,          Directories},
-          {avs,           ?env_storage_device()},
-          {ring_checksum, RingHashes},
+          {grp_level_2, ?env_grp_level_2()},
+          {dirs, get_info(directories)},
+          {avs, ?env_storage_device()},
+          {ring_checksum, get_info(ring_hashes)},
           {watchdog,
-           [{cpu_enabled,    ?env_wd_cpu_enabled()},
-            {io_enabled,     ?env_wd_io_enabled()},
-            {disk_enabled,   ?env_wd_disk_enabled()},
-            {rex_interval,   ?env_wd_rex_interval()},
-            {cpu_interval,   ?env_wd_cpu_interval()},
-            {io_interval,    ?env_wd_io_interval()},
-            {disk_interval,  ?env_wd_disk_interval()},
+           [{cpu_enabled, ?env_wd_cpu_enabled()},
+            {io_enabled, ?env_wd_io_enabled()},
+            {disk_enabled, ?env_wd_disk_enabled()},
+            {rex_interval, ?env_wd_rex_interval()},
+            {cpu_interval, ?env_wd_cpu_interval()},
+            {io_interval, ?env_wd_io_interval()},
+            {disk_interval, ?env_wd_disk_interval()},
             {rex_threshold_mem_capacity, ?env_wd_threshold_mem_capacity()},
             {cpu_threshold_cpu_load_avg, ?env_wd_threshold_cpu_load_avg()},
-            {cpu_threshold_cpu_util,     ?env_wd_threshold_cpu_util()},
-            {cpu_raised_error_times,     ?env_wd_cpu_raised_error_times()},
-            {io_threshold_input_per_sec,  ?env_wd_threshold_input_per_sec()},
+            {cpu_threshold_cpu_util, ?env_wd_threshold_cpu_util()},
+            {cpu_raised_error_times, ?env_wd_cpu_raised_error_times()},
+            {io_threshold_input_per_sec, ?env_wd_threshold_input_per_sec()},
             {io_threshold_output_per_sec, ?env_wd_threshold_output_per_sec()},
-            {disk_threshold_use,     ?env_wd_threshold_disk_use()},
-            {disk_threshold_util,    ?env_wd_threshold_disk_util()},
-            {disk_threshold_rkb,     ?env_wd_threshold_disk_rkb()},
-            {disk_threshold_wkb,     ?env_wd_threshold_disk_wkb()},
-            {disk_target_devices,         ?env_wd_disk_target_devices()},
-            {disk_target_paths,           ?env_wd_disk_target_paths()},
-            {disk_raised_error_times,     ?env_wd_disk_raised_error_times()}
+            {disk_threshold_use, ?env_wd_threshold_disk_use()},
+            {disk_threshold_util, ?env_wd_threshold_disk_util()},
+            {disk_threshold_rkb, ?env_wd_threshold_disk_rkb()},
+            {disk_threshold_wkb, ?env_wd_threshold_disk_wkb()},
+            {disk_target_devices, ?env_wd_disk_target_devices()},
+            {disk_target_paths, ?env_wd_disk_target_paths()},
+            {disk_raised_error_times, ?env_wd_disk_raised_error_times()}
            ]
           },
           %% mq-related
           {mq_num_of_procs, ?env_num_of_mq_procs()},
           {mq_num_of_batch_process_step, ?env_mq_num_of_batch_process_step()},
-          {mq_num_of_batch_process_reg,  ?env_mq_num_of_batch_process_reg()},
-          {mq_num_of_batch_process_max,  ?env_mq_num_of_batch_process_max()},
-          {mq_num_of_batch_process_min,  ?env_mq_num_of_batch_process_min()},
+          {mq_num_of_batch_process_reg, ?env_mq_num_of_batch_process_reg()},
+          {mq_num_of_batch_process_max, ?env_mq_num_of_batch_process_max()},
+          {mq_num_of_batch_process_min, ?env_mq_num_of_batch_process_min()},
           {mq_interval_between_batch_procs_step, ?env_mq_interval_between_batch_procs_step()},
-          {mq_interval_between_batch_procs_reg,  ?env_mq_interval_between_batch_procs_reg()},
-          {mq_interval_between_batch_procs_max,  ?env_mq_interval_between_batch_procs_max()},
-          {mq_interval_between_batch_procs_min,  ?env_mq_interval_between_batch_procs_min()},
+          {mq_interval_between_batch_procs_reg, ?env_mq_interval_between_batch_procs_reg()},
+          {mq_interval_between_batch_procs_max, ?env_mq_interval_between_batch_procs_max()},
+          {mq_interval_between_batch_procs_min, ?env_mq_interval_between_batch_procs_min()},
           %% auto-compaction-related
           {auto_compaction_enabled, ?env_auto_compaction_enabled()},
-          {auto_compaction_warn_active_size_ratio,      ?env_warn_active_size_ratio()},
+          {auto_compaction_warn_active_size_ratio, ?env_warn_active_size_ratio()},
           {auto_compaction_threshold_active_size_ratio, ?env_threshold_active_size_ratio()},
-          {auto_compaction_interval,                    ?env_auto_compaction_interval()},
-          {auto_compaction_parallel_procs,              ?env_auto_compaction_parallel_procs()},
+          {auto_compaction_interval, ?env_auto_compaction_interval()},
+          {auto_compaction_parallel_procs, ?env_auto_compaction_parallel_procs()},
           %% compaction-related
           {limit_num_of_compaction_procs, ?env_limit_num_of_compaction_procs()},
-          {compaction_num_of_batch_procs_max,            ?env_compaction_num_of_batch_procs_max()},
-          {compaction_num_of_batch_procs_reg,            ?env_compaction_num_of_batch_procs_reg()},
-          {compaction_interval_between_batch_procs_max,  ?env_compaction_interval_max()},
-          {compaction_interval_between_batch_procs_reg,  ?env_compaction_interval_reg()},
+          {compaction_num_of_batch_procs_max, ?env_compaction_num_of_batch_procs_max()},
+          {compaction_num_of_batch_procs_reg, ?env_compaction_num_of_batch_procs_reg()},
+          {compaction_interval_between_batch_procs_max, ?env_compaction_interval_max()},
+          {compaction_interval_between_batch_procs_reg, ?env_compaction_interval_reg()},
           %% others
+          {log_level, get_info(log_level)},
           {statistics, Statistics}
          ]}.
+
+%% Retrieve the environement values
+%% @private
+get_info(version) ->
+    case application:get_key(leo_storage, vsn) of
+        {ok, Ver} ->
+            Ver;
+        _ ->
+            "undefined"
+    end;
+get_info(ring_hashes) ->
+    {RingHashCur, RingHashPrev} =
+        case leo_redundant_manager_api:checksum(?CHECKSUM_RING) of
+            {ok, {Chksum0, Chksum1}} ->
+                {Chksum0, Chksum1};
+            _ ->
+                {[],[]}
+        end,
+    [{ring_cur, RingHashCur},
+     {ring_prev, RingHashPrev }
+    ];
+get_info(directories) ->
+    QueueDir =
+        case application:get_env(leo_storage, queue_dir) of
+            {ok, EnvQueueDir} ->
+                EnvQueueDir;
+            _ ->
+                []
+        end,
+    SNMPAgent =
+        case application:get_env(leo_storage, snmp_agent) of
+            {ok, EnvSNMPAgent} ->
+                EnvSNMPAgent;
+            _ ->
+                []
+        end,
+    [{log, ?env_log_dir(leo_storage)},
+     {mnesia, []},
+     {queue, QueueDir},
+     {snmp_agent, SNMPAgent}
+    ];
+get_info(num_of_queue_1) ->
+    case catch leo_mq_api:status(?QUEUE_ID_PER_OBJECT) of
+        {ok, Res_1} ->
+            leo_misc:get_value(?MQ_CNS_PROP_NUM_OF_MSGS, Res_1, 0);
+        _ ->
+            0
+    end;
+get_info(num_of_queue_2) ->
+    case catch leo_mq_api:status(?QUEUE_ID_SYNC_BY_VNODE_ID) of
+        {ok, Res_2} ->
+            leo_misc:get_value(?MQ_CNS_PROP_NUM_OF_MSGS, Res_2, 0);
+        _ ->
+            0
+    end;
+get_info(num_of_queue_3) ->
+    case catch leo_mq_api:status(?QUEUE_ID_REBALANCE) of
+        {ok, Res_3} ->
+            leo_misc:get_value(?MQ_CNS_PROP_NUM_OF_MSGS, Res_3, 0);
+        _ ->
+            0
+    end;
+get_info(log_level) ->
+    case application:get_env(leo_storage, log_level) of
+        {ok, 0} ->
+            "debug";
+        {ok, 1} ->
+            "info";
+        {ok, 2} ->
+            "warn";
+        {ok, 3} ->
+            "error";
+        {ok, 4} ->
+            "fatal";
+        _ ->
+            "undefined"
+    end;
+get_info(_) ->
+    [].
 
 
 %% @doc Do rebalance which means "Objects are copied to the specified node".
@@ -476,7 +509,7 @@ rebalance(RebalanceList) ->
                                  MembersPrev::[#member{}]).
 rebalance(RebalanceList, MembersCur, MembersPrev) ->
     case leo_redundant_manager_api:synchronize(
-           ?SYNC_TARGET_BOTH, [{?VER_CUR,  MembersCur},
+           ?SYNC_TARGET_BOTH, [{?VER_CUR, MembersCur},
                                {?VER_PREV, MembersPrev}]) of
         {ok, Hashes} ->
             ok = rebalance(RebalanceList),

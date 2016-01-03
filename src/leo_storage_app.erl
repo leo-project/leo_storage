@@ -227,13 +227,13 @@ is_alive_managers([Manager|Rest]) ->
 %% @private
 launch_logger() ->
     DefLogDir = "./log/",
-    LogDir    = case application:get_env(leo_storage, log_appender) of
-                    {ok, [{file, Options}|_]} ->
-                        leo_misc:get_value(path, Options, DefLogDir);
-                    _ ->
-                        DefLogDir
-                end,
-    LogLevel  = ?env_log_level(leo_storage),
+    LogDir = case application:get_env(leo_storage, log_appender) of
+                 {ok, [{file, Options}|_]} ->
+                     leo_misc:get_value(path, Options, DefLogDir);
+                 _ ->
+                     DefLogDir
+             end,
+    LogLevel = ?env_log_level(leo_storage),
     leo_logger_client_message:new(LogDir, LogLevel, log_file_appender()).
 
 
