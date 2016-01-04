@@ -45,7 +45,8 @@
          compact/1, compact/3, diagnose_data/0,
          get_node_status/0,
          rebalance/1, rebalance/3,
-         get_disk_usage/0
+         get_disk_usage/0,
+         update_conf/2
         ]).
 -export([get_mq_consumer_state/0,
          get_mq_consumer_state/1,
@@ -90,16 +91,16 @@ register_in_monitor_1([],_Pid,_RequestedTimes) ->
     false;
 register_in_monitor_1([Node|Rest], Pid, RequestedTimes) ->
     Node_1 = case is_atom(Node) of
-                 true  -> Node;
+                 true -> Node;
                  false -> list_to_atom(Node)
              end,
 
     Ret = case leo_misc:node_existence(Node_1) of
               true ->
-                  GroupL_1   = ?env_grp_level_1(),
-                  GroupL_2   = ?env_grp_level_2(),
+                  GroupL_1 = ?env_grp_level_1(),
+                  GroupL_2 = ?env_grp_level_2(),
                   NumOfNodes = ?env_num_of_vnodes(),
-                  RPCPort    = ?env_rpc_port(),
+                  RPCPort = ?env_rpc_port(),
 
                   case rpc:call(Node_1, leo_manager_api, register,
                                 [RequestedTimes, Pid, erlang:node(), ?PERSISTENT_NODE,
@@ -181,8 +182,10 @@ start(MembersCur, SystemConf) ->
 
 start(MembersCur, MembersPrev, SystemConf) ->
     case SystemConf of
-        undefined -> ok;
-        [] -> ok;
+        undefined ->
+            ok;
+        [] ->
+            ok;
         _ ->
             Options = lists:zip(
                         record_info(
@@ -564,6 +567,26 @@ get_disk_usage([Path|Rest], Dict) ->
         Error ->
             {error, Error}
     end.
+
+
+
+%% @doc Update a configuration dinamically
+-spec(update_conf(Key, Val) ->
+             ok | {error, any()} when Key::atom(),
+                                      Val::any()).
+update_conf(log_level, Val) when Val == ?LOG_LEVEL_DEBUG;
+                                 Val == ?LOG_LEVEL_INFO;
+                                 Val == ?LOG_LEVEL_WARN;
+                                 Val == ?LOG_LEVEL_ERROR;
+                                 Val == ?LOG_LEVEL_FATAL ->
+    case application:set_env(leo_storage, log_level, Val) of
+        ok ->
+            leo_logger_client_message:update_log_level(Val);
+        _ ->
+            {error, ?ERROR_COULD_NOT_UPDATE_LOG_LEVEL}
+    end;
+update_conf(_,_) ->
+    {error, badarg}.
 
 
 %%--------------------------------------------------------------------
