@@ -122,7 +122,7 @@
  "leo_storage.system_version",
  [
   {datatype, string},
-  {default, "1.2.16"}
+  {default, "1.2.18"}
  ]}.
 
 %% @doc Path of object-container
