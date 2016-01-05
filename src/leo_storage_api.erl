@@ -585,6 +585,29 @@ update_conf(log_level, Val) when Val == ?LOG_LEVEL_DEBUG;
         _ ->
             {error, ?ERROR_COULD_NOT_UPDATE_LOG_LEVEL}
     end;
+update_conf(consistency_level, {W, R, D}) when is_integer(W),
+                                               is_integer(R),
+                                               is_integer(D) ->
+    {ok, RedConf} = leo_redundant_manager_api:get_options(),
+    RedConf_1 = case leo_misc:get_value(?PROP_W, RedConf) of
+                    undefined ->
+                        [{?PROP_W, W}|RedConf];
+                    Item_W ->
+                        [{?PROP_W, W}|lists:delete({?PROP_W, Item_W}, RedConf)]
+                end,
+    RedConf_2 = case leo_misc:get_value(?PROP_R, RedConf_1) of
+                    undefined ->
+                        [{?PROP_R, R}|RedConf_1];
+                    Item_R ->
+                        [{?PROP_R, R}|lists:delete({?PROP_R, Item_R}, RedConf_1)]
+                end,
+    RedConf_3 = case leo_misc:get_value(?PROP_D, RedConf_2) of
+                    undefined ->
+                        [{?PROP_D, D}|RedConf_2];
+                    Item_D ->
+                        [{?PROP_D, D}|lists:delete({?PROP_D, Item_D}, RedConf_2)]
+                end,
+    leo_redundant_manager_api:set_options(RedConf_3);
 update_conf(_,_) ->
     {error, badarg}.
 
