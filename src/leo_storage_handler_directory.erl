@@ -77,9 +77,9 @@ find_by_parent_dir(ParentDir, _Delimiter, Marker, MaxKeys) ->
 
     case (HasErrors orelse HasBadNodes) of
         true ->
-            ?warn("find_by_parent_dir/4", "~p",
-                  [[{errors, Errors}, {bad_nodes, BadNodes},
-                   {cause, ?ERROR_COULD_NOT_GET_METADATAS}]]),
+            ?warn("find_by_parent_dir/4",
+                  [{errors, Errors}, {bad_nodes, BadNodes},
+                   {cause, ?ERROR_COULD_NOT_GET_METADATAS}]),
             {error, unavailable};
         false ->
             case lists:foldl(

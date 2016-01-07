@@ -59,7 +59,7 @@
 -define(output_warn(Fun, _Key, _MSG), ok).
 -else.
 -define(output_warn(Fun, _Key, _MSG),
-        ?warn(Fun, "key:~p, cause:~p", [_Key, _MSG])).
+        ?warn(Fun, [{key, _Key}, {cause, _MSG}])).
 -endif.
 
 
@@ -251,8 +251,9 @@ put({Object, Ref}) ->
 %% @doc Insert an object (request from gateway).
 %%
 -spec(put(Object, ReqId) ->
-             ok | {error, any()} when Object::#?OBJECT{},
-                                      ReqId::integer()).
+             {ok, ETag} | {error, any()} when Object::#?OBJECT{},
+                                              ReqId::integer(),
+                                              ETag::{etag, integer()}).
 put(Object, ReqId) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
     replicate_fun(?REP_LOCAL, ?CMD_PUT, Object#?OBJECT.addr_id,
@@ -510,8 +511,8 @@ delete_objects_under_dir([Node|Rest], Ref, Keys) ->
                     void;
                 {error, Cause} ->
                     ?warn("delete_objects_under_dir/3",
-                          "qid:~p, node:~p, keys:~p, cause:~p",
-                          [QId, Node, Keys, Cause])
+                          [{qid, QId}, {node, Node},
+                           {keys, Keys}, {cause, Cause}])
             end
     end,
     delete_objects_under_dir(Rest, Ref, Keys).
@@ -834,8 +835,8 @@ prefix_search_and_remove_objects(ParentDir) ->
                                   void;
                               {error, Cause} ->
                                   ?warn("prefix_search_and_remove_objects/1",
-                                        "qid:~p, addr-id:~p, key:~p, cause:~p",
-                                        [QId, AddrId, Key, Cause])
+                                        [{qid, QId}, {addr_id, AddrId},
+                                         {key, Key}, {cause, Cause}])
                           end;
                       _ ->
                           Acc
@@ -1036,7 +1037,7 @@ read_and_repair_3(_,_,_) ->
 %% @doc Replicate an object from local-node to remote node
 %% @private
 -spec(replicate_fun(replication(), request_verb(), integer(), #?OBJECT{}) ->
-             ok | {error, any()}).
+             {ok, ETag} | {error, any()} when ETag::{etag, integer()}).
 replicate_fun(?REP_LOCAL, Method, AddrId, Object) ->
     %% Check state of the node
     case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
@@ -1083,7 +1084,7 @@ replicate_fun(?REP_REMOTE, Method, Object) ->
         {error, Ref, unavailable = Cause} ->
             {error, Cause};
         {error, Ref, Cause} ->
-            ?warn("replicate_fun/3", "cause:~p", [Cause]),
+            ?warn("replicate_fun/3", [{cause, Cause}]),
             {error, Cause}
     end.
 

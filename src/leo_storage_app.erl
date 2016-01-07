@@ -147,7 +147,7 @@ after_proc({ok, Pid}) ->
     %% Launch others
     after_proc_1(IsAliveManagers, Pid, Managers);
 after_proc(Error) ->
-    ?error("after_proc/1", "cause:~p", [Error]),
+    ?error("after_proc/1", [{cause, Error}]),
     init:stop().
 
 %% @private
@@ -202,12 +202,12 @@ after_proc_1(true, Pid, Managers) ->
         {ok, Pid}
     catch
         _:Cause ->
-            ?error("after_proc_1/3", "cause:~p", [{"Launch failure", Cause}]),
+            ?error("after_proc_1/3", [{cause, Cause}]),
             init:stop()
     end;
 after_proc_1(false,_,Managers) ->
-    ?error("after_proc_1/3", "cause:~s, managers:~p",
-           ["Not alive managers", Managers]),
+    ?error("after_proc_1/3", [{manager_nodes, Managers},
+                              {cause, "Not alive managers"}]),
     init:stop().
 
 
@@ -227,13 +227,13 @@ is_alive_managers([Manager|Rest]) ->
 %% @private
 launch_logger() ->
     DefLogDir = "./log/",
-    LogDir    = case application:get_env(leo_storage, log_appender) of
-                    {ok, [{file, Options}|_]} ->
-                        leo_misc:get_value(path, Options, DefLogDir);
-                    _ ->
-                        DefLogDir
-                end,
-    LogLevel  = ?env_log_level(leo_storage),
+    LogDir = case application:get_env(leo_storage, log_appender) of
+                 {ok, [{file, Options}|_]} ->
+                     leo_misc:get_value(path, Options, DefLogDir);
+                 _ ->
+                     DefLogDir
+             end,
+    LogLevel = ?env_log_level(leo_storage),
     leo_logger_client_message:new(LogDir, LogLevel, log_file_appender()).
 
 
