@@ -41,7 +41,6 @@
 %% API
 %%--------------------------------------------------------------------
 %% @doc Add a container into the supervisor
-%%
 -spec(start_link() ->
              ok | {error, any()}).
 start_link() ->
@@ -58,7 +57,6 @@ start_link(UId) ->
 
 
 %% @doc Remove a container from the supervisor
-%%
 -spec(stop(Id) ->
              ok | {error, any()} when Id::atom()).
 stop(Id) ->
@@ -66,48 +64,53 @@ stop(Id) ->
 
 
 %% @doc Stack a object into the ordning&reda
-%%
 -spec(defer_stack(Object) ->
              ok | {error, any()} when Object::null|#?OBJECT{}).
-defer_stack(#?OBJECT{addr_id = AddrId,
-                     key = Key} = Object) ->
-    spawn(fun() ->
-                  %% Check whether stack an object or not
-                  case leo_mdcr_tbl_cluster_stat:find_by_state(?STATE_RUNNING) of
-                      {ok, _} ->
-                          case stack(Object) of
-                              ok ->
-                                  void;
-                              {error, Cause}->
-                                  ?warn("defer_stack/1",
-                                        [{key, binary_to_list(Object#?OBJECT.key)},
-                                         {cause, Cause}]),
-                                  QId = ?QUEUE_ID_SYNC_OBJ_WITH_DC,
-                                  case leo_storage_mq:publish(
-                                         QId, AddrId, Key) of
-                                      ok ->
-                                          void;
-                                      {error, Cause} ->
-                                          ?warn("defer_stack/1",
-                                                [{addr_id, AddrId},
-                                                 {key, Key}, {cause, Cause}])
-                                  end
-                          end;
-                      not_found ->
-                          void;
-                      {error, Cause} ->
-                          ?warn("defer_stack/1",
-                                [{key, binary_to_list(Object#?OBJECT.key)},
-                                 {cause, Cause}])
-                  end
-          end),
-    ok;
+defer_stack(#?OBJECT{} = Object) ->
+    case (leo_mdcr_tbl_cluster_stat:size() > 0) of
+        true ->
+            Ret = leo_mdcr_tbl_cluster_stat:find_by_state(?STATE_RUNNING),
+            defer_stack_1(Ret, Object);
+        false ->
+            ok
+    end;
 defer_stack(_) ->
     ok.
 
+%% @private
+defer_stack_1({ok,_}, #?OBJECT{addr_id = AddrId,
+                               key = Key} = Object) ->
+    case stack(Object) of
+        ok ->
+            ok;
+        {error, Cause}->
+            ?warn("defer_stack_1/1",
+                  [{addr_id, AddrId},
+                   {key, Key}, {cause, Cause}]),
+
+            QId = ?QUEUE_ID_SYNC_OBJ_WITH_DC,
+            case leo_storage_mq:publish(
+                   QId, AddrId, Key) of
+                ok ->
+                    ok;
+                {error, Cause} ->
+                    ?warn("defer_stack/1",
+                          [{addr_id, AddrId},
+                           {key, Key}, {cause, Cause}]),
+                    {error, Cause}
+            end
+    end;
+defer_stack_1(not_found,_) ->
+    ok;
+defer_stack_1({error, Cause}, #?OBJECT{addr_id = AddrId,
+                                       key = Key}) ->
+    ?warn("defer_stack_1/1",
+          [{addr_id, AddrId},
+           {key, Key}, {cause, Cause}]),
+    {error, Cause}.
+
 
 %% @doc Stack a object into the ordning&reda
-%%
 -spec(stack(Object) ->
              ok | {error, any()} when Object::#?OBJECT{}).
 stack(Object) ->
@@ -120,8 +123,7 @@ stack(ClusterId, Object) ->
     stack_fun(ClusterId, Object).
 
 
-%% Store stacked objects
-%%
+%% @doc Store stacked objects
 -spec(store(ClusterId, CompressedObjs) ->
              {ok, [#?METADATA{}]} | {error, any()} when ClusterId::atom(),
                                                         CompressedObjs::binary()).
@@ -139,8 +141,7 @@ store(ClusterId, CompressedObjs) ->
     end.
 
 
-%% Generate a sync-proc of ID
-%%
+%% @doc Generate a sync-proc of ID
 -spec(gen_id() ->
              atom()).
 gen_id() ->
@@ -161,7 +162,6 @@ gen_id({cluster_id, ClusterId}) ->
 
 
 %% @doc Retrieve cluster members
-%%
 -spec(get_cluster_members(ClusterId) ->
              {ok, [#mdc_replication_info{}]} |
              {error, any()} when ClusterId::atom()).
@@ -216,7 +216,6 @@ get_cluster_members_2([#?CLUSTER_INFO{cluster_id = ClusterId}|Rest],
 
 %% @doc Compare a local-metadata with a remote-metadata
 %%      If it's inconsistent, the metadata is put into the queue
-%%
 -spec(compare_metadata(ListOfMetadata) ->
              ok when ListOfMetadata::[#?METADATA{}]).
 compare_metadata([]) ->
@@ -280,7 +279,7 @@ compare_metadata_1({_,Cause}, #?METADATA{cluster_id = ClusterId,
         ok ->
             ok;
         {error, Cause} ->
-            ?warn("compare_metadata/1",
+            ?warn("compare_metadata_1/2",
                   [{qid, QId}, {cluster_id, ClusterId},
                    {addr_id, AddrId}, {key, Key}, {cause, Cause}]),
             ok
@@ -290,7 +289,6 @@ compare_metadata_1({_,Cause}, #?METADATA{cluster_id = ClusterId,
 %% Callback
 %%--------------------------------------------------------------------
 %% @doc Handle send object to a remote-node.
-%%
 handle_send(UId, StackedInfo, CompressedObjs) ->
     %% Retrieve cluser-id
     ClusterId = get_cluster_id_from_uid(UId),
@@ -305,7 +303,6 @@ handle_send(UId, StackedInfo, CompressedObjs) ->
 
 
 %% @doc Handle a fail process
-%%
 -spec(handle_fail(atom(), list({integer(), string()})) ->
              ok | {error, any()}).
 handle_fail(_, []) ->
