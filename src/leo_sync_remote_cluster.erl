@@ -85,7 +85,7 @@ defer_stack_1({ok,_}, #?OBJECT{addr_id = AddrId,
         ok ->
             ok;
         {error, Cause}->
-            ?warn("defer_stack/1",
+            ?warn("defer_stack_1/1",
                   [{addr_id, AddrId},
                    {key, Key}, {cause, Cause}]),
 
@@ -105,7 +105,7 @@ defer_stack_1(not_found,_) ->
     ok;
 defer_stack_1({error, Cause}, #?OBJECT{addr_id = AddrId,
                                        key = Key}) ->
-    ?warn("defer_stack/1",
+    ?warn("defer_stack_1/1",
           [{addr_id, AddrId},
            {key, Key}, {cause, Cause}]),
     {error, Cause}.
@@ -142,8 +142,7 @@ store(ClusterId, CompressedObjs) ->
     end.
 
 
-%% Generate a sync-proc of ID
-%%
+%% @doc Generate a sync-proc of ID
 -spec(gen_id() ->
              atom()).
 gen_id() ->
@@ -164,7 +163,6 @@ gen_id({cluster_id, ClusterId}) ->
 
 
 %% @doc Retrieve cluster members
-%%
 -spec(get_cluster_members(ClusterId) ->
              {ok, [#mdc_replication_info{}]} |
              {error, any()} when ClusterId::atom()).
@@ -219,7 +217,6 @@ get_cluster_members_2([#?CLUSTER_INFO{cluster_id = ClusterId}|Rest],
 
 %% @doc Compare a local-metadata with a remote-metadata
 %%      If it's inconsistent, the metadata is put into the queue
-%%
 -spec(compare_metadata(ListOfMetadata) ->
              ok when ListOfMetadata::[#?METADATA{}]).
 compare_metadata([]) ->
@@ -283,7 +280,7 @@ compare_metadata_1({_,Cause}, #?METADATA{cluster_id = ClusterId,
         ok ->
             ok;
         {error, Cause} ->
-            ?warn("compare_metadata/1",
+            ?warn("compare_metadata_1/2",
                   [{qid, QId}, {cluster_id, ClusterId},
                    {addr_id, AddrId}, {key, Key}, {cause, Cause}]),
             ok
@@ -293,7 +290,6 @@ compare_metadata_1({_,Cause}, #?METADATA{cluster_id = ClusterId,
 %% Callback
 %%--------------------------------------------------------------------
 %% @doc Handle send object to a remote-node.
-%%
 handle_send(UId, StackedInfo, CompressedObjs) ->
     %% Retrieve cluser-id
     ClusterId = get_cluster_id_from_uid(UId),
@@ -308,7 +304,6 @@ handle_send(UId, StackedInfo, CompressedObjs) ->
 
 
 %% @doc Handle a fail process
-%%
 -spec(handle_fail(atom(), list({integer(), string()})) ->
              ok | {error, any()}).
 handle_fail(_, []) ->
