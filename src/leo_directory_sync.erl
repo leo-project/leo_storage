@@ -59,7 +59,6 @@
 %% API-1
 %%--------------------------------------------------------------------
 %% @doc Launch the directory's db(s)
-%%
 -spec(start() ->
              ok | {error, any()}).
 start() ->
@@ -83,7 +82,6 @@ start() ->
 
 
 %% @doc Add a container into the supervisor
-%%
 -spec(add_container(DestNode) ->
              ok | {error, any()} when DestNode::atom()).
 add_container(DestNode) ->
@@ -99,7 +97,6 @@ add_container(DestNode) ->
 
 
 %% @doc Remove a container from the supervisor
-%%
 -spec(remove_container(DestNode) ->
              ok | {error, any()} when DestNode::atom()).
 remove_container(DestNode) ->
@@ -111,8 +108,19 @@ remove_container(DestNode) ->
              ok when Metadata::#?METADATA{}).
 append(#?METADATA{key = <<>>}) ->
     ok;
-append(Metadata) ->
-    append(Metadata, ?DIR_ASYNC).
+append(#?METADATA{} = Metadata) ->
+    append(Metadata, ?DIR_ASYNC);
+append(#?OBJECT{key = Key} = Object) ->
+    Metadata = leo_object_storage_transformer:object_to_metadata(Object),
+    case (nomatch =/= binary:match(Key, [<<"\n">>],[])) of
+        true ->
+            ok;
+        false ->
+            append(Metadata, ?DIR_ASYNC)
+    end;
+append(_) ->
+    ok.
+
 
 -spec(append(Metadata, SyncOption) ->
              ok when Metadata::#?METADATA{},

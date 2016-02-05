@@ -112,7 +112,6 @@ handle_call({operate, Method, #?OBJECT{} = Object}, _From,
             #state{event_pid = Pid} = State) when Method == ?CMD_PUT;
                                                   Method == ?CMD_DELETE ->
     Metadata = leo_object_storage_transformer:object_to_metadata(Object),
-    ok = leo_sync_remote_cluster:defer_stack(Object),
     _ = notify_fun(Pid, Method, Metadata),
     {reply, ok, State};
 
@@ -187,7 +186,7 @@ notify_fun(Pid, Method, #?METADATA{key = Key} = Metadata) ->
 notify_fun_1(true,_Pid,_Method,_Metadata) ->
     ok;
 notify_fun_1(false, Pid, Method, #?METADATA{key = Key} = Metadata) ->
-    %% synchronize the metadata into the cluster
+    %% synchronize the metadata into the cluster (via NFS-clients)
     SyncMode = case binary:match(Key, [<<"$$_dir_$$">>],[]) of
                    nomatch ->
                        ?DIR_ASYNC;

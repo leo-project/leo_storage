@@ -710,7 +710,7 @@ replicate(Object) ->
 
 
 %% @doc Replicate an object from local to remote
-%%
+%%      This function is requested from leo_stroage_mq:rebalance_2/2
 -spec(replicate(DestNodes, AddrId, Key) ->
              ok |
              not_found |
@@ -725,14 +725,16 @@ replicate(DestNodes, AddrId, Key) ->
                 #?METADATA{del = ?DEL_FALSE} = Metadata ->
                     case ?MODULE:get({Ref, Key}) of
                         {ok, Ref, Metadata, Bin} ->
-                            leo_storage_event_notifier:replicate(DestNodes, Metadata, Bin);
+                            leo_storage_event_notifier:replicate(
+                              DestNodes, Metadata, Bin);
                         {error, Ref, Cause} ->
                             {error, Cause};
                         _Other ->
                             {error, invalid_response}
                     end;
                 #?METADATA{del = ?DEL_TRUE} = Metadata ->
-                    leo_storage_event_notifier:replicate(DestNodes, Metadata, <<>>);
+                    leo_storage_event_notifier:replicate(
+                      DestNodes, Metadata, <<>>);
                 _ ->
                     {error, invalid_data_type}
             end;
@@ -1317,11 +1319,13 @@ replicate_fun(?REP_REMOTE, Method, Object) ->
     case Ret of
         %% for put-operation
         {ok, Ref, Checksum} ->
-            ok = leo_storage_event_notifier:operate(Method, Object),
+            %% @TODO
+            %% ok = leo_storage_event_notifier:operate(Method, Object),
             {ok, Checksum};
         %% for delete-operation
         {ok, Ref} ->
-            ok = leo_storage_event_notifier:operate(Method, Object),
+            %% @TODO
+            %% ok = leo_storage_event_notifier:operate(Method, Object),
             {ok, 0};
         {error, Ref, not_found = Cause} ->
             {error, Cause};
@@ -1385,11 +1389,11 @@ replicate_callback() ->
 -spec(replicate_callback(#?OBJECT{}|null) ->
              function()).
 replicate_callback(Object) ->
-    fun({ok, ?CMD_PUT = Method, Checksum}) ->
-            leo_storage_event_notifier:operate(Method, Object),
+    fun({ok, ?CMD_PUT, Checksum}) ->
+            ok = leo_directory_sync:append(Object),
             {ok, Checksum};
-       ({ok,?CMD_DELETE = Method,_Checksum}) ->
-            leo_storage_event_notifier:operate(Method, Object),
+       ({ok,?CMD_DELETE,_Checksum}) ->
+            ok = leo_directory_sync:append(Object),
             {ok, 0};
        ({error, Errors}) ->
             case catch lists:keyfind(not_found, 2, Errors) of

@@ -219,17 +219,17 @@ replicate_fun(Ref, #req_params{pid = Pid,
                                object = Object,
                                req_id = ReqId}) ->
     %% Ref  = make_ref(),
-    Ret  = case leo_storage_handler_object:put({Object, Ref}) of
-               {ok, Ref, Checksum} ->
-                   {Ref, {ok, Checksum}};
-               {error, Ref, not_found = Cause} ->
-                   {Ref, {error, {node(), Cause}}};
-               {error, Ref, Cause} ->
-                   ?warn("replicate_fun/2",
-                         [{key, Key}, {node, local},
-                          {req_id, ReqId}, {cause, Cause}]),
-                   {Ref, {error, {node(), Cause}}}
-           end,
+    Ret = case leo_storage_handler_object:put({Object, Ref}) of
+              {ok, Ref, Checksum} ->
+                  {Ref, {ok, Checksum}};
+              {error, Ref, not_found = Cause} ->
+                  {Ref, {error, {node(), Cause}}};
+              {error, Ref, Cause} ->
+                  ?warn("replicate_fun/2",
+                        [{key, Key}, {node, local},
+                         {req_id, ReqId}, {cause, Cause}]),
+                  {Ref, {error, {node(), Cause}}}
+          end,
     erlang:send(Pid, Ret).
 
 
