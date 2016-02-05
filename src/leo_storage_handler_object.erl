@@ -699,8 +699,9 @@ replicate(Object) ->
                        end,
             case get_active_redundancies(Quorum_2, Redundancies_1) of
                 {ok, Redundancies_2} ->
-                    leo_storage_replicator_cp:replicate(Method, Quorum_2, Redundancies_2,
-                                                        Object_1, replicate_callback());
+                    leo_storage_replicator_cp:replicate(
+                      Method, Quorum_2, Redundancies_2,
+                      Object_1, replicate_callback());
                 {error, Reason} ->
                     {error, Reason}
             end;
@@ -725,22 +726,46 @@ replicate(DestNodes, AddrId, Key) ->
                 #?METADATA{del = ?DEL_FALSE} = Metadata ->
                     case ?MODULE:get({Ref, Key}) of
                         {ok, Ref, Metadata, Bin} ->
-                            leo_storage_event_notifier:replicate(
-                              DestNodes, Metadata, Bin);
+                            replicate_1(DestNodes, Metadata, Bin);
                         {error, Ref, Cause} ->
                             {error, Cause};
                         _Other ->
                             {error, invalid_response}
                     end;
                 #?METADATA{del = ?DEL_TRUE} = Metadata ->
-                    leo_storage_event_notifier:replicate(
-                      DestNodes, Metadata, <<>>);
+                    replicate_1(DestNodes, Metadata, <<>>);
                 _ ->
                     {error, invalid_data_type}
             end;
         Error ->
             Error
     end.
+
+%% @private
+replicate_1(Nodes, #?METADATA{addr_id = AddrId,
+                              key = Key,
+                              del = IsDel} = Metadata, Bin) ->
+    %% replicate the object for the local-cluster
+    Ret = leo_sync_local_cluster:stack(
+            Nodes, AddrId, Key, Metadata, Bin),
+
+    %% replicate the object for the remote-cluster(s)
+    Object_1 = leo_object_storage_transformer:metadata_to_object(Metadata),
+    Object_2 = case (IsDel == ?DEL_TRUE) of
+                   true ->
+                       Object_1#?OBJECT{method = ?CMD_DELETE,
+                                        data  = <<>>,
+                                        dsize = 0,
+                                        del = ?DEL_TRUE};
+                   false ->
+                       Object_1#?OBJECT{method = ?CMD_PUT,
+                                        data = Bin}
+               end,
+    ok = leo_sync_remote_cluster:defer_stack(Object_2),
+
+    %% synchronize the metadata into the cluster
+    ok = leo_directory_sync:append(Metadata),
+    Ret.
 
 
 %%--------------------------------------------------------------------
@@ -1320,12 +1345,12 @@ replicate_fun(?REP_REMOTE, Method, Object) ->
         %% for put-operation
         {ok, Ref, Checksum} ->
             %% @TODO
-            %% ok = leo_storage_event_notifier:operate(Method, Object),
+            %% ok = leo_directory_sync:append(Object),
             {ok, Checksum};
         %% for delete-operation
         {ok, Ref} ->
             %% @TODO
-            %% ok = leo_storage_event_notifier:operate(Method, Object),
+            %% ok = leo_directory_sync:append(Object),
             {ok, 0};
         {error, Ref, not_found = Cause} ->
             {error, Cause};

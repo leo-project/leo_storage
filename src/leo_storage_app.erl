@@ -170,7 +170,6 @@ after_proc({ok, Pid}) ->
 
     %% Launch servers
     ok = launch_logger(),
-    ok = launch_dispatcher(),
     ok = launch_object_storage(Pid),
     ok = leo_ordning_reda_api:start(),
 
@@ -273,16 +272,6 @@ launch_logger() ->
              end,
     LogLevel = ?env_log_level(leo_storage),
     leo_logger_client_message:new(LogDir, LogLevel, log_file_appender()).
-
-
-%% @doc Launch Storage's dispatcher
-%% @private
-launch_dispatcher() ->
-    ChildSpec = {leo_storage_event_notifier,
-                 {leo_storage_event_notifier, start_link, []},
-                 permanent, 2000, worker, [leo_storage_event_notifier]},
-    {ok, _} = supervisor:start_child(leo_storage_sup, ChildSpec),
-    ok.
 
 
 %% @doc Launch Object-Storage

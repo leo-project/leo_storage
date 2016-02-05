@@ -541,6 +541,13 @@ copy_({TestNode_1, TestNode_2}) ->
                         {ok, #member{state = ?STATE_RUNNING}}
                 end),
 
+    %% leo_directory_sync
+    meck:new(leo_directory_sync, [non_strict]),
+    meck:expect(leo_directory_sync, append,
+                fun(_) ->
+                        ok
+                end),
+
     %% ording-reda
     meck:new(leo_ordning_reda_api, [non_strict]),
     meck:expect(leo_ordning_reda_api, add_container,
