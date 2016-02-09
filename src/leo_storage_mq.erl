@@ -119,11 +119,10 @@ start_1([{Id, Path}|Rest], Sup, Root) ->
 -spec(publish(queue_type(), atom()|binary()) ->
              ok | {error, any()}).
 publish(?QUEUE_TYPE_RECOVERY_NODE = Id, Node) ->
-    Clock = leo_date:clock(),
-    KeyBin = term_to_binary({Node, Clock}),
+    KeyBin = term_to_binary(Node),
     MsgBin = term_to_binary(
-               #recovery_node_message{id        = Clock,
-                                      node      = Node,
+               #recovery_node_message{id = leo_date:clock(),
+                                      node = Node,
                                       timestamp = leo_date:now()}),
     leo_mq_api:publish(queue_id(Id), KeyBin, MsgBin);
 publish(_,_) ->
@@ -132,22 +131,20 @@ publish(_,_) ->
 -spec(publish(queue_type(), any(), any()) ->
              ok | {error, any()}).
 publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID = Id, VNodeId, Node) ->
-    Clock = leo_date:clock(),
-    KeyBin     = term_to_binary({VNodeId, Node, Clock}),
+    KeyBin = term_to_binary({VNodeId, Node}),
     MessageBin = term_to_binary(
-                   #sync_unit_of_vnode_message{id        = Clock,
-                                               vnode_id  = VNodeId,
-                                               node      = Node,
+                   #sync_unit_of_vnode_message{id = leo_date:clock(),
+                                               vnode_id = VNodeId,
+                                               node = Node,
                                                timestamp = leo_date:now()}),
     leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
 
 publish(?QUEUE_TYPE_ASYNC_DELETION = Id, AddrId, Key) ->
-    Clock = leo_date:clock(),
-    KeyBin     = term_to_binary({AddrId, Key, Clock}),
+    KeyBin = term_to_binary({AddrId, Key}),
     MessageBin = term_to_binary(
-                   #async_deletion_message{id        = Clock,
-                                           addr_id   = AddrId,
-                                           key       = Key,
+                   #async_deletion_message{id = leo_date:clock(),
+                                           addr_id = AddrId,
+                                           key = Key,
                                            timestamp = leo_date:now()}),
     leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
 
@@ -155,20 +152,18 @@ publish(?QUEUE_TYPE_SYNC_OBJ_WITH_DC, AddrId, Key) ->
     publish(?QUEUE_TYPE_SYNC_OBJ_WITH_DC, undefined, AddrId, Key);
 
 publish(?QUEUE_TYPE_COMP_META_WITH_DC = Id, ClusterId, AddrAndKeyList) ->
-    Clock = leo_date:clock(),
-    KeyBin     = term_to_binary({ClusterId, Clock}),
+    KeyBin = term_to_binary(ClusterId),
     MessageBin = term_to_binary(
-                   #comparison_metadata_with_dc{id         = Clock,
+                   #comparison_metadata_with_dc{id = leo_date:clock(),
                                                 cluster_id = ClusterId,
                                                 list_of_addrid_and_key = AddrAndKeyList,
                                                 timestamp = leo_date:now()}),
     leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
 
 publish(?QUEUE_TYPE_DEL_DIR = Id, Node, Keys) ->
-    Clock = leo_date:clock(),
-    KeyBin = term_to_binary({Node, Keys, Clock}),
+    KeyBin = term_to_binary({Node, Keys}),
     MsgBin = term_to_binary(
-               #delete_dir{id   = Clock,
+               #delete_dir{id = leo_date:clock(),
                            node = Node,
                            keys = Keys,
                            timestamp = leo_date:now()}),
@@ -180,26 +175,24 @@ publish(_,_,_) ->
 -spec(publish(queue_type(), any(), any(), any()) ->
              ok | {error, any()}).
 publish(?QUEUE_TYPE_PER_OBJECT = Id, AddrId, Key, ErrorType) ->
-    Clock = leo_date:clock(),
-    KeyBin = term_to_binary({ErrorType, Key, Clock}),
+    KeyBin = term_to_binary({ErrorType, Key}),
     MessageBin = term_to_binary(
-                   #inconsistent_data_message{id        = Clock,
-                                              type      = ErrorType,
-                                              addr_id   = AddrId,
-                                              key       = Key,
+                   #inconsistent_data_message{id = leo_date:clock(),
+                                              type = ErrorType,
+                                              addr_id = AddrId,
+                                              key = Key,
                                               timestamp = leo_date:now()}),
     leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
 
 publish(?QUEUE_TYPE_SYNC_OBJ_WITH_DC = Id, ClusterId, AddrId, Key) ->
-    Clock = leo_date:clock(),
-    KeyBin = term_to_binary({ClusterId, AddrId, Key, Clock}),
+    KeyBin = term_to_binary({ClusterId, AddrId, Key}),
     MessageBin  = term_to_binary(
-                    #inconsistent_data_with_dc{id         = Clock,
+                    #inconsistent_data_with_dc{id = leo_date:clock(),
                                                cluster_id = ClusterId,
-                                               addr_id    = AddrId,
-                                               key        = Key,
-                                               del        = 0,
-                                               timestamp  = leo_date:now()}),
+                                               addr_id = AddrId,
+                                               key = Key,
+                                               del = 0,
+                                               timestamp = leo_date:now()}),
     leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
 
 publish(_,_,_,_) ->
@@ -208,14 +201,13 @@ publish(_,_,_,_) ->
 -spec(publish(queue_type(), any(), any(), any(), any()) ->
              ok | {error, any()}).
 publish(?QUEUE_TYPE_REBALANCE = Id, Node, VNodeId, AddrId, Key) ->
-    Clock = leo_date:clock(),
-    KeyBin = term_to_binary({Node, AddrId, Key, Clock}),
+    KeyBin = term_to_binary({Node, AddrId, Key}),
     MessageBin = term_to_binary(
-                   #rebalance_message{id        = Clock,
-                                      vnode_id  = VNodeId,
-                                      addr_id   = AddrId,
-                                      key       = Key,
-                                      node      = Node,
+                   #rebalance_message{id = leo_date:clock(),
+                                      vnode_id = VNodeId,
+                                      addr_id = AddrId,
+                                      key = Key,
+                                      node = Node,
                                       timestamp = leo_date:now()}),
     Table = ?TBL_REBALANCE_COUNTER,
     case ets_lookup(Table, VNodeId) of
@@ -228,15 +220,14 @@ publish(?QUEUE_TYPE_REBALANCE = Id, Node, VNodeId, AddrId, Key) ->
     leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
 
 publish(?QUEUE_TYPE_SYNC_OBJ_WITH_DC = Id, ClusterId, AddrId, Key, Del) ->
-    Clock = leo_date:clock(),
-    KeyBin = term_to_binary({ClusterId, AddrId, Key, Clock}),
+    KeyBin = term_to_binary({ClusterId, AddrId, Key}),
     MessageBin  = term_to_binary(
-                    #inconsistent_data_with_dc{id         = Clock,
+                    #inconsistent_data_with_dc{id = leo_date:clock(),
                                                cluster_id = ClusterId,
-                                               addr_id    = AddrId,
-                                               key        = Key,
-                                               del        = Del,
-                                               timestamp  = leo_date:now()}),
+                                               addr_id = AddrId,
+                                               key = Key,
+                                               del = Del,
+                                               timestamp = leo_date:now()}),
     leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
 
 publish(_,_,_,_,_) ->
