@@ -478,18 +478,28 @@ delete_objects_under_dir(Ref, [Key|Rest]) ->
 delete_objects_under_dir([], Ref,_Keys) ->
     {ok, Ref};
 delete_objects_under_dir([Node|Rest], Ref, Keys) ->
-    RPCKey = rpc:async_call(Node, ?MODULE,
-                            delete_objects_under_dir, [Ref, Keys]),
-    case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
-        {value, {ok, Ref}} ->
-            ok;
-        _Other ->
-            QId = ?QUEUE_ID_DEL_DIR,
-            [leo_storage_mq:publish(QId, Node, K)
-             || K <- Keys],
-            ok
+    case leo_misc:node_existence(Node) of
+        true ->
+            RPCKey = rpc:async_call(Node, ?MODULE,
+                                    delete_objects_under_dir, [Ref, Keys]),
+            case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
+                {value, {ok, Ref}} ->
+                    ok;
+                _Other ->
+                    delete_objects_under_dir_1(Node, Keys)
+            end;
+        false ->
+            delete_objects_under_dir_1(Node, Keys)
     end,
     delete_objects_under_dir(Rest, Ref, Keys).
+
+%% @private
+delete_objects_under_dir_1(_,[]) ->
+    ok;
+delete_objects_under_dir_1(Node, [Key|Rest]) ->
+    QId = ?QUEUE_ID_DEL_DIR,
+    ok = leo_storage_mq:publish(QId, Node, Key),
+    delete_objects_under_dir_1(Node, Rest).
 
 
 %%--------------------------------------------------------------------

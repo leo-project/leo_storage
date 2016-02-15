@@ -167,8 +167,6 @@ publish(?QUEUE_ID_COMP_META_WITH_DC = Id, ClusterId, AddrAndKeyList) ->
                                                 timestamp = leo_date:now()}),
     leo_mq_api:publish(Id, KeyBin, MessageBin);
 
-publish(?QUEUE_ID_DEL_DIR,_,'undefined') ->
-    ok;
 publish(?QUEUE_ID_DEL_DIR = Id, Node, Dir) ->
     KeyBin = term_to_binary({Node, Dir}),
     MsgBin = term_to_binary(
@@ -401,7 +399,7 @@ handle_call({consume, ?QUEUE_ID_DEL_DIR, MessageBin}) ->
                     node = Node} ->
             Ref = make_ref(),
             case leo_storage_handler_object:delete_objects_under_dir(
-                   [Node], Ref, [ParentDir, undefined]) of
+                   [Node], Ref, [ParentDir]) of
                 {ok, Ref} ->
                     ok;
                 _Other ->
