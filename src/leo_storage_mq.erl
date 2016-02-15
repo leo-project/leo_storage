@@ -124,6 +124,9 @@ publish(?QUEUE_ID_RECOVERY_NODE = Id, Node) ->
                                       timestamp = leo_date:now()}),
     leo_mq_api:publish(Id, KeyBin, MsgBin);
 
+publish(?QUEUE_ID_DEL_DIR = Id, {bulk_insert, Dirs}) ->
+    [publish(Id, D) || D <- Dirs],
+    ok;
 publish(?QUEUE_ID_DEL_DIR = Id, Dir) ->
     KeyBin = term_to_binary(Dir),
     MsgBin = term_to_binary(

@@ -480,10 +480,10 @@ delete_objects_under_dir([], Ref,_Keys) ->
 delete_objects_under_dir([Node|Rest], Ref, Keys) ->
     case leo_misc:node_existence(Node) of
         true ->
-            RPCKey = rpc:async_call(Node, ?MODULE,
-                                    delete_objects_under_dir, [Ref, Keys]),
+            RPCKey = rpc:async_call(Node, leo_storage_mq,
+                                    publish, [?QUEUE_ID_DEL_DIR, {bulk_insert, Keys}]),
             case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
-                {value, {ok, Ref}} ->
+                {value, ok} ->
                     ok;
                 _Other ->
                     delete_objects_under_dir_1(Node, Keys)
