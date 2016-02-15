@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012-2014 Rakuten, Inc.
+%% Copyright (c) 2012-2016 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -20,8 +20,6 @@
 %%
 %%======================================================================
 -module(leo_storage_handle_sync).
-
--author('Yosuke Hara').
 
 -behaviour(leo_mdcr_sync_cluster_behaviour).
 
@@ -116,7 +114,7 @@ send_addrid_and_key_to_remote_1([#mdc_replication_info{
 
 %% @private
 send_addrid_and_key_to_remote_2([], ClusterId, ListAddrIdAndKey,_RetryTimes) ->
-    QId = ?QUEUE_TYPE_COMP_META_WITH_DC,
+    QId = ?QUEUE_ID_COMP_META_WITH_DC,
     case leo_storage_mq:publish(
            QId, ClusterId, ListAddrIdAndKey) of
         ok ->

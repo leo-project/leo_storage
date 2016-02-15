@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012-2014 Rakuten, Inc.
+%% Copyright (c) 2012-2016 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -23,8 +23,6 @@
 %% @end
 %%======================================================================
 -module(leo_storage_handler_object).
-
--author('Yosuke Hara').
 
 -include("leo_storage.hrl").
 -include_lib("leo_commons/include/leo_commons.hrl").
@@ -448,7 +446,7 @@ delete_1(Ret, Object, true) ->
 -spec(delete_objects_under_dir(Object) ->
              ok when Object::#?OBJECT{}).
 delete_objects_under_dir(Object) ->
-    Key   = Object#?OBJECT.key,
+    Key = Object#?OBJECT.key,
     KSize = byte_size(Key),
 
     case catch binary:part(Key, (KSize - 1), 1) of
@@ -456,14 +454,15 @@ delete_objects_under_dir(Object) ->
             ok;
         ?BIN_SLASH = Bin ->
             %% for remote storage nodes
-            Targets =  [ Bin, undefined ],
+            Targets = [ Bin, undefined ],
             Ref = make_ref(),
             case leo_redundant_manager_api:get_members_by_status(?STATE_RUNNING) of
                 {ok, RetL} ->
-                    Nodes = [N||#member{node = N} <- RetL],
+                    Nodes = [N || #member{node = N} <- RetL],
                     spawn(
                       fun() ->
-                              {ok, Ref} = delete_objects_under_dir(Nodes, Ref, Targets)
+                              {ok, Ref} = delete_objects_under_dir(
+                                            Nodes, Ref, Targets)
                       end),
                     ok;
                 _ ->
@@ -487,6 +486,7 @@ delete_objects_under_dir(Ref, []) ->
 delete_objects_under_dir(Ref, [undefined|Rest]) ->
     delete_objects_under_dir(Ref, Rest);
 delete_objects_under_dir(Ref, [Key|Rest]) ->
+    %% @TODO
     _ = prefix_search_and_remove_objects(Key),
     delete_objects_under_dir(Ref, Rest).
 
@@ -505,7 +505,7 @@ delete_objects_under_dir([Node|Rest], Ref, Keys) ->
             ok;
         _Other ->
             %% enqueu a fail message into the mq
-            QId = ?QUEUE_TYPE_DEL_DIR,
+            QId = ?QUEUE_ID_DEL_DIR,
             case leo_storage_mq:publish(QId, Node, Keys) of
                 ok ->
                     void;
@@ -818,18 +818,17 @@ prefix_search_and_remove_objects(undefined) ->
 prefix_search_and_remove_objects(ParentDir) ->
     Fun = fun(Key, V, Acc) ->
                   Metadata = binary_to_term(V),
-                  AddrId   = Metadata#?METADATA.addr_id,
-
+                  AddrId = Metadata#?METADATA.addr_id,
                   Pos_1 = case binary:match(Key, [ParentDir]) of
                               nomatch ->
                                   -1;
-                              {Pos, _} ->
+                              {Pos,_} ->
                                   Pos
                           end,
 
                   case (Pos_1 == 0) of
                       true when Metadata#?METADATA.del == ?DEL_FALSE ->
-                          QId = ?QUEUE_TYPE_ASYNC_DELETION,
+                          QId = ?QUEUE_ID_ASYNC_DELETION,
                           case leo_storage_mq:publish(QId, AddrId, Key) of
                               ok ->
                                   void;
@@ -837,11 +836,11 @@ prefix_search_and_remove_objects(ParentDir) ->
                                   ?warn("prefix_search_and_remove_objects/1",
                                         [{qid, QId}, {addr_id, AddrId},
                                          {key, Key}, {cause, Cause}])
-                          end;
+                          end,
+                          Acc;
                       _ ->
                           Acc
-                  end,
-                  Acc
+                  end
           end,
     case catch leo_object_storage_api:fetch_by_key(
                  ParentDir, Fun) of

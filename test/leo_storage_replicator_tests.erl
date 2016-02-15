@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012
+%% Copyright (c) 2012-2016 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -24,7 +24,6 @@
 %% @end
 %%====================================================================
 -module(leo_storage_replicator_tests).
--author('Yosuke Hara').
 
 -include("leo_storage.hrl").
 -include_lib("leo_mq/include/leo_mq.hrl").
@@ -157,7 +156,7 @@ gen_mock_2(object, {_Test0Node, _Test1Node}, Case) ->
     meck:new(leo_storage_mq, [non_strict]),
     meck:expect(leo_storage_mq, publish,
                 fun(Type, VNodeId, Key, _ErrorType) ->
-                        ?assertEqual(?QUEUE_TYPE_PER_OBJECT, Type),
+                        ?assertEqual(?QUEUE_ID_PER_OBJECT, Type),
                         ?assertEqual(?TEST_RING_ID_1,        VNodeId),
                         ?assertEqual(?TEST_KEY_1,            Key),
                         ok

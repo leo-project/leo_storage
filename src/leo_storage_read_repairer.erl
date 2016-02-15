@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012-2014 Rakuten, Inc.
+%% Copyright (c) 2012-2016 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -24,8 +24,6 @@
 %% @end
 %%======================================================================
 -module(leo_storage_read_repairer).
-
--author('Yosuke Hara').
 
 -include("leo_storage.hrl").
 -include_lib("eunit/include/eunit.hrl").
@@ -173,7 +171,7 @@ compare(Ref, Pid, RPCKey, Node, #state{metadata = #?METADATA{addr_id = AddrId,
              ok | {error, any()} when AddrId::non_neg_integer(),
                                       Key::binary()).
 enqueue(AddrId, Key) ->
-    QId = ?QUEUE_TYPE_PER_OBJECT,
+    QId = ?QUEUE_ID_PER_OBJECT,
     case leo_storage_mq:publish(QId, AddrId, Key, ?ERR_TYPE_RECOVER_DATA) of
         ok ->
             void;
