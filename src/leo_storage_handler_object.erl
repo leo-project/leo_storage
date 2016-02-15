@@ -452,32 +452,14 @@ delete_objects_under_dir(Object) ->
     case catch binary:part(Key, (KSize - 1), 1) of
         {'EXIT',_} ->
             ok;
-        ?BIN_SLASH = Bin ->
-            %% for remote storage nodes
-            Targets = [ Bin, undefined ],
-            Ref = make_ref(),
-            case leo_redundant_manager_api:get_members_by_status(?STATE_RUNNING) of
-                {ok, RetL} ->
-                    Nodes = [N || #member{node = N} <- RetL],
-                    spawn(
-                      fun() ->
-                              {ok, Ref} = delete_objects_under_dir(
-                                            Nodes, Ref, Targets)
-                      end),
-                    ok;
-                _ ->
-                    void
-            end,
-            %% for local object storage
-            delete_objects_under_dir(Ref, Targets),
-            ok;
+        ?BIN_SLASH ->
+            leo_storage_mq:publish(?QUEUE_ID_DEL_DIR, Key);
         _ ->
             ok
     end.
 
 
 %% @doc Remove objects of the under directory for remote-nodes
-%%
 -spec(delete_objects_under_dir(Ref, Keys) ->
              {ok, Ref} when Ref::reference(),
                             Keys::[binary()|undefined]).
@@ -486,10 +468,8 @@ delete_objects_under_dir(Ref, []) ->
 delete_objects_under_dir(Ref, [undefined|Rest]) ->
     delete_objects_under_dir(Ref, Rest);
 delete_objects_under_dir(Ref, [Key|Rest]) ->
-    %% @TODO
     _ = prefix_search_and_remove_objects(Key),
     delete_objects_under_dir(Ref, Rest).
-
 
 -spec(delete_objects_under_dir(Nodes, Ref, Keys) ->
              {ok, Ref} when Nodes::[atom()],
@@ -504,16 +484,10 @@ delete_objects_under_dir([Node|Rest], Ref, Keys) ->
         {value, {ok, Ref}} ->
             ok;
         _Other ->
-            %% enqueu a fail message into the mq
             QId = ?QUEUE_ID_DEL_DIR,
-            case leo_storage_mq:publish(QId, Node, Keys) of
-                ok ->
-                    void;
-                {error, Cause} ->
-                    ?warn("delete_objects_under_dir/3",
-                          [{qid, QId}, {node, Node},
-                           {keys, Keys}, {cause, Cause}])
-            end
+            [leo_storage_mq:publish(QId, Node, K)
+             || K <- Keys],
+            ok
     end,
     delete_objects_under_dir(Rest, Ref, Keys).
 
@@ -845,6 +819,7 @@ prefix_search_and_remove_objects(ParentDir) ->
     case catch leo_object_storage_api:fetch_by_key(
                  ParentDir, Fun) of
         {'EXIT', Cause} ->
+            %% @TODO
             {error, Cause};
         Ret ->
             Ret

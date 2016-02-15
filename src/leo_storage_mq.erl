@@ -48,7 +48,6 @@
 -define(MSG_PATH_SYNC_OBJ_WITH_DC,  "6").
 -define(MSG_PATH_COMP_META_WITH_DC, "7").
 -define(MSG_PATH_DEL_DIR,           "8").
--define(MSG_PATH_REQ_DEL_DIR,       "9").
 
 %%--------------------------------------------------------------------
 %% API
@@ -93,8 +92,7 @@ start(RefSup, RootPath) ->
              {?QUEUE_ID_RECOVERY_NODE,     ?MSG_PATH_RECOVERY_NODE},
              {?QUEUE_ID_SYNC_OBJ_WITH_DC,  ?MSG_PATH_SYNC_OBJ_WITH_DC},
              {?QUEUE_ID_COMP_META_WITH_DC, ?MSG_PATH_COMP_META_WITH_DC},
-             {?QUEUE_ID_DEL_DIR,           ?MSG_PATH_DEL_DIR},
-             {?QUEUE_ID_REQ_DEL_DIR,       ?MSG_PATH_REQ_DEL_DIR}
+             {?QUEUE_ID_DEL_DIR,           ?MSG_PATH_DEL_DIR}
             ], RefMqSup, RootPath_1).
 
 %% @private
@@ -124,6 +122,15 @@ publish(?QUEUE_ID_RECOVERY_NODE = Id, Node) ->
                #recovery_node_message{id = leo_date:clock(),
                                       node = Node,
                                       timestamp = leo_date:now()}),
+    leo_mq_api:publish(Id, KeyBin, MsgBin);
+
+publish(?QUEUE_ID_DEL_DIR = Id, Dir) ->
+    KeyBin = term_to_binary(Dir),
+    MsgBin = term_to_binary(
+               #delete_dir{id = leo_date:clock(),
+                           dir = Dir,
+                           node = undefined,
+                           timestamp = leo_date:now()}),
     leo_mq_api:publish(Id, KeyBin, MsgBin);
 publish(_,_) ->
     {error, badarg}.
@@ -160,15 +167,16 @@ publish(?QUEUE_ID_COMP_META_WITH_DC = Id, ClusterId, AddrAndKeyList) ->
                                                 timestamp = leo_date:now()}),
     leo_mq_api:publish(Id, KeyBin, MessageBin);
 
-publish(?QUEUE_ID_DEL_DIR = Id, Node, Keys) ->
-    KeyBin = term_to_binary({Node, Keys}),
+publish(?QUEUE_ID_DEL_DIR,_,'undefined') ->
+    ok;
+publish(?QUEUE_ID_DEL_DIR = Id, Node, Dir) ->
+    KeyBin = term_to_binary({Node, Dir}),
     MsgBin = term_to_binary(
                #delete_dir{id = leo_date:clock(),
+                           dir = Dir,
                            node = Node,
-                           keys = Keys,
                            timestamp = leo_date:now()}),
     leo_mq_api:publish(Id, KeyBin, MsgBin);
-
 publish(_,_,_) ->
     {error, badarg}.
 
@@ -376,12 +384,32 @@ handle_call({consume, ?QUEUE_ID_DEL_DIR, MessageBin}) ->
             ?error("handle_call/1 - QUEUE_ID_DEL_DIR",
                    [{cause, Cause}]),
             {error, Cause};
-        #delete_dir{keys  = Keys,
+
+        %% A destination node is NOT specified
+        #delete_dir{dir = ParentDir,
+                    node = undefined} ->
+            case leo_redundant_manager_api:get_members() of
+                {ok, RetL} ->
+                    [publish(?QUEUE_ID_DEL_DIR, N, ParentDir)
+                     || #member{node = N} <- RetL];
+                _ ->
+                    publish(?QUEUE_ID_DEL_DIR, ParentDir)
+            end;
+
+        %% A destination node is specified
+        #delete_dir{dir = ParentDir,
                     node = Node} ->
             Ref = make_ref(),
-            leo_storage_handler_object:delete_objects_under_dir([Node], Ref, Keys)
-    end.
-
+            case leo_storage_handler_object:delete_objects_under_dir(
+                   [Node], Ref, [ParentDir, undefined]) of
+                {ok, Ref} ->
+                    ok;
+                _Other ->
+                    ok
+            end
+    end;
+handle_call(_) ->
+    ok.
 handle_call(_,_,_) ->
     ok.
 

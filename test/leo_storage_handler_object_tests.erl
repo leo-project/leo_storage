@@ -270,7 +270,16 @@ delete_({Node0, Node1}) ->
                 end),
 
     meck:new(leo_watchdog_state, [non_strict]),
-    meck:expect(leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end),
+    meck:expect(leo_watchdog_state, find_not_safe_items,
+                fun(_) ->
+                        not_found
+                end),
+
+    meck:new(leo_storage_mq, [non_strict]),
+    meck:expect(leo_storage_mq, publish,
+                fun(_,_) ->
+                        ok
+                end),
 
     ok = rpc:call(Node1, meck, new,    [leo_metrics_req, [no_link, non_strict]]),
     ok = rpc:call(Node1, meck, expect, [leo_metrics_req, notify, fun(_) -> ok end]),
