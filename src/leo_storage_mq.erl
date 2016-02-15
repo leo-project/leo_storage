@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012-2014 Rakuten, Inc.
+%% Copyright (c) 2012-2016 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -24,8 +24,6 @@
 %% @end
 %%====================================================================
 -module(leo_storage_mq).
-
--author('Yosuke Hara').
 
 -behaviour(leo_mq_behaviour).
 
@@ -50,6 +48,7 @@
 -define(MSG_PATH_SYNC_OBJ_WITH_DC,  "6").
 -define(MSG_PATH_COMP_META_WITH_DC, "7").
 -define(MSG_PATH_DEL_DIR,           "8").
+-define(MSG_PATH_REQ_DEL_DIR,       "9").
 
 %%--------------------------------------------------------------------
 %% API
@@ -94,7 +93,8 @@ start(RefSup, RootPath) ->
              {?QUEUE_ID_RECOVERY_NODE,     ?MSG_PATH_RECOVERY_NODE},
              {?QUEUE_ID_SYNC_OBJ_WITH_DC,  ?MSG_PATH_SYNC_OBJ_WITH_DC},
              {?QUEUE_ID_COMP_META_WITH_DC, ?MSG_PATH_COMP_META_WITH_DC},
-             {?QUEUE_ID_DEL_DIR, ?MSG_PATH_DEL_DIR}
+             {?QUEUE_ID_DEL_DIR,           ?MSG_PATH_DEL_DIR},
+             {?QUEUE_ID_REQ_DEL_DIR,       ?MSG_PATH_REQ_DEL_DIR}
             ], RefMqSup, RootPath_1).
 
 %% @private
@@ -116,65 +116,65 @@ start_1([{Id, Path}|Rest], Sup, Root) ->
 
 %% @doc Input a message into the queue.
 %%
--spec(publish(queue_type(), atom()|binary()) ->
+-spec(publish(queue_id(), atom()|binary()) ->
              ok | {error, any()}).
-publish(?QUEUE_TYPE_RECOVERY_NODE = Id, Node) ->
+publish(?QUEUE_ID_RECOVERY_NODE = Id, Node) ->
     KeyBin = term_to_binary(Node),
     MsgBin = term_to_binary(
                #recovery_node_message{id = leo_date:clock(),
                                       node = Node,
                                       timestamp = leo_date:now()}),
-    leo_mq_api:publish(queue_id(Id), KeyBin, MsgBin);
+    leo_mq_api:publish(Id, KeyBin, MsgBin);
 publish(_,_) ->
     {error, badarg}.
 
--spec(publish(queue_type(), any(), any()) ->
+-spec(publish(queue_id(), any(), any()) ->
              ok | {error, any()}).
-publish(?QUEUE_TYPE_SYNC_BY_VNODE_ID = Id, VNodeId, Node) ->
+publish(?QUEUE_ID_SYNC_BY_VNODE_ID = Id, VNodeId, Node) ->
     KeyBin = term_to_binary({VNodeId, Node}),
     MessageBin = term_to_binary(
                    #sync_unit_of_vnode_message{id = leo_date:clock(),
                                                vnode_id = VNodeId,
                                                node = Node,
                                                timestamp = leo_date:now()}),
-    leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
+    leo_mq_api:publish(Id, KeyBin, MessageBin);
 
-publish(?QUEUE_TYPE_ASYNC_DELETION = Id, AddrId, Key) ->
+publish(?QUEUE_ID_ASYNC_DELETION = Id, AddrId, Key) ->
     KeyBin = term_to_binary({AddrId, Key}),
     MessageBin = term_to_binary(
                    #async_deletion_message{id = leo_date:clock(),
                                            addr_id = AddrId,
                                            key = Key,
                                            timestamp = leo_date:now()}),
-    leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
+    leo_mq_api:publish(Id, KeyBin, MessageBin);
 
-publish(?QUEUE_TYPE_SYNC_OBJ_WITH_DC, AddrId, Key) ->
-    publish(?QUEUE_TYPE_SYNC_OBJ_WITH_DC, undefined, AddrId, Key);
+publish(?QUEUE_ID_SYNC_OBJ_WITH_DC, AddrId, Key) ->
+    publish(?QUEUE_ID_SYNC_OBJ_WITH_DC, undefined, AddrId, Key);
 
-publish(?QUEUE_TYPE_COMP_META_WITH_DC = Id, ClusterId, AddrAndKeyList) ->
+publish(?QUEUE_ID_COMP_META_WITH_DC = Id, ClusterId, AddrAndKeyList) ->
     KeyBin = term_to_binary(ClusterId),
     MessageBin = term_to_binary(
                    #comparison_metadata_with_dc{id = leo_date:clock(),
                                                 cluster_id = ClusterId,
                                                 list_of_addrid_and_key = AddrAndKeyList,
                                                 timestamp = leo_date:now()}),
-    leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
+    leo_mq_api:publish(Id, KeyBin, MessageBin);
 
-publish(?QUEUE_TYPE_DEL_DIR = Id, Node, Keys) ->
+publish(?QUEUE_ID_DEL_DIR = Id, Node, Keys) ->
     KeyBin = term_to_binary({Node, Keys}),
     MsgBin = term_to_binary(
                #delete_dir{id = leo_date:clock(),
                            node = Node,
                            keys = Keys,
                            timestamp = leo_date:now()}),
-    leo_mq_api:publish(queue_id(Id), KeyBin, MsgBin);
+    leo_mq_api:publish(Id, KeyBin, MsgBin);
 
 publish(_,_,_) ->
     {error, badarg}.
 
--spec(publish(queue_type(), any(), any(), any()) ->
+-spec(publish(queue_id(), any(), any(), any()) ->
              ok | {error, any()}).
-publish(?QUEUE_TYPE_PER_OBJECT = Id, AddrId, Key, ErrorType) ->
+publish(?QUEUE_ID_PER_OBJECT = Id, AddrId, Key, ErrorType) ->
     KeyBin = term_to_binary({ErrorType, Key}),
     MessageBin = term_to_binary(
                    #inconsistent_data_message{id = leo_date:clock(),
@@ -182,9 +182,9 @@ publish(?QUEUE_TYPE_PER_OBJECT = Id, AddrId, Key, ErrorType) ->
                                               addr_id = AddrId,
                                               key = Key,
                                               timestamp = leo_date:now()}),
-    leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
+    leo_mq_api:publish(Id, KeyBin, MessageBin);
 
-publish(?QUEUE_TYPE_SYNC_OBJ_WITH_DC = Id, ClusterId, AddrId, Key) ->
+publish(?QUEUE_ID_SYNC_OBJ_WITH_DC = Id, ClusterId, AddrId, Key) ->
     KeyBin = term_to_binary({ClusterId, AddrId, Key}),
     MessageBin  = term_to_binary(
                     #inconsistent_data_with_dc{id = leo_date:clock(),
@@ -193,14 +193,14 @@ publish(?QUEUE_TYPE_SYNC_OBJ_WITH_DC = Id, ClusterId, AddrId, Key) ->
                                                key = Key,
                                                del = 0,
                                                timestamp = leo_date:now()}),
-    leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
+    leo_mq_api:publish(Id, KeyBin, MessageBin);
 
 publish(_,_,_,_) ->
     {error, badarg}.
 
--spec(publish(queue_type(), any(), any(), any(), any()) ->
+-spec(publish(queue_id(), any(), any(), any(), any()) ->
              ok | {error, any()}).
-publish(?QUEUE_TYPE_REBALANCE = Id, Node, VNodeId, AddrId, Key) ->
+publish(?QUEUE_ID_REBALANCE = Id, Node, VNodeId, AddrId, Key) ->
     KeyBin = term_to_binary({Node, AddrId, Key}),
     MessageBin = term_to_binary(
                    #rebalance_message{id = leo_date:clock(),
@@ -217,9 +217,9 @@ publish(?QUEUE_TYPE_REBALANCE = Id, Node, VNodeId, AddrId, Key) ->
             void
     end,
     ok = increment_counter(Table, VNodeId),
-    leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
+    leo_mq_api:publish(Id, KeyBin, MessageBin);
 
-publish(?QUEUE_TYPE_SYNC_OBJ_WITH_DC = Id, ClusterId, AddrId, Key, Del) ->
+publish(?QUEUE_ID_SYNC_OBJ_WITH_DC = Id, ClusterId, AddrId, Key, Del) ->
     KeyBin = term_to_binary({ClusterId, AddrId, Key}),
     MessageBin  = term_to_binary(
                     #inconsistent_data_with_dc{id = leo_date:clock(),
@@ -228,7 +228,7 @@ publish(?QUEUE_TYPE_SYNC_OBJ_WITH_DC = Id, ClusterId, AddrId, Key, Del) ->
                                                key = Key,
                                                del = Del,
                                                timestamp = leo_date:now()}),
-    leo_mq_api:publish(queue_id(Id), KeyBin, MessageBin);
+    leo_mq_api:publish(Id, KeyBin, MessageBin);
 
 publish(_,_,_,_,_) ->
     {error, badarg}.
@@ -264,7 +264,7 @@ handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
                     ?warn("handle_call/1 - consume",
                           [{addr_id, AddrId},
                            {key, Key}, {cause, Cause}]),
-                    publish(?QUEUE_TYPE_PER_OBJECT, AddrId, Key, ErrorType),
+                    publish(?QUEUE_ID_PER_OBJECT, AddrId, Key, ErrorType),
                     {error, Cause}
             end;
         _ ->
@@ -318,7 +318,7 @@ handle_call({consume, ?QUEUE_ID_ASYNC_DELETION, MessageBin}) ->
                 ok ->
                     ok;
                 {_,_Cause} ->
-                    publish(?QUEUE_TYPE_ASYNC_DELETION, AddrId, Key)
+                    publish(?QUEUE_ID_ASYNC_DELETION, AddrId, Key)
             end;
         _ ->
             {error, ?ERROR_COULD_NOT_MATCH}
@@ -429,7 +429,7 @@ recover_node_callback_1(AddrId, Key, Node, RedundantNodes) ->
         true ->
             case lists:member(erlang:node(), RedundantNodes) of
                 true ->
-                    ?MODULE:publish(?QUEUE_TYPE_PER_OBJECT,
+                    ?MODULE:publish(?QUEUE_ID_PER_OBJECT,
                                     AddrId, Key, ?ERR_TYPE_RECOVER_DATA);
                 false ->
                     ok
@@ -471,7 +471,7 @@ sync_vnodes_callback(Node, FromAddrId, ToAddrId)->
                             case lists:member(Node, Nodes) of
                                 true ->
                                     VNodeId = ToAddrId,
-                                    ?MODULE:publish(?QUEUE_TYPE_REBALANCE, Node,
+                                    ?MODULE:publish(?QUEUE_ID_REBALANCE, Node,
                                                     VNodeId, AddrId, K),
                                     Acc;
                                 false ->
@@ -697,7 +697,7 @@ rebalance_1(#rebalance_message{node = Node,
                     Ret = delete_node_from_redundancies(Redundancies, Node, []),
                     rebalance_2(Ret, Msg);
                 _ ->
-                    ok = publish(?QUEUE_TYPE_PER_OBJECT,
+                    ok = publish(?QUEUE_ID_PER_OBJECT,
                                  AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
                     {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
             end;
@@ -705,7 +705,7 @@ rebalance_1(#rebalance_message{node = Node,
             ?warn("rebalance_1/1",
                   [{node, Node}, {addr_id, AddrId},
                    {key, Key}, {cause, Cause}]),
-            ok = publish(?QUEUE_TYPE_PER_OBJECT,
+            ok = publish(?QUEUE_ID_PER_OBJECT,
                          AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
             {error, inactive}
     end.
@@ -729,7 +729,7 @@ rebalance_2({ok, Redundancies}, #rebalance_message{node = Node,
                            {cause, Cause}]),
                     ok;
                 Error ->
-                    ok = publish(?QUEUE_TYPE_PER_OBJECT,
+                    ok = publish(?QUEUE_ID_PER_OBJECT,
                                  AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
                     Error
             end;
@@ -737,7 +737,7 @@ rebalance_2({ok, Redundancies}, #rebalance_message{node = Node,
             ?warn("rebalance_2/2",
                   [{node, Node}, {addr_id, AddrId},
                    {key, Key}, {cause, 'node_not_found'}]),
-            ok = publish(?QUEUE_TYPE_PER_OBJECT,
+            ok = publish(?QUEUE_ID_PER_OBJECT,
                          AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
             ok
     end.
@@ -854,25 +854,3 @@ increment_counter(Table, Key) ->
 decrement_counter(Table, Key) ->
     catch ets:update_counter(Table, Key, -1),
     ok.
-
-
-%% @doc Retrieve queue's id by queue's type
-%% @private
--spec(queue_id(queue_type()) ->
-             queue_id()).
-queue_id(?QUEUE_TYPE_SYNC_BY_VNODE_ID) ->
-    ?QUEUE_ID_SYNC_BY_VNODE_ID;
-queue_id(?QUEUE_TYPE_ASYNC_DELETION) ->
-    ?QUEUE_ID_ASYNC_DELETION;
-queue_id(?QUEUE_TYPE_PER_OBJECT) ->
-    ?QUEUE_ID_PER_OBJECT;
-queue_id(?QUEUE_TYPE_REBALANCE) ->
-    ?QUEUE_ID_REBALANCE;
-queue_id(?QUEUE_TYPE_RECOVERY_NODE) ->
-    ?QUEUE_ID_RECOVERY_NODE;
-queue_id(?QUEUE_TYPE_SYNC_OBJ_WITH_DC) ->
-    ?QUEUE_ID_SYNC_OBJ_WITH_DC;
-queue_id(?QUEUE_TYPE_COMP_META_WITH_DC) ->
-    ?QUEUE_ID_COMP_META_WITH_DC;
-queue_id(?QUEUE_TYPE_DEL_DIR) ->
-    ?QUEUE_ID_DEL_DIR.
