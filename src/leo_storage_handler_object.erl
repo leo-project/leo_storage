@@ -477,6 +477,9 @@ delete_objects_under_dir(Ref, [Key|Rest]) ->
                             Keys::[binary()|undefined]).
 delete_objects_under_dir([], Ref,_Keys) ->
     {ok, Ref};
+delete_objects_under_dir([Node|Rest], Ref, Keys) when Node == erlang:node() ->
+    {ok, Ref} = delete_objects_under_dir(Ref, Keys),
+    delete_objects_under_dir(Rest, Ref, Keys);
 delete_objects_under_dir([Node|Rest], Ref, Keys) ->
     case leo_misc:node_existence(Node) of
         true ->

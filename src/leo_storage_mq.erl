@@ -125,16 +125,18 @@ publish(?QUEUE_ID_RECOVERY_NODE = Id, Node) ->
     leo_mq_api:publish(Id, KeyBin, MsgBin);
 
 publish(?QUEUE_ID_DEL_DIR = Id, {bulk_insert, Dirs}) ->
-    [publish(Id, D) || D <- Dirs],
+    [publish(Id, erlang:node(), D) || D <- Dirs],
     ok;
 publish(?QUEUE_ID_DEL_DIR = Id, Dir) ->
-    KeyBin = term_to_binary(Dir),
-    MsgBin = term_to_binary(
-               #delete_dir{id = leo_date:clock(),
-                           dir = Dir,
-                           node = undefined,
-                           timestamp = leo_date:now()}),
-    leo_mq_api:publish(Id, KeyBin, MsgBin);
+    case leo_redundant_manager_api:get_members() of
+        {ok, RetL} ->
+            [publish(Id, N, Dir)
+             || #member{node = N} <- RetL],
+            ok;
+        _ ->
+            timer:sleep(timer:seconds(5)),
+            publish(Id, Dir)
+    end;
 publish(_,_) ->
     {error, badarg}.
 
@@ -389,13 +391,7 @@ handle_call({consume, ?QUEUE_ID_DEL_DIR, MessageBin}) ->
         %% A destination node is NOT specified
         #delete_dir{dir = ParentDir,
                     node = undefined} ->
-            case leo_redundant_manager_api:get_members() of
-                {ok, RetL} ->
-                    [publish(?QUEUE_ID_DEL_DIR, N, ParentDir)
-                     || #member{node = N} <- RetL];
-                _ ->
-                    publish(?QUEUE_ID_DEL_DIR, ParentDir)
-            end;
+            publish(?QUEUE_ID_DEL_DIR, ParentDir);
 
         %% A destination node is specified
         #delete_dir{dir = ParentDir,
