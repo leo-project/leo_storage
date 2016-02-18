@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012-2015 Rakuten, Inc.
+%% Copyright (c) 2012-2016 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -48,28 +48,28 @@
                         ?CMD_HEAD).
 
 %% @doc queue-related.
--define(QUEUE_ID_PER_OBJECT,        'leo_per_object_queue').
--define(QUEUE_ID_SYNC_BY_VNODE_ID,  'leo_sync_by_vnode_id_queue').
--define(QUEUE_ID_DIRECTORY,         'leo_directory_queue').
--define(QUEUE_ID_REBALANCE,         'leo_rebalance_queue').
--define(QUEUE_ID_ASYNC_DELETE_OBJ,  'leo_async_deletion_queue').
--define(QUEUE_ID_RECOVERY_NODE,     'leo_recovery_node_queue').
--define(QUEUE_ID_SYNC_OBJ_WITH_DC,  'leo_sync_obj_with_dc_queue').
+-define(QUEUE_ID_PER_OBJECT, 'leo_per_object_queue').
+-define(QUEUE_ID_SYNC_BY_VNODE_ID, 'leo_sync_by_vnode_id_queue').
+-define(QUEUE_ID_DIRECTORY, 'leo_directory_queue').
+-define(QUEUE_ID_REBALANCE, 'leo_rebalance_queue').
+-define(QUEUE_ID_ASYNC_DELETE_OBJ, 'leo_delete_obj_queue').
+-define(QUEUE_ID_RECOVERY_NODE, 'leo_recovery_node_queue').
+-define(QUEUE_ID_SYNC_OBJ_WITH_DC, 'leo_sync_obj_with_dc_queue').
 -define(QUEUE_ID_COMP_META_WITH_DC, 'leo_comp_meta_with_dc_queue').
--define(QUEUE_ID_ASYNC_DELETE_DIR,  'leo_async_delete_dir_queue').
+-define(QUEUE_ID_ASYNC_DELETE_DIR, 'leo_delete_dir_queue').
 -define(QUEUE_ID_ASYNC_RECOVER_DIR, 'leo_async_recover_dir_queue').
 -define(QUEUE_ID_RECOVERY_FRAGMENT, 'leo_recovery_fragment_queue').
 -define(QUEUE_ID_TRANS_FRAGMENT,    'leo_trans_fragment_queue').
 
--define(ERR_TYPE_REPLICATE_DATA,      'error_msg_replicate_data').
--define(ERR_TYPE_RECOVER_DATA,        'error_msg_recover_data').
--define(ERR_TYPE_DELETE_DATA,         'error_msg_delete_data').
--define(ERR_TYPE_REPLICATE_INDEX,     'error_msg_replicate_index').
--define(ERR_TYPE_RECOVER_INDEX,       'error_msg_recover_index').
--define(ERR_TYPE_DELETE_INDEX,        'error_msg_delete_index').
--define(ERR_TYPE_STORE_FRAGMENT,      'error_msg_store_fragment').
+-define(ERR_TYPE_REPLICATE_DATA, 'error_msg_replicate_data').
+-define(ERR_TYPE_RECOVER_DATA, 'error_msg_recover_data').
+-define(ERR_TYPE_DELETE_DATA, 'error_msg_delete_data').
+-define(ERR_TYPE_REPLICATE_INDEX, 'error_msg_replicate_index').
+-define(ERR_TYPE_RECOVER_INDEX, 'error_msg_recover_index').
+-define(ERR_TYPE_DELETE_INDEX, 'error_msg_delete_index').
+-define(ERR_TYPE_STORE_FRAGMENT, 'error_msg_store_fragment').
 
--define(TBL_REBALANCE_COUNTER,        'leo_rebalance_counter').
+-define(TBL_REBALANCE_COUNTER, 'leo_rebalance_counter').
 
 -define(SYNC_TARGET_OBJ, 'object').
 -define(SYNC_TARGET_DIR, 'directory').
@@ -83,7 +83,6 @@
 
 
 %% @doc error messages.
-%%
 -define(ERROR_COULD_NOT_GET_DATA, "Could not get data").
 -define(ERROR_COULD_NOT_GET_META, "Could not get a metadata").
 -define(ERROR_COULD_NOT_GET_METADATAS, "Could not get metadatas").
@@ -101,22 +100,20 @@
 
 
 %% @doc notified message items
-%%
 -define(MSG_ITEM_TIMEOUT, 'timeout').
 -define(MSG_ITEM_SLOW_OP, 'slow_op').
 
 
 %% @doc request parameter for READ
-%%
 -record(read_parameter, {
-          ref             :: reference(),
-          addr_id         :: integer(),
-          key = <<>>      :: binary(),
-          etag = 0        :: non_neg_integer(),
-          start_pos = -1  :: integer(),
-          end_pos   = -1  :: integer(),
-          quorum = 0      :: non_neg_integer(),
-          req_id = 0      :: non_neg_integer()
+          ref :: reference(),
+          addr_id = 0 :: non_neg_integer(),
+          key = <<>> :: binary(),
+          etag = 0 :: non_neg_integer(),
+          start_pos = -1 :: integer(),
+          end_pos   = -1 :: integer(),
+          quorum = 0 :: non_neg_integer(),
+          req_id = 0 :: non_neg_integer()
          }).
 -record(read_parameter_1, {
           ref             :: reference(),
@@ -133,7 +130,6 @@
 
 
 %% @doc Queue's Message.
-%%
 -record(inconsistent_data_message, {
           id = 0 :: non_neg_integer(),
           type :: atom(),
@@ -186,7 +182,7 @@
           id = 0 :: non_neg_integer(),
           cluster_id :: atom(),
           addr_id = 0 :: non_neg_integer(),
-          key :: binary(),
+          key = <<>> :: binary(),
           del = 0 :: non_neg_integer(), %% del:[0:false, 1:true]
           timestamp = 0 :: non_neg_integer(),
           times = 0 :: non_neg_integer()}).
@@ -201,7 +197,7 @@
 -record(delete_dir, {
           id = 0 :: non_neg_integer(),
           node = undefined :: atom(),
-          keys = [] :: [binary()|undefined],
+          dir = <<>> :: binary(),
           timestamp = 0 :: non_neg_integer()
          }).
 
@@ -210,12 +206,13 @@
           addr_id = 0 :: non_neg_integer(),
           key = <<>> :: binary(),
           fragment_id_list = [] :: [non_neg_integer()],
+          node :: atom(),
+          dir = <<>> :: binary(),
           timestamp = 0 :: non_neg_integer()
          }).
 
 
 %% @doc macros.
-%%
 -define(env_storage_device(),
         case application:get_env(leo_storage, obj_containers) of
             {ok, EnvStorageDevice} ->
@@ -479,6 +476,7 @@
         end).
 -endif.
 
+
 -type(queue_id()   :: ?QUEUE_ID_PER_OBJECT |
                       ?QUEUE_ID_SYNC_BY_VNODE_ID |
                       ?QUEUE_ID_REBALANCE |
@@ -487,25 +485,29 @@
                       ?QUEUE_ID_SYNC_OBJ_WITH_DC |
                       ?QUEUE_ID_COMP_META_WITH_DC |
                       ?QUEUE_ID_ASYNC_DELETE_DIR |
-                      ?QUEUE_ID_ASYNC_RECOVER_DIR
+                      ?QUEUE_ID_ASYNC_RECOVER_DIR |
+                      ?QUEUE_ID_RECOVERY_FRAGMENT |
+                      ?QUEUE_ID_TRANS_FRAGMENT
                       ).
 
 -define(mq_id_and_alias, [
-                          {?QUEUE_ID_PER_OBJECT,        "recover inconsistent objs"},
-                          {?QUEUE_ID_SYNC_BY_VNODE_ID,  "sync objs by vnode-id"},
-                          {?QUEUE_ID_REBALANCE,         "rebalance objs"},
-                          {?QUEUE_ID_ASYNC_DELETE_OBJ,  "async deletion of objs"},
-                          {?QUEUE_ID_RECOVERY_NODE,     "recovery objs of node"},
-                          {?QUEUE_ID_SYNC_OBJ_WITH_DC,  "sync objs w/remote-node"},
+                          {?QUEUE_ID_PER_OBJECT,        "recover inconsistent objects"},
+                          {?QUEUE_ID_SYNC_BY_VNODE_ID,  "sync objects by vnode-id"},
+                          {?QUEUE_ID_REBALANCE,         "rebalance objects"},
+                          {?QUEUE_ID_ASYNC_DELETE_OBJ,  "async deletion of objects"},
+                          {?QUEUE_ID_RECOVERY_NODE,     "recovery objects of node"},
+                          {?QUEUE_ID_SYNC_OBJ_WITH_DC,  "sync objects w/remote-node"},
                           {?QUEUE_ID_COMP_META_WITH_DC, "compare metadata w/remote-node"},
+                          {?QUEUE_ID_ASYNC_DELETE_DIR,  "async deletion of dirs"},
                           {?QUEUE_ID_ASYNC_DELETE_DIR,  "delete directories"},
-                          {?QUEUE_ID_ASYNC_RECOVER_DIR, "async metadata of directories recovery"}
+                          {?QUEUE_ID_ASYNC_RECOVER_DIR, "async metadata of directories recovery"},
+                          {?QUEUE_ID_RECOVERY_FRAGMENT, "recovery encoded objects"},
+                          {?QUEUE_ID_TRANS_FRAGMENT,    "transmission of encoded objects"}
                          ]).
 
 
-%% For the watchdog
-%%
-%% @doc Threshold active size ratio:
+%% @doc Storage watchdog related
+%% Threshold active size ratio:
 %%    * round(active-size/total-size)
 %%    * default:50%
 -ifdef(TEST).
@@ -570,7 +572,7 @@
             end
         end).
 
-%% @doc For the autonomic-operation
+%% @doc Storage autonomic-operation related
 -define(env_auto_compaction_enabled(),
         case application:get_env(leo_storage, auto_compaction_enabled) of
             {ok, EnvAutoCompactionEnabled} ->
@@ -625,7 +627,7 @@
         end).
 
 
-%% Misc.
+%% @doc Misc
 -define(DEF_SEEKING_METADATA_TIMEOUT, 10). %% default:50ms
 -define(env_seeking_timeout_per_metadata(),
         case application:get_env(leo_storage, seeking_timeout_per_metadata) of

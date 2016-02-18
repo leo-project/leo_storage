@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012-2015 Rakuten, Inc.
+%% Copyright (c) 2012-2016 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -389,7 +389,10 @@ delete_1_({TestNode_1, TestNode_2}) ->
                 end),
 
     meck:new(leo_watchdog_state, [non_strict]),
-    meck:expect(leo_watchdog_state, find_not_safe_items, fun(_) -> not_found end),
+    meck:expect(leo_watchdog_state, find_not_safe_items,
+                fun(_) ->
+                        not_found
+                end),
 
     meck:new(leo_directory_cache, [non_strict]),
     meck:expect(leo_directory_cache, delete, fun(_) -> ok end),

@@ -2,7 +2,7 @@
 %%
 %% Leo Storage
 %%
-%% Copyright (c) 2012-2015 Rakuten, Inc.
+%% Copyright (c) 2012-2016 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -37,7 +37,7 @@
          bulk_delete/1,
          delete_objects_under_dir/1,
          delete_objects_under_dir/2,
-         delete_objects_under_dir/5,
+         delete_objects_under_dir/3,
          prefix_search_and_remove_objects/1,
          find_uploaded_objects_by_key/1,
          get/1, get/2,
@@ -165,29 +165,7 @@ delete_objects_under_dir(Dir) ->
         {'EXIT',_} ->
             ok;
         $/ ->
-            %% remove the directory w/sync
-            case leo_directory_sync:delete(Dir) of
-                ok ->
-                    %% remove objects under the directory w/async
-                    case leo_redundant_manager_api:get_members_by_status(?STATE_RUNNING) of
-                        {ok, RetL} ->
-                            Nodes = [N||#member{node = N} <- RetL],
-                            Ref = make_ref(),
-                            DirL = [Dir, undefined],
-
-                            case delete_objects_under_dir(
-                                   Nodes, erlang:length(Nodes), Ref, DirL, []) of
-                                {ok, Ref} ->
-                                    ok;
-                                {error, {Ref, Cause}} ->
-                                    {error, Cause}
-                            end;
-                        _ ->
-                            leo_storage_mq:publish(?QUEUE_ID_ASYNC_DELETE_DIR, [Dir])
-                    end;
-                {error, Reason} ->
-                    {error, Reason}
-            end;
+            leo_storage_mq:publish(?QUEUE_ID_ASYNC_DELETE_DIR, Dir);
         _ ->
             ok
     end.
@@ -204,41 +182,38 @@ delete_objects_under_dir(Ref, [Dir|Rest]) ->
     ok = prefix_search_and_remove_objects(Dir),
     delete_objects_under_dir(Ref, Rest).
 
--spec(delete_objects_under_dir(Nodes, NumOfNodes, Ref, DirL, ErrorL) ->
+-spec(delete_objects_under_dir(Nodes, Ref, Keys) ->
              {ok, Ref} when Nodes::[atom()],
-                            NumOfNodes::non_neg_integer(),
                             Ref::reference(),
-                            DirL::[binary()|undefined],
-                            ErrorL::[any()]).
-delete_objects_under_dir([], NumOfNodes,
-                         Ref,_DirL, ErrorL) when NumOfNodes =/= erlang:length(ErrorL) ->
+                            Keys::[binary()|undefined]).
+delete_objects_under_dir([], Ref,_Keys) ->
     {ok, Ref};
-delete_objects_under_dir([],_, Ref,_DirL, ErrorL) ->
-    {error, {Ref, ErrorL}};
-delete_objects_under_dir([Node|Rest], NumOfNodes, Ref, DirL, ErrorL) ->
-    RPCKey = rpc:async_call(Node, ?MODULE,
-                            delete_objects_under_dir, [Ref, DirL]),
-    ErrorL_1 =
-        case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
-            {value, {ok, Ref}} ->
-                ErrorL;
-            Other ->
-                %% Enqueue a failed message into the mq
-                ok = leo_storage_mq:publish(
-                       ?QUEUE_ID_ASYNC_DELETE_DIR, DirL),
-                Cause = case Other of
-                            {value, {error, {Ref, Why}}} ->
-                                Why;
-                            {badrpc,_} = Why ->
-                                Why;
-                            timeout = Why ->
-                                Why;
-                            Error ->
-                                Error
-                        end,
-                [{Node, Cause}|ErrorL]
-        end,
-    delete_objects_under_dir(Rest, NumOfNodes, Ref, DirL, ErrorL_1).
+delete_objects_under_dir([Node|Rest], Ref, Keys) when Node == erlang:node() ->
+    {ok, Ref} = delete_objects_under_dir(Ref, Keys),
+    delete_objects_under_dir(Rest, Ref, Keys);
+delete_objects_under_dir([Node|Rest], Ref, Keys) ->
+    case leo_misc:node_existence(Node) of
+        true ->
+            RPCKey = rpc:async_call(Node, leo_storage_mq,
+                                    publish, [?QUEUE_ID_ASYNC_DELETE_DIR, {bulk_insert, Keys}]),
+            case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
+                {value, ok} ->
+                    ok;
+                _Other ->
+                    delete_objects_under_dir_1(Node, Keys)
+            end;
+        false ->
+            delete_objects_under_dir_1(Node, Keys)
+    end,
+    delete_objects_under_dir(Rest, Ref, Keys).
+
+%% @private
+delete_objects_under_dir_1(_,[]) ->
+    ok;
+delete_objects_under_dir_1(Node, [Key|Rest]) ->
+    QId = ?QUEUE_ID_ASYNC_DELETE_DIR,
+    ok = leo_storage_mq:publish(QId, Node, Key),
+    delete_objects_under_dir_1(Node, Rest).
 
 
 %% @doc Retrieve object of deletion from object-storage by key
@@ -252,7 +227,6 @@ prefix_search_and_remove_objects(Dir) ->
                         collect_deletion_of_objs(
                           Ref, fun bulk_delete/1, sets:new())
                 end),
-
     F = fun(Key, V, Acc) ->
                 Metadata = binary_to_term(V),
                 AddrId = Metadata#?METADATA.addr_id,

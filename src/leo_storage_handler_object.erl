@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012-2015 Rakuten, Inc.
+%% Copyright (c) 2012-2016 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -63,7 +63,6 @@
 %% API - GET
 %%--------------------------------------------------------------------
 %% @doc get object (from storage-node#1).
-%%
 -spec(get(RefAndKey) ->
              {ok, reference(), #?METADATA{}, binary()} |
              {ok, {'fragments', reference(), [term()]}} |
@@ -99,7 +98,6 @@ get(_Args) ->
 
 
 %% @doc get object (from storage-node#2).
-%%
 -spec(get(ReadParams, Redundancies) ->
              {ok, #?METADATA{}, binary()} |
              {ok, match} |
@@ -128,7 +126,6 @@ get(ReadParameter, Redundancies) ->
 
 
 %% @doc Retrieve an object which is requested from gateway.
-%%
 -spec(get(AddrId, Key, ReqId) ->
              {ok, #?METADATA{}, binary()} |
              {error, any()} when AddrId::non_neg_integer(),
@@ -141,7 +138,6 @@ get(AddrId, Key, ReqId) ->
                          req_id = ReqId}, []).
 
 %% @doc Retrieve an object which is requested from gateway w/etag.
-%%
 -spec(get(AddrId, Key, ETag, ReqId) ->
              {ok, #?METADATA{}, binary()} |
              {ok, match} |
@@ -157,7 +153,6 @@ get(AddrId, Key, ETag, ReqId) ->
                          req_id = ReqId}, []).
 
 %% @doc Retrieve a part of an object.
-%%
 -spec(get(AddrId, Key, StartPos, EndPos, ReqId) ->
              {ok, #?METADATA{}, binary()} |
              {ok, match} |
@@ -176,7 +171,6 @@ get(AddrId, Key, StartPos, EndPos, ReqId) ->
 
 
 %% @doc read data (common).
-%% @private
 %% @private
 -spec(get_fun(AddrId, Key, IsForcedCheck) ->
              {ok, #?METADATA{}, #?OBJECT{}} |
@@ -288,6 +282,7 @@ put({Object, Ref}) ->
             put_fun(Ref, AddrId, Key, Object_1)
     end.
 
+
 %% @doc Put an object (request from gateway).
 -spec(put(Object, ReqId) ->
              {ok, ETag} | {error, any()} when Object::#?OBJECT{},
@@ -339,9 +334,6 @@ put(Object, ReqId) ->
             replicate_fun(?REP_LOCAL, ?CMD_PUT, Object_2)
     end.
 
-
-%% @doc Put an object
-%%      Request from remote-storage-nodes/replicator - between storage-nodes
 -spec(put(Ref, From, Object, ReqId) ->
              {ok, atom()} |
              {error, any()} when Ref::reference(),
@@ -480,8 +472,7 @@ delete_chunked_objects(CIndex, ParentKey) ->
                          cindex = CIndex,
                          clock = leo_date:clock(),
                          timestamp = leo_date:now(),
-                         del = ?DEL_TRUE
-                        }, 0) of
+                         del = ?DEL_TRUE}, 0) of
         ok ->
             delete_chunked_objects(CIndex - 1, ParentKey);
         {error, Cause} ->
@@ -493,7 +484,6 @@ delete_chunked_objects(CIndex, ParentKey) ->
 %% API - DELETE
 %%--------------------------------------------------------------------
 %% @doc Remove an object (request from storage)
-%%
 -spec(delete(ObjAndRef) ->
              {ok, reference()} |
              {error, reference(), any()} when ObjAndRef::{#?OBJECT{}, reference()}).
@@ -527,7 +517,6 @@ delete({Object, Ref}) ->
 
 
 %% @doc Remova an object (request from gateway)
-%%
 -spec(delete(Object, ReqId) ->
              ok | {error, any()} when Object::#?OBJECT{},
                                       ReqId::non_neg_integer()|reference()).
@@ -541,7 +530,6 @@ delete(Object, ReqId) ->
 delete(#?OBJECT{addr_id = AddrId,
                 key = Key}, ReqId, CheckUnderDir) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
-
     %% Check replication method of the object
     case ?MODULE:head(AddrId, Key) of
         {ok, Metadata} ->
@@ -577,6 +565,7 @@ delete_1(Ret, Object, CheckUnderDir) ->
             ok = leo_storage_handler_directory:delete_objects_under_dir(Object);
         _ ->
             void
+
     end,
     Ret_1.
 
@@ -585,7 +574,6 @@ delete_1(Ret, Object, CheckUnderDir) ->
 %% API - HEAD
 %%--------------------------------------------------------------------
 %% @doc retrieve a meta-data from mata-data-server (file).
-%%
 -spec(head(AddrId, Key) ->
              {ok, #?METADATA{}} | not_found | {error, any} when AddrId::non_neg_integer(),
                                                                 Key::binary()).
@@ -636,12 +624,12 @@ head_1([#redundant_node{node = Node,
 head_1([_|Rest], AddrId, Key) ->
     head_1(Rest, AddrId, Key).
 
+
 %%--------------------------------------------------------------------
 %% API - HEAD with calculating MD5
 %%--------------------------------------------------------------------
 %% @doc Retrieve a metada/data from backend_db/object-storage
 %%      AND calc MD5 based on the body data
-%%
 -spec(head_with_calc_md5(AddrId, Key, MD5Context) ->
              {ok, #?METADATA{}, any()} |
              {error, any()} when AddrId::non_neg_integer(),
@@ -655,7 +643,6 @@ head_with_calc_md5(AddrId, Key, MD5Context) ->
 %% API - COPY/STACK-SEND/RECEIVE-STORE
 %%--------------------------------------------------------------------
 %% @doc Replicate an object, which is requested from remote-cluster
-%%
 -spec(replicate(Object) ->
              ok |
              {ok, reference()} |

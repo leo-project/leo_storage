@@ -779,7 +779,6 @@
 %% --------------------------------------------------------------------
 %% Leo' MQ
 %% @doc leo-mq.backend_db
-%% @deprecated (v1.2.2-)
 {mapping,
  "mq.backend_db",
  "leo_storage.mq_backend_db",
