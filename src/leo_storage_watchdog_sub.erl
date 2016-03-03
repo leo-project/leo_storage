@@ -269,7 +269,13 @@ is_candidates_2([#compaction_info{total_size = SumTotalSize,
     Acc_1 = case (DiffCompactionDate >= CompactionInterval) of
                 true ->
                     %% Check a fragmentation ratio
-                    ActiveSizeRatio = erlang:round(SumActiveSize / SumTotalSize * 100),
+                    ActiveSizeRatio =
+                        case (SumTotalSize > 0) of
+                            true when SumActiveSize > 0  ->
+                                erlang:round(SumActiveSize / SumTotalSize * 100);
+                            _ ->
+                                0
+                        end,
                     ThresholdActiveSizeRatio = ?env_threshold_active_size_ratio(),
                     case (ActiveSizeRatio =< ThresholdActiveSizeRatio) of
                         true ->
