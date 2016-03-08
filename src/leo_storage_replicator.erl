@@ -69,27 +69,33 @@
                         Callback::function()).
 replicate(Method, Quorum, Nodes, Object, Callback) ->
     AddrId = Object#?OBJECT.addr_id,
-    Key    = Object#?OBJECT.key,
-    ReqId  = Object#?OBJECT.req_id,
+    Key = Object#?OBJECT.key,
+    ReqId = Object#?OBJECT.req_id,
     NumOfNodes = erlang:length(Nodes),
 
     Pid = self(),
     Ref = make_ref(),
-    State = #state{method       = Method,
-                   addr_id      = AddrId,
-                   key          = Key,
-                   object       = Object,
+    State = #state{method = Method,
+                   addr_id = AddrId,
+                   key = Key,
+                   object = Object,
                    num_of_nodes = NumOfNodes,
-                   req_id       = ReqId,
-                   callback     = Callback,
-                   errors       = [],
-                   is_reply     = false
-                  },
-    case proc_lib:start_link(?MODULE, init_loop, [NumOfNodes, Quorum, Ref, Pid, State]) of
-        {ok, Ref, SubParent} ->
-            replicate_1(Nodes, Ref, SubParent, State);
-        _ ->
-            Callback({error, ["Failed to initialize"]})
+                   req_id = ReqId,
+                   callback = Callback,
+                   errors = [],
+                   is_reply = false},
+    MaxProcs = ?env_max_num_of_procs_for_write(),
+    case (MaxProcs <
+              erlang:system_info(process_count)) of
+        true ->
+            Callback({error, unavailable});
+        false ->
+            case proc_lib:start_link(?MODULE, init_loop, [NumOfNodes, Quorum, Ref, Pid, State]) of
+                {ok, Ref, SubParent} ->
+                    replicate_1(Nodes, Ref, SubParent, State);
+                _ ->
+                    Callback({error, ["Failed to initialize"]})
+            end
     end.
 
 init_loop(NumOfNodes, Quorum, Ref, Parent, State) ->
