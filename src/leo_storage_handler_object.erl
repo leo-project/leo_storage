@@ -1080,6 +1080,8 @@ replicate_callback(Object) ->
        ({ok,?CMD_DELETE,_Checksum}) ->
             ok = leo_sync_remote_cluster:defer_stack(Object),
             {ok, 0};
+       ({error, unavailable} = Ret) ->
+            Ret;
        ({error, Errors}) ->
             case catch lists:keyfind(not_found, 2, Errors) of
                 {'EXIT',_} ->
