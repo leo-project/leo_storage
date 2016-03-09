@@ -636,3 +636,13 @@
             _ ->
                 ?DEF_SEEKING_METADATA_TIMEOUT
         end).
+
+%% @doc Maximum number of processes for the write operation
+-define(DEF_MAX_NUM_OF_PROCS, 3000).
+-define(env_max_num_of_procs(),
+        case application:get_env(leo_storage, max_num_of_procs) of
+            {ok, EnvMaxNumOfProcs} ->
+                EnvMaxNumOfProcs;
+            _ ->
+                ?DEF_MAX_NUM_OF_PROCS
+        end).

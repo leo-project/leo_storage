@@ -54,26 +54,32 @@
                         Metadata::#?METADATA{},
                         Callback::function()).
 repair(ReadParams, Redundancies, Metadata, Callback) ->
-    DiffNumOfNodes =
-        case (lists:keyfind(erlang:node(), 2, Redundancies) /= false) of
-            true ->
-                1;
-            false ->
-                0
-        end,
-    NumOfNodes = case erlang:length(
-                        [N || #redundant_node{node = N,
-                                              available = true,
-                                              can_read_repair = true}
-                                  <- Redundancies]) of
-                     0 ->
-                         0;
-                     Len ->
-                         Len - DiffNumOfNodes
-                 end,
-    repair_1(NumOfNodes, DiffNumOfNodes,
-             ReadParams, Redundancies, Metadata, Callback).
-
+    MaxProcs = ?env_max_num_of_procs(),
+    case (MaxProcs <
+              erlang:system_info(process_count)) of
+        true ->
+            Callback({error, unavailable});
+        false ->
+            DiffNumOfNodes =
+                case (lists:keyfind(erlang:node(), 2, Redundancies) /= false) of
+                    true ->
+                        1;
+                    false ->
+                        0
+                end,
+            NumOfNodes = case erlang:length(
+                                [N || #redundant_node{node = N,
+                                                      available = true,
+                                                      can_read_repair = true}
+                                          <- Redundancies]) of
+                             0 ->
+                                 0;
+                             Len ->
+                                 Len - DiffNumOfNodes
+                         end,
+            repair_1(NumOfNodes, DiffNumOfNodes,
+                     ReadParams, Redundancies, Metadata, Callback)
+    end.
 
 %% @private
 repair_1(0,_,#?READ_PARAMETER{quorum = ReadQuorum},_Redundancies,_Metadata, Callback) when ReadQuorum =< 1 ->

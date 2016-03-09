@@ -916,6 +916,8 @@ read_and_repair_3(_Arg1,_,_) ->
 read_and_repair_4(Metadata, #?OBJECT{data = Bin}, ReadParams, Redundancies) ->
     Fun = fun(ok) ->
                   {ok, Metadata, Bin};
+             ({error, unavailable} = Ret) ->
+                  Ret;
              ({error,_Cause}) ->
                   {error, ?ERROR_RECOVER_FAILURE}
           end,
@@ -1407,6 +1409,8 @@ replicate_callback(Object) ->
        ({ok,?CMD_DELETE,_Checksum}) ->
             ok = leo_directory_sync:append(Object),
             {ok, 0};
+       ({error, unavailable} = Ret) ->
+            Ret;
        ({error, Errors}) ->
             case catch lists:keyfind(not_found, 2, Errors) of
                 {'EXIT',_} ->

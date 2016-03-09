@@ -207,14 +207,18 @@ is_candidates([],_,MaxNumOfNodes, Acc) ->
 is_candidates(_, MaxNumOfNodes, MaxNumOfNodes,_Acc) ->
     false;
 is_candidates([#member{node = Node}|Rest], CntRunningNode, MaxNumOfNodes, Acc) ->
-    {IsRunning, Acc_1} = get_candidates(Node, Acc, 0),
-    CntRunningNode_1 = case IsRunning of
-                           true ->
-                               CntRunningNode + 1;
-                           false ->
-                               CntRunningNode
-                       end,
-    is_candidates(Rest, CntRunningNode_1, MaxNumOfNodes, Acc_1).
+    case get_candidates(Node, Acc, 0) of
+        {IsRunning, Acc_1} ->
+            CntRunningNode_1 = case IsRunning of
+                                   true ->
+                                       CntRunningNode + 1;
+                                   false ->
+                                       CntRunningNode
+                               end,
+            is_candidates(Rest, CntRunningNode_1, MaxNumOfNodes, Acc_1);
+        _ ->
+            is_candidates(Rest, CntRunningNode, MaxNumOfNodes, Acc)
+    end.
 
 %% @private
 is_candidates_1(MaxNumOfNodes, Candidates) ->
@@ -269,7 +273,13 @@ is_candidates_2([#compaction_info{total_size = SumTotalSize,
     Acc_1 = case (DiffCompactionDate >= CompactionInterval) of
                 true ->
                     %% Check a fragmentation ratio
-                    ActiveSizeRatio = erlang:round(SumActiveSize / SumTotalSize * 100),
+                    ActiveSizeRatio =
+                        case (SumTotalSize > 0) of
+                            true when SumActiveSize > 0  ->
+                                erlang:round(SumActiveSize / SumTotalSize * 100);
+                            _ ->
+                                0
+                        end,
                     ThresholdActiveSizeRatio = ?env_threshold_active_size_ratio(),
                     case (ActiveSizeRatio =< ThresholdActiveSizeRatio) of
                         true ->

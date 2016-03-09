@@ -231,6 +231,14 @@
   {default, 10} %% 10msec
  ]}.
 
+%% @doc Maximum number of processes for both write and read operation  (v1.2.20-)
+{mapping,
+ "max_num_of_procs",
+ "leo_storage.max_num_of_procs",
+ [
+  {datatype, integer},
+  {default, 3000}
+ ]}.
 
 %% @doc Default coder of erasure-code
 %% @since (v1.4.0-pre3)

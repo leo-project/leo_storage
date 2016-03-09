@@ -80,12 +80,19 @@ replicate(Method, Quorum, Nodes, #?OBJECT{addr_id = AddrId,
                    callback = Callback,
                    errors = [],
                    is_reply = false},
-    case proc_lib:start(?MODULE, init_loop,
-                        [TotalNodes, Quorum, Ref, self(), State]) of
-        {ok, Ref, SubParent} ->
-            replicate_1(Nodes, Ref, SubParent, State);
-        _ ->
-            Callback({error, ["Failed to initialize"]})
+    MaxProcs = ?env_max_num_of_procs(),
+    case (MaxProcs <
+              erlang:system_info(process_count)) of
+        true ->
+            Callback({error, unavailable});
+        false ->
+            case proc_lib:start(?MODULE, init_loop,
+                                [TotalNodes, Quorum, Ref, self(), State]) of
+                {ok, Ref, SubParent} ->
+                    replicate_1(Nodes, Ref, SubParent, State);
+                _ ->
+                    Callback({error, ["Failed to initialize"]})
+            end
     end.
 
 %% @private
