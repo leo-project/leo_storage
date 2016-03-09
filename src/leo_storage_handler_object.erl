@@ -988,6 +988,8 @@ read_and_repair_3({ok, Metadata, #?OBJECT{data = Bin}},
                   #read_parameter{quorum = Quorum} = ReadParameter, Redundancies) ->
     Fun = fun(ok) ->
                   {ok, Metadata, Bin};
+             ({error, unavailable} = Ret) ->
+                  Ret;
              ({error,_Cause}) ->
                   {error, ?ERROR_RECOVER_FAILURE}
           end,

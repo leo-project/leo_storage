@@ -55,35 +55,42 @@
                         Callback::function()).
 repair(#read_parameter{quorum = ReadQuorum,
                        req_id = ReqId}, Redundancies, Metadata, Callback) ->
-    Ref    = make_ref(),
-    From   = self(),
-    AddrId = Metadata#?METADATA.addr_id,
-    Key    = Metadata#?METADATA.key,
-    Params = #state{read_quorum  = ReadQuorum,
-                    redundancies = Redundancies,
-                    metadata     = Metadata,
-                    req_id       = ReqId},
-    NumOfNodes = erlang:length([N || #redundant_node{node = N,
-                                                     can_read_repair = true}
-                                         <- Redundancies]),
-    lists:foreach(
-      fun(#redundant_node{available = false}) ->
-              void;
-         (#redundant_node{can_read_repair = false}) ->
-              void;
-         (#redundant_node{node = Node,
-                          available = true,
-                          can_read_repair = true}) ->
-              spawn(fun() ->
-                            RPCKey = rpc:async_call(
-                                       Node, leo_storage_handler_object,
-                                       head, [AddrId, Key, false]),
-                            compare(Ref, From, RPCKey, Node, Params)
-                    end);
-         (_) ->
-              void
-      end, Redundancies),
-    loop(ReadQuorum, Ref, From, NumOfNodes, {ReqId, Key, []}, Callback).
+    MaxProcs = ?env_max_num_of_procs(),
+    case (MaxProcs <
+              erlang:system_info(process_count)) of
+        true ->
+            Callback({error, unavailable});
+        false ->
+            Ref = make_ref(),
+            From = self(),
+            AddrId = Metadata#?METADATA.addr_id,
+            Key = Metadata#?METADATA.key,
+            Params = #state{read_quorum = ReadQuorum,
+                            redundancies = Redundancies,
+                            metadata = Metadata,
+                            req_id = ReqId},
+            NumOfNodes = erlang:length([N || #redundant_node{node = N,
+                                                             can_read_repair = true}
+                                                 <- Redundancies]),
+            lists:foreach(
+              fun(#redundant_node{available = false}) ->
+                      void;
+                 (#redundant_node{can_read_repair = false}) ->
+                      void;
+                 (#redundant_node{node = Node,
+                                  available = true,
+                                  can_read_repair = true}) ->
+                      spawn(fun() ->
+                                    RPCKey = rpc:async_call(
+                                               Node, leo_storage_handler_object,
+                                               head, [AddrId, Key, false]),
+                                    compare(Ref, From, RPCKey, Node, Params)
+                            end);
+                 (_) ->
+                      void
+              end, Redundancies),
+            loop(ReadQuorum, Ref, From, NumOfNodes, {ReqId, Key, []}, Callback)
+    end.
 
 
 %% @doc Waiting for messages (compare a metadata)

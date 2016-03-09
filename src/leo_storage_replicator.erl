@@ -84,7 +84,7 @@ replicate(Method, Quorum, Nodes, Object, Callback) ->
                    callback = Callback,
                    errors = [],
                    is_reply = false},
-    MaxProcs = ?env_max_num_of_procs_for_write(),
+    MaxProcs = ?env_max_num_of_procs(),
     case (MaxProcs <
               erlang:system_info(process_count)) of
         true ->

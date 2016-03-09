@@ -234,8 +234,8 @@
 
 %% @doc Maximum number of processes for the write-operation (v1.2.20-)
 {mapping,
- "max_num_of_procs_for_write",
- "leo_storage.max_num_of_procs_for_write",
+ "max_num_of_procs",
+ "leo_storage.max_num_of_procs",
  [
   {datatype, integer},
   {default, 3000}
