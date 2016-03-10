@@ -626,7 +626,8 @@ correct_redundancies_2(ListOfMetadata, ErrorNodes) ->
                 MaxClock = lists:max([M#?METADATA.clock
                                       || {_,M} <- ListOfMetadata]),
                 {_,RetL} = lists:foldl(
-                             fun({_,#?METADATA{clock = Clock}} = M, {MaxClock_1, Acc}) when Clock == MaxClock_1 ->
+                             fun({_,#?METADATA{clock = Clock}} = M,
+                                 {MaxClock_1, Acc}) when Clock == MaxClock_1 ->
                                      {MaxClock_1, [M|Acc]};
                                 (_, {MaxClock_1, Acc}) ->
                                      {MaxClock_1, Acc}
@@ -639,11 +640,13 @@ correct_redundancies_2(ListOfMetadata, ErrorNodes) ->
         lists:foldl(
           fun({Node,_Metadata}, {{DestNode, _Metadata} = Dest, C, R}) when Node =:= DestNode ->
                   {Dest, [Node|C], R};
-             ({Node, #?METADATA{clock = Clock}}, {{DestNode, #?METADATA{clock = DestClock}} = Dest, C, R}) when Node  =/= DestNode,
-                                                                                                                Clock =:= DestClock ->
+             ({Node, #?METADATA{clock = Clock}},
+              {{DestNode, #?METADATA{clock = DestClock}} = Dest, C, R}) when Node  =/= DestNode,
+                                                                             Clock =:= DestClock ->
                   {Dest, [Node|C], R};
-             ({Node, #?METADATA{clock = Clock}}, {{DestNode, #?METADATA{clock = DestClock}} = Dest, C, R}) when Node  =/= DestNode,
-                                                                                                                Clock =/= DestClock ->
+             ({Node, #?METADATA{clock = Clock}},
+              {{DestNode, #?METADATA{clock = DestClock}} = Dest, C, R}) when Node  =/= DestNode,
+                                                                             Clock =/= DestClock ->
                   {Dest, C, [Node|R]}
           end, {H, [], []}, ListOfMetadata),
     correct_redundancies_3(ErrorNodes ++ InconsistentNodes, CorrectNodes, Metadata).
