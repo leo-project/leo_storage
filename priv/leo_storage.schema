@@ -242,6 +242,16 @@
  ]}.
 
 
+%% @doc Total number of obj-storage-read processes  (v1.2.20-)
+{mapping,
+ "num_of_obj_storage_read_procs",
+ "leo_object_storage.num_of_obj_storage_read_procs",
+ [
+  {datatype, integer},
+  {default, 3}
+ ]}.
+
+
 %% --------------------------------------------------------------------
 %% STORAGE - Watchdog
 %% --------------------------------------------------------------------
