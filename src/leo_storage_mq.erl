@@ -809,7 +809,8 @@ correct_redundancies_2(ListOfMetadata, ErrorNodes) ->
                 MaxClock = lists:max([M#?METADATA.clock
                                       || {_,M} <- ListOfMetadata]),
                 {_,RetL} = lists:foldl(
-                             fun({_,#?METADATA{clock = Clock}} = M, {MaxClock_1, Acc}) when Clock == MaxClock_1 ->
+                             fun({_,#?METADATA{clock = Clock}} = M,
+                                 {MaxClock_1, Acc}) when Clock == MaxClock_1 ->
                                      {MaxClock_1, [M|Acc]};
                                 (_, {MaxClock_1, Acc}) ->
                                      {MaxClock_1, Acc}
