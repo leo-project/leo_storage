@@ -34,6 +34,12 @@
 -include_lib("leo_object_storage/include/leo_object_storage.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
+-ifdef(namespaced_types).
+-type otp_dict() :: dict:dict().
+-else.
+-type otp_dict() :: dict().
+-endif.
+
 %% API
 -export([start_link/0, stop/0]).
 -export([append/2,
@@ -52,7 +58,7 @@
 
 
 -record(state, {
-          directories = [] :: dict()
+          directories = [] :: otp_dict()
          }).
 
 
