@@ -667,8 +667,8 @@ replicate(Object) ->
                            r = ReadQuorum,
                            d = DeleteQuorum}} ->
             %% Replicate an object into the storage cluster
-            Object_1 = case Object#?OBJECT.cp_params of
-                           undefined ->
+            Object_1 = case (Object#?OBJECT.cp_params == undefined) of
+                           true ->
                                Object#?OBJECT{cp_params = {TotalReplicas, WriteQuorum,
                                                            ReadQuorum, DeleteQuorum}};
                            _ ->

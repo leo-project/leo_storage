@@ -358,6 +358,7 @@
 
 
 %% @doc Total number of obj-storage-read processes per object-container, AVS (v1.2.20-)
+%%      Range: [1..100]
 {mapping,
  "num_of_obj_storage_read_procs",
  "leo_object_storage.num_of_obj_storage_read_procs",
@@ -365,6 +366,19 @@
   {datatype, integer},
   {default, 3}
  ]}.
+
+{translation, "leo_object_storage.num_of_obj_storage_read_procs",
+ fun(Conf) ->
+         Val = cuttlefish_util:conf_get_value("num_of_obj_storage_read_procs", Conf),
+         case (Val < 1) of
+             true ->
+                 1;
+             false when Val > 100 ->
+                 100;
+             false ->
+                 Val
+         end
+ end}.
 
 
 %% --------------------------------------------------------------------
