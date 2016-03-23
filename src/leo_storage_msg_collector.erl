@@ -2,7 +2,7 @@
 %%
 %% Leo Storage
 %%
-%% Copyright (c) 2012-2015 Rakuten, Inc.
+%% Copyright (c) 2012-2016 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -26,8 +26,6 @@
 %% @end
 %%======================================================================
 -module(leo_storage_msg_collector).
-
--author('Yosuke Hara').
 
 -behaviour(gen_server).
 

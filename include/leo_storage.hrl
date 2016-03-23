@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012-2015 Rakuten, Inc.
+%% Copyright (c) 2012-2016 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -22,29 +22,26 @@
 %% LeoFS Storage - Constant/Macro/Record
 %%
 %%====================================================================
--author('Yosuke Hara').
 
 %% @doc default-values.
-%%
 -define(SHUTDOWN_WAITING_TIME, 2000).
 -define(MAX_RESTART, 5).
 -define(MAX_TIME, 60).
 -define(RETRY_TIMES, 5).
 
 -ifdef(TEST).
--define(TIMEOUT,         1000).
+-define(TIMEOUT, 1000).
 -define(DEF_REQ_TIMEOUT, 1000).
 -else.
--define(TIMEOUT,          5000). %%  5sec
--define(DEF_REQ_TIMEOUT, 30000). %% 30sec
+-define(TIMEOUT, 5000).
+-define(DEF_REQ_TIMEOUT, 30000).
 -endif.
 
 %% @doc operationg-methods.
-%%
--define(CMD_GET,    get).
--define(CMD_PUT,    put).
+-define(CMD_GET, get).
+-define(CMD_PUT, put).
 -define(CMD_DELETE, delete).
--define(CMD_HEAD,   head).
+-define(CMD_HEAD, head).
 -type(request_verb() :: ?CMD_GET |
                         ?CMD_PUT |
                         ?CMD_DELETE |
@@ -52,37 +49,27 @@
                         ).
 
 %% @doc queue-related.
-%%
--define(QUEUE_ID_PER_OBJECT,        'leo_per_object_queue').
--define(QUEUE_ID_SYNC_BY_VNODE_ID,  'leo_sync_by_vnode_id_queue').
--define(QUEUE_ID_DIRECTORY,         'leo_directory_queue').
--define(QUEUE_ID_REBALANCE,         'leo_rebalance_queue').
--define(QUEUE_ID_ASYNC_DELETION,    'leo_async_deletion_queue').
--define(QUEUE_ID_RECOVERY_NODE,     'leo_recovery_node_queue').
--define(QUEUE_ID_SYNC_OBJ_WITH_DC,  'leo_sync_obj_with_dc_queue').
+-define(QUEUE_ID_PER_OBJECT, 'leo_per_object_queue').
+-define(QUEUE_ID_SYNC_BY_VNODE_ID, 'leo_sync_by_vnode_id_queue').
+-define(QUEUE_ID_DIRECTORY, 'leo_directory_queue').
+-define(QUEUE_ID_REBALANCE, 'leo_rebalance_queue').
+-define(QUEUE_ID_ASYNC_DELETION, 'leo_async_deletion_queue').
+-define(QUEUE_ID_RECOVERY_NODE, 'leo_recovery_node_queue').
+-define(QUEUE_ID_SYNC_OBJ_WITH_DC, 'leo_sync_obj_with_dc_queue').
 -define(QUEUE_ID_COMP_META_WITH_DC, 'leo_comp_meta_with_dc_queue').
--define(QUEUE_ID_DEL_DIR,           'leo_delete_dir_queue').
+-define(QUEUE_ID_DEL_DIR, 'leo_delete_dir_queue').
+-define(QUEUE_ID_REQ_DEL_DIR, 'leo_req_delete_dir_queue').
 
--define(QUEUE_TYPE_PER_OBJECT,        'queue_type_per_object').
--define(QUEUE_TYPE_SYNC_BY_VNODE_ID,  'queue_type_sync_by_vnode_id').
--define(QUEUE_TYPE_REBALANCE,         'queue_type_rebalance').
--define(QUEUE_TYPE_ASYNC_DELETION,    'queue_type_async_deletion').
--define(QUEUE_TYPE_RECOVERY_NODE,     'queue_type_recovery_node').
--define(QUEUE_TYPE_SYNC_OBJ_WITH_DC,  'queue_type_sync_obj_with_dc').
--define(QUEUE_TYPE_COMP_META_WITH_DC, 'queue_type_comp_meta_with_dc').
--define(QUEUE_TYPE_DEL_DIR,           'queue_type_delete_dir').
+-define(ERR_TYPE_REPLICATE_DATA, 'error_msg_replicate_data').
+-define(ERR_TYPE_RECOVER_DATA, 'error_msg_recover_data').
+-define(ERR_TYPE_DELETE_DATA, 'error_msg_delete_data').
+-define(ERR_TYPE_REPLICATE_INDEX, 'error_msg_replicate_index').
+-define(ERR_TYPE_RECOVER_INDEX, 'error_msg_recover_index').
+-define(ERR_TYPE_DELETE_INDEX, 'error_msg_delete_index').
 
--define(ERR_TYPE_REPLICATE_DATA,      'error_msg_replicate_data').
--define(ERR_TYPE_RECOVER_DATA,        'error_msg_recover_data').
--define(ERR_TYPE_DELETE_DATA,         'error_msg_delete_data').
--define(ERR_TYPE_REPLICATE_INDEX,     'error_msg_replicate_index').
--define(ERR_TYPE_RECOVER_INDEX,       'error_msg_recover_index').
--define(ERR_TYPE_DELETE_INDEX,        'error_msg_delete_index').
-
--define(TBL_REBALANCE_COUNTER,        'leo_rebalance_counter').
+-define(TBL_REBALANCE_COUNTER, 'leo_rebalance_counter').
 
 %% @doc error messages.
-%%
 -define(ERROR_COULD_NOT_GET_DATA, "Could not get data").
 -define(ERROR_COULD_NOT_GET_META, "Could not get a metadata").
 -define(ERROR_COULD_NOT_GET_METADATAS, "Could not get metadatas").
@@ -99,100 +86,96 @@
 
 
 %% @doc notified message items
-%%
 -define(MSG_ITEM_TIMEOUT, 'timeout').
 -define(MSG_ITEM_SLOW_OP, 'slow_op').
 
 
 %% @doc request parameter for READ
-%%
 -record(read_parameter, {
-          ref            :: reference(),
-          addr_id        :: integer(),
-          key            :: binary(),
-          etag = 0       :: integer(),
+          ref :: reference(),
+          addr_id = 0 :: non_neg_integer(),
+          key = <<>> :: binary(),
+          etag = 0 :: non_neg_integer(),
           start_pos = -1 :: integer(),
           end_pos   = -1 :: integer(),
-          quorum         :: integer(),
-          req_id         :: integer()
+          quorum = 0 :: non_neg_integer(),
+          req_id = 0 :: non_neg_integer()
          }).
 
 %% @doc Queue's Message.
-%%
 -record(inconsistent_data_message, {
-          id = 0                :: integer(),
-          type                  :: atom(),
-          addr_id = 0           :: integer(),
-          key                   :: any(),
-          meta                  :: tuple(),
-          timestamp = 0         :: integer(),
-          times = 0             :: integer()}).
+          id = 0 :: non_neg_integer(),
+          type :: atom(),
+          addr_id = 0 :: non_neg_integer(),
+          key :: any(),
+          meta :: tuple(),
+          timestamp = 0 :: non_neg_integer(),
+          times = 0 :: non_neg_integer()}).
 
 -record(inconsistent_index_message, {
-          id = 0                :: integer(),
-          type                  :: atom(),
-          addr_id = 0           :: integer(),
-          key                   :: any(),
-          timestamp = 0         :: integer(),
-          times = 0             :: integer()}).
+          id = 0 :: non_neg_integer(),
+          type :: atom(),
+          addr_id = 0 :: non_neg_integer(),
+          key :: any(),
+          timestamp = 0 :: non_neg_integer(),
+          times = 0 :: non_neg_integer()}).
 
 -record(sync_unit_of_vnode_message, {
-          id = 0                :: integer(),
-          vnode_id = 0          :: integer(),
-          node                  :: atom(),
-          timestamp = 0         :: integer(),
-          times = 0             :: integer()
+          id = 0 :: non_neg_integer(),
+          vnode_id = 0 :: non_neg_integer(),
+          node :: atom(),
+          timestamp = 0 :: non_neg_integer(),
+          times = 0 :: non_neg_integer()
          }).
 
 -record(rebalance_message, {
-          id = 0                :: integer(),
-          vnode_id = 0          :: integer(),
-          addr_id = 0           :: integer(),
-          key                   :: binary(),
-          node                  :: atom(),
-          timestamp = 0         :: integer(),
-          times = 0             :: integer()
+          id = 0 :: non_neg_integer(),
+          vnode_id = 0 :: non_neg_integer(),
+          addr_id = 0 :: non_neg_integer(),
+          key = <<>> :: binary(),
+          node :: atom(),
+          timestamp = 0 :: non_neg_integer(),
+          times = 0 :: non_neg_integer()
          }).
 
 -record(async_deletion_message, {
-          id = 0                :: integer(),
-          addr_id = 0           :: integer(),
-          key                   :: any(),
-          timestamp = 0         :: integer(),
-          times = 0             :: integer()}).
+          id = 0 :: non_neg_integer(),
+          addr_id = 0 :: non_neg_integer(),
+          key :: any(),
+          timestamp = 0 :: non_neg_integer(),
+          times = 0 :: non_neg_integer()}).
 
 -record(recovery_node_message, {
-          id = 0                :: integer(),
-          node                  :: atom(),
-          timestamp = 0         :: integer(),
-          times = 0             :: integer()}).
+          id = 0 :: non_neg_integer(),
+          node :: atom(),
+          timestamp = 0 :: non_neg_integer(),
+          times = 0 :: non_neg_integer()}).
 
 -record(inconsistent_data_with_dc, {
-          id = 0                :: integer(),
-          cluster_id            :: atom(),
-          addr_id = 0           :: integer(),
-          key                   :: binary(),
-          del = 0               :: integer(), %% del:[0:false, 1:true]
-          timestamp = 0         :: integer(),
-          times = 0             :: integer()}).
+          id = 0 :: non_neg_integer(),
+          cluster_id :: atom(),
+          addr_id = 0 :: non_neg_integer(),
+          key = <<>> :: binary(),
+          del = 0 :: non_neg_integer(), %% del:[0:false, 1:true]
+          timestamp = 0 :: non_neg_integer(),
+          times = 0 :: non_neg_integer()}).
 
 -record(comparison_metadata_with_dc, {
-          id = 0                 :: integer(),
-          cluster_id             :: atom(),
+          id = 0 :: non_neg_integer(),
+          cluster_id :: atom(),
           list_of_addrid_and_key :: list(),
-          timestamp = 0          :: integer()
+          timestamp = 0 :: non_neg_integer()
          }).
 
 -record(delete_dir, {
-          id = 0        :: integer(),
-          node          :: atom(),
-          keys = []     :: [binary()|undefined],
-          timestamp = 0 :: integer()
+          id = 0 :: non_neg_integer(),
+          node :: atom(),
+          dir = <<>> :: binary(),
+          timestamp = 0 :: non_neg_integer()
          }).
 
 
 %% @doc macros.
-%%
 -define(env_storage_device(),
         case application:get_env(leo_storage, obj_containers) of
             {ok, EnvStorageDevice} ->
@@ -366,17 +349,6 @@
         end).
 -endif.
 
-%% @doc types.
-%%
--type(queue_type() :: ?QUEUE_TYPE_PER_OBJECT  |
-                      ?QUEUE_TYPE_SYNC_BY_VNODE_ID  |
-                      ?QUEUE_TYPE_REBALANCE |
-                      ?QUEUE_TYPE_ASYNC_DELETION |
-                      ?QUEUE_TYPE_RECOVERY_NODE |
-                      ?QUEUE_TYPE_SYNC_OBJ_WITH_DC |
-                      ?QUEUE_TYPE_COMP_META_WITH_DC |
-                      ?QUEUE_TYPE_DEL_DIR
-                      ).
 
 -type(queue_id()   :: ?QUEUE_ID_PER_OBJECT |
                       ?QUEUE_ID_SYNC_BY_VNODE_ID |
@@ -385,10 +357,12 @@
                       ?QUEUE_ID_RECOVERY_NODE |
                       ?QUEUE_ID_SYNC_OBJ_WITH_DC |
                       ?QUEUE_ID_COMP_META_WITH_DC |
-                      ?QUEUE_ID_DEL_DIR
+                      ?QUEUE_ID_DEL_DIR |
+                      ?QUEUE_ID_REQ_DEL_DIR
                       ).
 
--define(mq_id_and_alias, [{leo_delete_dir_queue,        "delete directories"},
+-define(mq_id_and_alias, [{leo_delete_dir_queue,        "remove directories"},
+                          {leo_req_delete_dir_queue,    "request removing directories"},
                           {leo_comp_meta_with_dc_queue, "compare metadata w/remote-node"},
                           {leo_sync_obj_with_dc_queue,  "sync objs w/remote-node"},
                           {leo_recovery_node_queue,     "recovery objs of node"},
@@ -398,9 +372,9 @@
                           {leo_per_object_queue,        "recover inconsistent objs"}]).
 
 
-%% Storage watchdog related
+%% @doc Storage watchdog related
 %%
-%% @doc Threshold active size ratio:
+%% Threshold active size ratio:
 %%    * round(active-size/total-size)
 %%    * default:50%
 -ifdef(TEST).
@@ -465,8 +439,7 @@
             end
         end).
 
-%% Storage autonomic-operation related
-%%
+%% @doc Storage autonomic-operation related
 -define(env_auto_compaction_enabled(),
         case application:get_env(leo_storage, auto_compaction_enabled) of
             {ok, EnvAutoCompactionEnabled} ->
@@ -500,7 +473,7 @@
         end).
 
 
-%% Misc.
+%% @doc Misc
 -define(DEF_SEEKING_METADATA_TIMEOUT, 10). %% default:50ms
 -define(env_seeking_timeout_per_metadata(),
         case application:get_env(leo_storage, seeking_timeout_per_metadata) of
@@ -508,4 +481,14 @@
                 EnvSeekingMetadataTimeout;
             _ ->
                 ?DEF_SEEKING_METADATA_TIMEOUT
+        end).
+
+%% @doc Maximum number of processes for the write operation
+-define(DEF_MAX_NUM_OF_PROCS, 3000).
+-define(env_max_num_of_procs(),
+        case application:get_env(leo_storage, max_num_of_procs) of
+            {ok, EnvMaxNumOfProcs} ->
+                EnvMaxNumOfProcs;
+            _ ->
+                ?DEF_MAX_NUM_OF_PROCS
         end).

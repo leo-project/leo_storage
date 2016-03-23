@@ -2,7 +2,7 @@
 %%
 %% Leo Storage
 %%
-%% Copyright (c) 2012-2014 Rakuten, Inc.
+%% Copyright (c) 2012-2016 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -19,8 +19,6 @@
 %% under the License.
 %%======================================================================
 -module(leo_sync_remote_cluster).
--author('Yosuke Hara').
-
 -behaviour(leo_ordning_reda_behaviour).
 
 -include("leo_storage.hrl").
@@ -42,7 +40,6 @@
 %% API
 %%--------------------------------------------------------------------
 %% @doc Add a container into the supervisor
-%%
 -spec(start_link() ->
              ok | {error, any()}).
 start_link() ->
@@ -59,7 +56,6 @@ start_link(UId) ->
 
 
 %% @doc Remove a container from the supervisor
-%%
 -spec(stop(Id) ->
              ok | {error, any()} when Id::atom()).
 stop(Id) ->
@@ -67,48 +63,53 @@ stop(Id) ->
 
 
 %% @doc Stack a object into the ordning&reda
-%%
 -spec(defer_stack(Object) ->
              ok | {error, any()} when Object::null|#?OBJECT{}).
-defer_stack(#?OBJECT{addr_id = AddrId,
-                     key = Key} = Object) ->
-    spawn(fun() ->
-                  %% Check whether stack an object or not
-                  case leo_mdcr_tbl_cluster_stat:find_by_state(?STATE_RUNNING) of
-                      {ok, _} ->
-                          case stack(Object) of
-                              ok ->
-                                  void;
-                              {error, Cause}->
-                                  ?warn("defer_stack/1",
-                                        [{key, binary_to_list(Object#?OBJECT.key)},
-                                                 {cause, Cause}]),
-                                  QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
-                                  case leo_storage_mq:publish(
-                                         QId, AddrId, Key) of
-                                      ok ->
-                                          void;
-                                      {error, Cause} ->
-                                          ?warn("defer_stack/1",
-                                                [{addr_id, AddrId},
-                                                 {key, Key}, {cause, Cause}])
-                                  end
-                          end;
-                      not_found ->
-                          void;
-                      {error, Cause} ->
-                          ?warn("defer_stack/1",
-                                [{key, binary_to_list(Object#?OBJECT.key)},
-                                 {cause, Cause}])
-                  end
-          end),
-    ok;
+defer_stack(#?OBJECT{} = Object) ->
+    case (leo_mdcr_tbl_cluster_stat:size() > 0) of
+        true ->
+            Ret = leo_mdcr_tbl_cluster_stat:find_by_state(?STATE_RUNNING),
+            defer_stack_1(Ret, Object);
+        false ->
+            ok
+    end;
 defer_stack(_) ->
     ok.
 
+%% @private
+defer_stack_1({ok,_}, #?OBJECT{addr_id = AddrId,
+                               key = Key} = Object) ->
+    case stack(Object) of
+        ok ->
+            ok;
+        {error, Cause}->
+            ?warn("defer_stack_1/1",
+                  [{addr_id, AddrId},
+                   {key, Key}, {cause, Cause}]),
+
+            QId = ?QUEUE_ID_SYNC_OBJ_WITH_DC,
+            case leo_storage_mq:publish(
+                   QId, AddrId, Key) of
+                ok ->
+                    ok;
+                {error, Cause} ->
+                    ?warn("defer_stack/1",
+                          [{addr_id, AddrId},
+                           {key, Key}, {cause, Cause}]),
+                    {error, Cause}
+            end
+    end;
+defer_stack_1(not_found,_) ->
+    ok;
+defer_stack_1({error, Cause}, #?OBJECT{addr_id = AddrId,
+                                       key = Key}) ->
+    ?warn("defer_stack_1/1",
+          [{addr_id, AddrId},
+           {key, Key}, {cause, Cause}]),
+    {error, Cause}.
+
 
 %% @doc Stack a object into the ordning&reda
-%%
 -spec(stack(Object) ->
              ok | {error, any()} when Object::#?OBJECT{}).
 stack(Object) ->
@@ -121,8 +122,7 @@ stack(ClusterId, Object) ->
     stack_fun(ClusterId, Object).
 
 
-%% Store stacked objects
-%%
+%% @doc Store stacked objects
 -spec(store(ClusterId, CompressedObjs) ->
              {ok, [#?METADATA{}]} | {error, any()} when ClusterId::atom(),
                                                         CompressedObjs::binary()).
@@ -140,8 +140,7 @@ store(ClusterId, CompressedObjs) ->
     end.
 
 
-%% Generate a sync-proc of ID
-%%
+%% @doc Generate a sync-proc of ID
 -spec(gen_id() ->
              atom()).
 gen_id() ->
@@ -162,7 +161,6 @@ gen_id({cluster_id, ClusterId}) ->
 
 
 %% @doc Retrieve cluster members
-%%
 -spec(get_cluster_members(ClusterId) ->
              {ok, [#mdc_replication_info{}]} |
              {error, any()} when ClusterId::atom()).
@@ -217,7 +215,6 @@ get_cluster_members_2([#?CLUSTER_INFO{cluster_id = ClusterId}|Rest],
 
 %% @doc Compare a local-metadata with a remote-metadata
 %%      If it's inconsistent, the metadata is put into the queue
-%%
 -spec(compare_metadata(ListOfMetadata) ->
              ok when ListOfMetadata::[#?METADATA{}]).
 compare_metadata([]) ->
@@ -241,7 +238,7 @@ compare_metadata_1({ok, MetaBin}, #?METADATA{cluster_id = ClusterId,
         true ->
             ok;
         false ->
-            QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
+            QId = ?QUEUE_ID_SYNC_OBJ_WITH_DC,
             case leo_storage_mq:publish(
                    QId, ClusterId, AddrId, Key) of
                 ok ->
@@ -259,7 +256,7 @@ compare_metadata_1(not_found, #?METADATA{cluster_id = ClusterId,
                                          addr_id = AddrId,
                                          key = Key,
                                          del = ?DEL_FALSE}) ->
-    QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
+    QId = ?QUEUE_ID_SYNC_OBJ_WITH_DC,
     case leo_storage_mq:publish(QId, ClusterId, AddrId, Key, ?DEL_TRUE) of
         ok ->
             ok;
@@ -276,12 +273,12 @@ compare_metadata_1({_,Cause}, #?METADATA{cluster_id = ClusterId,
           [{key, binary_to_list(Key)},
            {cause, Cause}]),
 
-    QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
+    QId = ?QUEUE_ID_SYNC_OBJ_WITH_DC,
     case leo_storage_mq:publish(QId, ClusterId, AddrId, Key) of
         ok ->
             ok;
         {error, Cause} ->
-            ?warn("compare_metadata/1",
+            ?warn("compare_metadata_1/2",
                   [{qid, QId}, {cluster_id, ClusterId},
                    {addr_id, AddrId}, {key, Key}, {cause, Cause}]),
             ok
@@ -291,7 +288,6 @@ compare_metadata_1({_,Cause}, #?METADATA{cluster_id = ClusterId,
 %% Callback
 %%--------------------------------------------------------------------
 %% @doc Handle send object to a remote-node.
-%%
 handle_send(UId, StackedInfo, CompressedObjs) ->
     %% Retrieve cluser-id
     ClusterId = get_cluster_id_from_uid(UId),
@@ -306,7 +302,6 @@ handle_send(UId, StackedInfo, CompressedObjs) ->
 
 
 %% @doc Handle a fail process
-%%
 -spec(handle_fail(atom(), list({integer(), string()})) ->
              ok | {error, any()}).
 handle_fail(_, []) ->
@@ -314,7 +309,7 @@ handle_fail(_, []) ->
 handle_fail(UId, [{AddrId, Key}|Rest] = _StackInfo) ->
     case get_cluster_id_from_uid(UId) of
         undefined ->
-            QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
+            QId = ?QUEUE_ID_SYNC_OBJ_WITH_DC,
             case leo_storage_mq:publish(QId, AddrId, Key) of
                 ok ->
                     void;
@@ -324,7 +319,7 @@ handle_fail(UId, [{AddrId, Key}|Rest] = _StackInfo) ->
                            {key, Key}, {cause, Cause}])
             end;
         ClusterId ->
-            QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
+            QId = ?QUEUE_ID_SYNC_OBJ_WITH_DC,
             case leo_storage_mq:publish(QId, ClusterId, AddrId, Key) of
                 ok ->
                     void;
@@ -345,7 +340,7 @@ handle_fail(UId, [{AddrId, Key}|Rest] = _StackInfo) ->
 -spec(stack_fun(atom(), #?OBJECT{}) ->
              ok | {error, any()}).
 stack_fun(ClusterId, #?OBJECT{addr_id = AddrId,
-                              key     = Key} = Object) ->
+                              key = Key} = Object) ->
     case leo_cluster_tbl_conf:get() of
         {ok, #?SYSTEM_CONF{
                  cluster_id = MDC_ClusterId,
@@ -531,7 +526,7 @@ send_1([#?CLUSTER_MEMBER{node = Node,
 enqueue_fail_replication([],_ClusterId) ->
     ok;
 enqueue_fail_replication([{AddrId, Key}|Rest], ClusterId) ->
-    QId = ?QUEUE_TYPE_SYNC_OBJ_WITH_DC,
+    QId = ?QUEUE_ID_SYNC_OBJ_WITH_DC,
     case leo_storage_mq:publish(QId, ClusterId, AddrId, Key) of
         ok ->
             void;

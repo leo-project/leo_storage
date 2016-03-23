@@ -122,7 +122,7 @@
  "leo_storage.system_version",
  [
   {datatype, string},
-  {default, "1.2.18"}
+  {default, "1.2.20"}
  ]}.
 
 %% @doc Path of object-container
@@ -230,6 +230,40 @@
   {datatype, integer},
   {default, 10} %% 10msec
  ]}.
+
+
+%% @doc Maximum number of processes for both write and read operation  (v1.2.20-)
+{mapping,
+ "max_num_of_procs",
+ "leo_storage.max_num_of_procs",
+ [
+  {datatype, integer},
+  {default, 3000}
+ ]}.
+
+
+%% @doc Total number of obj-storage-read processes per object-container, AVS (v1.2.20-)
+%%      Range: [1..100]
+{mapping,
+ "num_of_obj_storage_read_procs",
+ "leo_object_storage.num_of_obj_storage_read_procs",
+ [
+  {datatype, integer},
+  {default, 3}
+ ]}.
+
+{translation, "leo_object_storage.num_of_obj_storage_read_procs",
+ fun(Conf) ->
+         Val = cuttlefish_util:conf_get_value("num_of_obj_storage_read_procs", Conf),
+         case (Val < 1) of
+             true ->
+                 1;
+             false when Val > 100 ->
+                 100;
+             false ->
+                 Val
+         end
+ end}.
 
 
 %% --------------------------------------------------------------------
@@ -662,13 +696,12 @@
 %% --------------------------------------------------------------------
 %% Leo' MQ
 %% @doc leo-mq.backend_db
-%% @deprecated (v1.2.2-)
 {mapping,
  "mq.backend_db",
  "leo_storage.mq_backend_db",
  [
   {datatype, atom},
-  {default, 'bitcask'}
+  {default, 'leveldb'}
  ]}.
 
 

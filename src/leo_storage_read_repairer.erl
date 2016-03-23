@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012-2014 Rakuten, Inc.
+%% Copyright (c) 2012-2016 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -24,8 +24,6 @@
 %% @end
 %%======================================================================
 -module(leo_storage_read_repairer).
-
--author('Yosuke Hara').
 
 -include("leo_storage.hrl").
 -include_lib("eunit/include/eunit.hrl").
@@ -57,35 +55,42 @@
                         Callback::function()).
 repair(#read_parameter{quorum = ReadQuorum,
                        req_id = ReqId}, Redundancies, Metadata, Callback) ->
-    Ref    = make_ref(),
-    From   = self(),
-    AddrId = Metadata#?METADATA.addr_id,
-    Key    = Metadata#?METADATA.key,
-    Params = #state{read_quorum  = ReadQuorum,
-                    redundancies = Redundancies,
-                    metadata     = Metadata,
-                    req_id       = ReqId},
-    NumOfNodes = erlang:length([N || #redundant_node{node = N,
-                                                     can_read_repair = true}
-                                         <- Redundancies]),
-    lists:foreach(
-      fun(#redundant_node{available = false}) ->
-              void;
-         (#redundant_node{can_read_repair = false}) ->
-              void;
-         (#redundant_node{node = Node,
-                          available = true,
-                          can_read_repair = true}) ->
-              spawn(fun() ->
-                            RPCKey = rpc:async_call(
-                                       Node, leo_storage_handler_object,
-                                       head, [AddrId, Key, false]),
-                            compare(Ref, From, RPCKey, Node, Params)
-                    end);
-         (_) ->
-              void
-      end, Redundancies),
-    loop(ReadQuorum, Ref, From, NumOfNodes, {ReqId, Key, []}, Callback).
+    MaxProcs = ?env_max_num_of_procs(),
+    case (MaxProcs <
+              erlang:system_info(process_count)) of
+        true ->
+            Callback({error, unavailable});
+        false ->
+            Ref = make_ref(),
+            From = self(),
+            AddrId = Metadata#?METADATA.addr_id,
+            Key = Metadata#?METADATA.key,
+            Params = #state{read_quorum = ReadQuorum,
+                            redundancies = Redundancies,
+                            metadata = Metadata,
+                            req_id = ReqId},
+            NumOfNodes = erlang:length([N || #redundant_node{node = N,
+                                                             can_read_repair = true}
+                                                 <- Redundancies]),
+            lists:foreach(
+              fun(#redundant_node{available = false}) ->
+                      void;
+                 (#redundant_node{can_read_repair = false}) ->
+                      void;
+                 (#redundant_node{node = Node,
+                                  available = true,
+                                  can_read_repair = true}) ->
+                      spawn(fun() ->
+                                    RPCKey = rpc:async_call(
+                                               Node, leo_storage_handler_object,
+                                               head, [AddrId, Key, false]),
+                                    compare(Ref, From, RPCKey, Node, Params)
+                            end);
+                 (_) ->
+                      void
+              end, Redundancies),
+            loop(ReadQuorum, Ref, From, NumOfNodes, {ReqId, Key, []}, Callback)
+    end.
 
 
 %% @doc Waiting for messages (compare a metadata)
@@ -173,7 +178,7 @@ compare(Ref, Pid, RPCKey, Node, #state{metadata = #?METADATA{addr_id = AddrId,
              ok | {error, any()} when AddrId::non_neg_integer(),
                                       Key::binary()).
 enqueue(AddrId, Key) ->
-    QId = ?QUEUE_TYPE_PER_OBJECT,
+    QId = ?QUEUE_ID_PER_OBJECT,
     case leo_storage_mq:publish(QId, AddrId, Key, ?ERR_TYPE_RECOVER_DATA) of
         ok ->
             void;

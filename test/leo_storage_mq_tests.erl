@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012-2014 Rakuten, Inc.
+%% Copyright (c) 2012-2016 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -24,7 +24,6 @@
 %% @end
 %%====================================================================
 -module(leo_storage_mq_tests).
--author('Yosuke Hara').
 
 -include("leo_storage.hrl").
 -include_lib("leo_mq/include/leo_mq.hrl").
@@ -164,20 +163,20 @@ publish_({_, Test1Node}) ->
     ?TBL_REBALANCE_COUNTER = ets:new(?TBL_REBALANCE_COUNTER, [named_table, public]),
 
     ok = leo_storage_mq:publish(
-           ?QUEUE_TYPE_SYNC_BY_VNODE_ID, ?TEST_VNODE_ID, Test1Node),
+           ?QUEUE_ID_SYNC_BY_VNODE_ID, ?TEST_VNODE_ID, Test1Node),
     ok = leo_storage_mq:publish(
-           ?QUEUE_TYPE_REBALANCE, Test1Node, ?TEST_VNODE_ID, ?TEST_VNODE_ID, ?TEST_KEY_1),
+           ?QUEUE_ID_REBALANCE, Test1Node, ?TEST_VNODE_ID, ?TEST_VNODE_ID, ?TEST_KEY_1),
 
     ok = leo_storage_mq:publish(
-           ?QUEUE_TYPE_PER_OBJECT, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_REPLICATE_DATA),
+           ?QUEUE_ID_PER_OBJECT, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_REPLICATE_DATA),
     ok = leo_storage_mq:publish(
-           ?QUEUE_TYPE_PER_OBJECT, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_DELETE_DATA),
+           ?QUEUE_ID_PER_OBJECT, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_DELETE_DATA),
     ok = leo_storage_mq:publish(
-           ?QUEUE_TYPE_PER_OBJECT, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_REPLICATE_INDEX),
+           ?QUEUE_ID_PER_OBJECT, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_REPLICATE_INDEX),
     ok = leo_storage_mq:publish(
-           ?QUEUE_TYPE_PER_OBJECT, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_DELETE_INDEX),
+           ?QUEUE_ID_PER_OBJECT, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_DELETE_INDEX),
     ok = leo_storage_mq:publish(
-           ?QUEUE_TYPE_PER_OBJECT, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_RECOVER_DATA),
+           ?QUEUE_ID_PER_OBJECT, ?TEST_VNODE_ID, ?TEST_KEY_1, ?ERR_TYPE_RECOVER_DATA),
 
     History0 = meck:history(leo_mq_api),
     ?assertEqual(true, length(History0) > 0),

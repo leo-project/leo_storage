@@ -2,7 +2,7 @@
 %%
 %% LeoFS Storage
 %%
-%% Copyright (c) 2012-2014 Rakuten, Inc.
+%% Copyright (c) 2012-2016 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -24,8 +24,6 @@
 %% @end
 %%======================================================================
 -module(leo_storage_replicator).
-
--author('Yosuke Hara').
 
 -include("leo_storage.hrl").
 -include_lib("leo_logger/include/leo_logger.hrl").
@@ -71,27 +69,33 @@
                         Callback::function()).
 replicate(Method, Quorum, Nodes, Object, Callback) ->
     AddrId = Object#?OBJECT.addr_id,
-    Key    = Object#?OBJECT.key,
-    ReqId  = Object#?OBJECT.req_id,
+    Key = Object#?OBJECT.key,
+    ReqId = Object#?OBJECT.req_id,
     NumOfNodes = erlang:length(Nodes),
 
     Pid = self(),
     Ref = make_ref(),
-    State = #state{method       = Method,
-                   addr_id      = AddrId,
-                   key          = Key,
-                   object       = Object,
+    State = #state{method = Method,
+                   addr_id = AddrId,
+                   key = Key,
+                   object = Object,
                    num_of_nodes = NumOfNodes,
-                   req_id       = ReqId,
-                   callback     = Callback,
-                   errors       = [],
-                   is_reply     = false
-                  },
-    case proc_lib:start_link(?MODULE, init_loop, [NumOfNodes, Quorum, Ref, Pid, State]) of
-        {ok, Ref, SubParent} ->
-            replicate_1(Nodes, Ref, SubParent, State);
-        _ ->
-            Callback({error, ["Failed to initialize"]})
+                   req_id = ReqId,
+                   callback = Callback,
+                   errors = [],
+                   is_reply = false},
+    MaxProcs = ?env_max_num_of_procs(),
+    case (MaxProcs <
+              erlang:system_info(process_count)) of
+        true ->
+            Callback({error, unavailable});
+        false ->
+            case proc_lib:start_link(?MODULE, init_loop, [NumOfNodes, Quorum, Ref, Pid, State]) of
+                {ok, Ref, SubParent} ->
+                    replicate_1(Nodes, Ref, SubParent, State);
+                _ ->
+                    Callback({error, ["Failed to initialize"]})
+            end
     end.
 
 init_loop(NumOfNodes, Quorum, Ref, Parent, State) ->
@@ -245,7 +249,7 @@ replicate_fun(Ref, #req_params{pid     = Pid,
                      AddrId::non_neg_integer(),
                      Key::binary()).
 enqueue('put', ?ERR_TYPE_REPLICATE_DATA = Type,  AddrId, Key) ->
-    QId = ?QUEUE_TYPE_PER_OBJECT,
+    QId = ?QUEUE_ID_PER_OBJECT,
     case leo_storage_mq:publish(QId, AddrId, Key, Type) of
         ok ->
             ok;
@@ -255,7 +259,7 @@ enqueue('put', ?ERR_TYPE_REPLICATE_DATA = Type,  AddrId, Key) ->
                    {key, Key}, {type, Type}, {cause, Cause}])
     end;
 enqueue('delete', _Type,  AddrId, Key) ->
-    QId = ?QUEUE_TYPE_ASYNC_DELETION,
+    QId = ?QUEUE_ID_ASYNC_DELETION,
     case leo_storage_mq:publish(QId, AddrId, Key) of
         ok ->
             ok;

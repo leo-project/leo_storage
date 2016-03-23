@@ -2,7 +2,7 @@
 %%
 %% Leo Storage
 %%
-%% Copyright (c) 2012-2014 Rakuten, Inc.
+%% Copyright (c) 2012-2016 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -19,7 +19,6 @@
 %% under the License.
 %%======================================================================
 -module(leo_sync_local_cluster).
--author('Yosuke Hara').
 
 -behaviour(leo_ordning_reda_behaviour).
 
@@ -137,7 +136,7 @@ handle_send_1(Node, CompressedObjs) ->
 handle_fail(_, []) ->
     ok;
 handle_fail(Node, [{AddrId, Key}|Rest]) ->
-    _ = leo_storage_mq:publish(?QUEUE_TYPE_PER_OBJECT,
+    _ = leo_storage_mq:publish(?QUEUE_ID_PER_OBJECT,
                                AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
     handle_fail(Node, Rest).
 
@@ -222,7 +221,7 @@ slice_and_replicate_1(#?METADATA{addr_id = AddrId,
         {ok, #?METADATA{clock = Clock_1}} when Clock == Clock_1 ->
             slice_and_replicate(StackedObject, Errors);
         {ok, #?METADATA{clock = Clock_1}} when Clock < Clock_1 ->
-            ok = leo_storage_mq:publish(?QUEUE_TYPE_PER_OBJECT,
+            ok = leo_storage_mq:publish(?QUEUE_ID_PER_OBJECT,
                                         AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
             slice_and_replicate(StackedObject, Errors);
         _ ->
