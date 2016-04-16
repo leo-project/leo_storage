@@ -452,15 +452,28 @@ recover_node_callback_1(_,_,_,[]) ->
 recover_node_callback_1(AddrId, Key, Node, RedundantNodes) ->
     case lists:member(Node, RedundantNodes) of
         true ->
-            case lists:member(erlang:node(), RedundantNodes) of
-                true ->
-                    ?MODULE:publish(?QUEUE_ID_PER_OBJECT,
-                                    AddrId, Key, ?ERR_TYPE_RECOVER_DATA);
-                false ->
-                    ok
+            case lists:delete(Node, RedundantNodes) of
+                [] ->
+                    ok;
+                RedundantNodes_1 ->
+                    recover_node_callback_2(RedundantNodes_1, AddrId, Key)
             end;
         false ->
             ok
+    end.
+
+%% @private
+recover_node_callback_2([],_AddrId,_Key) ->
+    ok;
+recover_node_callback_2([Node|Rest], AddrId, Key) ->
+    case leo_misc:node_existence(Node, ?DEF_REQ_TIMEOUT) of
+        true when Node == erlang:node() ->
+            ?MODULE:publish(?QUEUE_ID_PER_OBJECT,
+                            AddrId, Key, ?ERR_TYPE_RECOVER_DATA);
+        true ->
+            ok;
+        false ->
+            recover_node_callback_2(Rest, AddrId, Key)
     end.
 
 
