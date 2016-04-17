@@ -471,7 +471,12 @@ recover_node_callback_2([Node|Rest], AddrId, Key) ->
             ?MODULE:publish(?QUEUE_ID_PER_OBJECT,
                             AddrId, Key, ?ERR_TYPE_RECOVER_DATA);
         true ->
-            ok;
+            case leo_redundant_manager_api:get_member_by_node(Node) of
+                {ok, #member{state = ?STATE_RUNNING}} ->
+                    ok;
+                _ ->
+                    recover_node_callback_2(Rest, AddrId, Key)
+            end;
         false ->
             recover_node_callback_2(Rest, AddrId, Key)
     end.
