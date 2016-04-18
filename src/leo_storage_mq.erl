@@ -36,7 +36,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -export([start/1, start/2,
-         publish/2, publish/3, publish/4, publish/5]).
+         publish/2, publish/3, publish/4, publish/5, publish/6]).
 -export([init/0, handle_call/1, handle_call/3]).
 
 -define(SLASH, "/").
@@ -188,11 +188,11 @@ publish(_,_,_) ->
 publish(?QUEUE_ID_PER_OBJECT = Id, AddrId, Key, ErrorType) ->
     KeyBin = term_to_binary({ErrorType, Key}),
     MessageBin = term_to_binary(
-                   #inconsistent_data_message{id = leo_date:clock(),
-                                              type = ErrorType,
-                                              addr_id = AddrId,
-                                              key = Key,
-                                              timestamp = leo_date:now()}),
+                   #?MSG_INCONSISTENT_DATA{id = leo_date:clock(),
+                                           type = ErrorType,
+                                           addr_id = AddrId,
+                                           key = Key,
+                                           timestamp = leo_date:now()}),
     leo_mq_api:publish(Id, KeyBin, MessageBin);
 
 publish(?QUEUE_ID_SYNC_OBJ_WITH_DC = Id, ClusterId, AddrId, Key) ->
@@ -240,8 +240,21 @@ publish(?QUEUE_ID_SYNC_OBJ_WITH_DC = Id, ClusterId, AddrId, Key, Del) ->
                                                del = Del,
                                                timestamp = leo_date:now()}),
     leo_mq_api:publish(Id, KeyBin, MessageBin);
-
 publish(_,_,_,_,_) ->
+    {error, badarg}.
+
+publish(?QUEUE_ID_PER_OBJECT = Id, AddrId, Key, ForceSyncNode, IsForceSync, ErrorType) ->
+    KeyBin = term_to_binary({ErrorType, Key}),
+    MessageBin = term_to_binary(
+                   #?MSG_INCONSISTENT_DATA{id = leo_date:clock(),
+                                           type = ErrorType,
+                                           addr_id = AddrId,
+                                           key = Key,
+                                           force_sync_node = ForceSyncNode,
+                                           is_force_sync = IsForceSync,
+                                           timestamp = leo_date:now()}),
+    leo_mq_api:publish(Id, KeyBin, MessageBin);
+publish(_,_,_,_,_,_) ->
     {error, badarg}.
 
 
@@ -265,21 +278,38 @@ handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
             ?error("handle_call/1 - QUEUE_ID_PER_OBJECT",
                    [{cause, Cause}]),
             {error, Cause};
-        #inconsistent_data_message{addr_id = AddrId,
-                                   key     = Key,
-                                   type    = ErrorType} ->
-            case correct_redundancies(Key) of
-                ok ->
-                    ok;
-                {error, Cause} ->
-                    ?warn("handle_call/1 - consume",
-                          [{addr_id, AddrId},
-                           {key, Key}, {cause, Cause}]),
-                    publish(?QUEUE_ID_PER_OBJECT, AddrId, Key, ErrorType),
-                    {error, Cause}
-            end;
-        _ ->
-            {error, ?ERROR_COULD_NOT_MATCH}
+        Term ->
+            case ?transform_inconsistent_data_message(Term) of
+                {ok, #?MSG_INCONSISTENT_DATA{addr_id = AddrId,
+                                             key = Key,
+                                             type = ErrorType,
+                                             force_sync_node = ForceSyncNode,
+                                             is_force_sync = true}} when ForceSyncNode /= undefined ->
+                    case leo_storage_handler_object:head(AddrId, Key, false) of
+                        {ok, Metadata} ->
+                            leo_storage_api:synchronize([ForceSyncNode], Metadata);
+                        not_found ->
+                            ok;
+                        Error ->
+                            publish(?QUEUE_ID_PER_OBJECT, AddrId, Key, ErrorType),
+                            Error
+                    end;
+                {ok, #?MSG_INCONSISTENT_DATA{addr_id = AddrId,
+                                             key = Key,
+                                             type = ErrorType}} ->
+                    case correct_redundancies(Key) of
+                        ok ->
+                            ok;
+                        {error, Cause} ->
+                            ?warn("handle_call/1 - consume",
+                                  [{addr_id, AddrId},
+                                   {key, Key}, {cause, Cause}]),
+                            publish(?QUEUE_ID_PER_OBJECT, AddrId, Key, ErrorType),
+                            {error, Cause}
+                    end;
+                {error, Error} ->
+                    {error, Error}
+            end
     end;
 
 handle_call({consume, ?QUEUE_ID_SYNC_BY_VNODE_ID, MessageBin}) ->
@@ -456,29 +486,30 @@ recover_node_callback_1(AddrId, Key, Node, RedundantNodes) ->
                 [] ->
                     ok;
                 RedundantNodes_1 ->
-                    recover_node_callback_2(RedundantNodes_1, AddrId, Key)
+                    recover_node_callback_2(RedundantNodes_1, AddrId, Key, Node)
             end;
         false ->
             ok
     end.
 
 %% @private
-recover_node_callback_2([],_AddrId,_Key) ->
+recover_node_callback_2([],_AddrId,_Key,_FixedNode) ->
     ok;
-recover_node_callback_2([Node|Rest], AddrId, Key) ->
-    case leo_misc:node_existence(Node, ?DEF_REQ_TIMEOUT) of
-        true when Node == erlang:node() ->
+recover_node_callback_2([SrcNode|Rest], AddrId, Key, FixedNode) ->
+    case leo_misc:node_existence(SrcNode, ?DEF_REQ_TIMEOUT) of
+        true when SrcNode == erlang:node() ->
             ?MODULE:publish(?QUEUE_ID_PER_OBJECT,
-                            AddrId, Key, ?ERR_TYPE_RECOVER_DATA);
+                            AddrId, Key, FixedNode, true,
+                            ?ERR_TYPE_RECOVER_DATA);
         true ->
-            case leo_redundant_manager_api:get_member_by_node(Node) of
+            case leo_redundant_manager_api:get_member_by_node(SrcNode) of
                 {ok, #member{state = ?STATE_RUNNING}} ->
                     ok;
                 _ ->
-                    recover_node_callback_2(Rest, AddrId, Key)
+                    recover_node_callback_2(Rest, AddrId, Key, FixedNode)
             end;
         false ->
-            recover_node_callback_2(Rest, AddrId, Key)
+            recover_node_callback_2(Rest, AddrId, Key, FixedNode)
     end.
 
 
