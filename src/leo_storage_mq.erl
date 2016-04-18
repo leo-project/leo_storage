@@ -282,13 +282,20 @@ handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
             case ?transform_inconsistent_data_message(Term) of
                 {ok, #?MSG_INCONSISTENT_DATA{addr_id = AddrId,
                                              key = Key,
+                                             type = ErrorType,
                                              sync_node = SyncNode,
                                              is_force_sync = true}} when SyncNode /= undefined ->
                     Ref = make_ref(),
                     case leo_storage_handler_object:get({Ref, Key}) of
                         {ok, Ref, Metadata, Bin} ->
-                            leo_sync_local_cluster:stack(
-                                    [SyncNode], AddrId, Key, Metadata, Bin);
+                            case rpc:call(SyncNode, leo_sync_local_cluster, store,
+                                          [Metadata, Bin], ?DEF_REQ_TIMEOUT) of
+                                ok ->
+                                    ok;
+                                _ ->
+                                    ?MODULE:publish(?QUEUE_ID_PER_OBJECT, AddrId, Key,
+                                                    SyncNode, true, ErrorType)
+                            end;
                         {error, Ref, Cause} ->
                             {error, Cause};
                         _Other ->

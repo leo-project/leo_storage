@@ -29,7 +29,7 @@
 -include_lib("leo_redundant_manager/include/leo_redundant_manager.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
--export([start_link/3, stop/1, stack/5,  store/1]).
+-export([start_link/3, stop/1, stack/5,  store/1, store/2]).
 -export([handle_send/3,
          handle_fail/2]).
 
@@ -79,6 +79,37 @@ store(BinObjs) ->
             ok;
         {error, _Cause} ->
             {error, fail_storing_files}
+    end.
+
+-spec(store(Metadata, Bin) ->
+             ok | {error, any()} when Metadata::#?METADATA{},
+                                      Bin::binary()).
+store(#?METADATA{addr_id = AddrId,
+                 key = Key,
+                 clock = Clock} = Metadata, Bin) ->
+    case leo_storage_handler_object:head(AddrId, Key, false) of
+        {ok, #?METADATA{clock = Clock_1}} when Clock == Clock_1 ->
+            ok;
+        _ ->
+            case leo_misc:get_env(leo_redundant_manager, ?PROP_RING_HASH) of
+                {ok, RingHashCur} ->
+                    case leo_object_storage_api:store(
+                           Metadata#?METADATA{ring_hash = RingHashCur}, Bin) of
+                        ok ->
+                            ok;
+                        {error, Cause} ->
+                            ?warn("store/2",
+                                  [{key, binary_to_list(Metadata#?METADATA.key)},
+                                   {cause, Cause}]),
+                            {error, Cause}
+                    end;
+                _ ->
+                    Reason = "Current ring-hash is not found",
+                    ?warn("store/2",
+                          [{key, binary_to_list(Metadata#?METADATA.key)},
+                           {cause, Reason}]),
+                    {error, Reason}
+            end
     end.
 
 
