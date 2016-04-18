@@ -282,17 +282,17 @@ handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
             case ?transform_inconsistent_data_message(Term) of
                 {ok, #?MSG_INCONSISTENT_DATA{addr_id = AddrId,
                                              key = Key,
-                                             type = ErrorType,
                                              sync_node = SyncNode,
                                              is_force_sync = true}} when SyncNode /= undefined ->
-                    case leo_storage_handler_object:head(AddrId, Key, false) of
-                        {ok, Metadata} ->
-                            leo_storage_api:synchronize([SyncNode], Metadata);
-                        not_found ->
-                            ok;
-                        Error ->
-                            publish(?QUEUE_ID_PER_OBJECT, AddrId, Key, ErrorType),
-                            Error
+                    Ref = make_ref(),
+                    case leo_storage_handler_object:get({Ref, Key}) of
+                        {ok, Ref, Metadata, Bin} ->
+                            leo_sync_local_cluster:stack(
+                                    [SyncNode], AddrId, Key, Metadata, Bin);
+                        {error, Ref, Cause} ->
+                            {error, Cause};
+                        _Other ->
+                            {error, invalid_response}
                     end;
                 {ok, #?MSG_INCONSISTENT_DATA{addr_id = AddrId,
                                              key = Key,
