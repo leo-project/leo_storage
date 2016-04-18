@@ -243,14 +243,14 @@ publish(?QUEUE_ID_SYNC_OBJ_WITH_DC = Id, ClusterId, AddrId, Key, Del) ->
 publish(_,_,_,_,_) ->
     {error, badarg}.
 
-publish(?QUEUE_ID_PER_OBJECT = Id, AddrId, Key, ForceSyncNode, IsForceSync, ErrorType) ->
+publish(?QUEUE_ID_PER_OBJECT = Id, AddrId, Key, SyncNode, IsForceSync, ErrorType) ->
     KeyBin = term_to_binary({ErrorType, Key}),
     MessageBin = term_to_binary(
                    #?MSG_INCONSISTENT_DATA{id = leo_date:clock(),
                                            type = ErrorType,
                                            addr_id = AddrId,
                                            key = Key,
-                                           force_sync_node = ForceSyncNode,
+                                           sync_node = SyncNode,
                                            is_force_sync = IsForceSync,
                                            timestamp = leo_date:now()}),
     leo_mq_api:publish(Id, KeyBin, MessageBin);
@@ -283,11 +283,11 @@ handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
                 {ok, #?MSG_INCONSISTENT_DATA{addr_id = AddrId,
                                              key = Key,
                                              type = ErrorType,
-                                             force_sync_node = ForceSyncNode,
-                                             is_force_sync = true}} when ForceSyncNode /= undefined ->
+                                             sync_node = SyncNode,
+                                             is_force_sync = true}} when SyncNode /= undefined ->
                     case leo_storage_handler_object:head(AddrId, Key, false) of
                         {ok, Metadata} ->
-                            leo_storage_api:synchronize([ForceSyncNode], Metadata);
+                            leo_storage_api:synchronize([SyncNode], Metadata);
                         not_found ->
                             ok;
                         Error ->
