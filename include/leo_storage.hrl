@@ -118,7 +118,7 @@
           addr_id = 0 :: non_neg_integer(),
           key :: any(),
           meta :: tuple(),
-          force_sync_node :: atom(),
+          sync_node :: atom(),
           is_force_sync = false :: boolean(),
           timestamp = 0 :: non_neg_integer(),
           times = 0 :: non_neg_integer()}).
