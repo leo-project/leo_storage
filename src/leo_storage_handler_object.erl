@@ -498,16 +498,16 @@ delete_objects_under_dir_1(Node, [Key|Rest]) ->
 %%--------------------------------------------------------------------
 %% @doc retrieve a meta-data from mata-data-server (file).
 -spec(head(AddrId, Key) ->
-             {ok, #?METADATA{}} | {error, any} when AddrId::integer(),
-                                                    Key::binary()).
+             {ok, #?METADATA{}} | not_found | {error, any} when AddrId::integer(),
+                                                                Key::binary()).
 head(AddrId, Key) ->
     %% Do retry when being invoked as usual method
     head(AddrId, Key, true).
 
 -spec(head(AddrId, Key, CanRetry) ->
-             {ok, #?METADATA{}} | {error, any} when AddrId::integer(),
-                                                    Key::binary(),
-                                                    CanRetry::boolean()).
+             {ok, #?METADATA{}} | not_found | {error, any} when AddrId::integer(),
+                                                                Key::binary(),
+                                                                CanRetry::boolean()).
 head(AddrId, Key, false) ->
     %% No retry when being invoked from recover/rebalance
     case leo_object_storage_api:head({AddrId, Key}) of
