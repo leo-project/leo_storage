@@ -288,14 +288,17 @@ handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
                     Ref = make_ref(),
                     case leo_storage_handler_object:get({Ref, Key}) of
                         {ok, Ref, Metadata, Bin} ->
-                            case rpc:call(SyncNode, leo_sync_local_cluster, store,
-                                          [Metadata, Bin], ?DEF_REQ_TIMEOUT) of
-                                ok ->
-                                    ok;
-                                _ ->
-                                    ?MODULE:publish(?QUEUE_ID_PER_OBJECT, AddrId, Key,
-                                                    SyncNode, true, ErrorType)
-                            end;
+                            spawn(fun() ->
+                                          case rpc:call(SyncNode, leo_sync_local_cluster, store,
+                                                        [Metadata, Bin], ?DEF_REQ_TIMEOUT) of
+                                              ok ->
+                                                  ok;
+                                              _ ->
+                                                  ?MODULE:publish(?QUEUE_ID_PER_OBJECT, AddrId, Key,
+                                                                  SyncNode, true, ErrorType)
+                                          end
+                                  end),
+                            ok;
                         {error, Ref, Cause} ->
                             {error, Cause};
                         _Other ->
