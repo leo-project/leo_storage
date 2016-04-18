@@ -123,20 +123,15 @@ stack(ClusterId, Object) ->
 
 
 %% @doc Store stacked objects
--spec(store(ClusterId, CompressedObjs) ->
+-spec(store(ClusterId, BinObjs) ->
              {ok, [#?METADATA{}]} | {error, any()} when ClusterId::atom(),
-                                                        CompressedObjs::binary()).
-store(ClusterId, CompressedObjs) ->
-    case catch lz4:unpack(CompressedObjs) of
-        {ok, OriginalObjects} ->
-            case slice_and_replicate(ClusterId, OriginalObjects, []) of
-                {ok, RetL} ->
-                    {ok, RetL};
-                {error, _Cause} ->
-                    {error, fail_storing_files}
-            end;
-        {_, Cause} ->
-            {error, Cause}
+                                                        BinObjs::binary()).
+store(ClusterId, BinObjs) ->
+    case slice_and_replicate(ClusterId, BinObjs, []) of
+        {ok, RetL} ->
+            {ok, RetL};
+        {error, _Cause} ->
+            {error, fail_storing_files}
     end.
 
 
@@ -288,14 +283,14 @@ compare_metadata_1({_,Cause}, #?METADATA{cluster_id = ClusterId,
 %% Callback
 %%--------------------------------------------------------------------
 %% @doc Handle send object to a remote-node.
-handle_send(UId, StackedInfo, CompressedObjs) ->
+handle_send(UId, StackedInfo, BinObjs) ->
     %% Retrieve cluser-id
     ClusterId = get_cluster_id_from_uid(UId),
 
     %% Retrieve remote-members from the tables
     case get_cluster_members(ClusterId) of
         {ok, ListMembers} ->
-            send(ListMembers, StackedInfo, CompressedObjs);
+            send(ListMembers, StackedInfo, BinObjs);
         {error,_Reason} ->
             {error,_Reason}
     end.
@@ -467,28 +462,28 @@ get_cluster_id_from_uid(_) ->
 
 %% Send stacked objects to remote-members with leo-rpc
 %% @private
-send([],_StackedInfo,_CompressedObjs) ->
+send([],_StackedInfo,_BinObjs) ->
     ok;
-send([#mdc_replication_info{cluster_members = Members}|Rest], StackedInfo, CompressedObjs) ->
+send([#mdc_replication_info{cluster_members = Members}|Rest], StackedInfo, BinObjs) ->
     {ok, #?SYSTEM_CONF{cluster_id = ClusterId}} = leo_cluster_tbl_conf:get(),
-    case send_1(Members, ClusterId, StackedInfo, CompressedObjs, 0) of
+    case send_1(Members, ClusterId, StackedInfo, BinObjs, 0) of
         {ok, RetL} ->
             %% Compare with local-cluster's objects
             compare_metadata(RetL);
         _ ->
             void
     end,
-    send(Rest, StackedInfo, CompressedObjs).
+    send(Rest, StackedInfo, BinObjs).
 
 %% @private
-send_1([], ClusterId, StackedInfo,_CompressedObjs,_RetryTimes) ->
+send_1([], ClusterId, StackedInfo,_BinObjs,_RetryTimes) ->
     ok = enqueue_fail_replication(StackedInfo, ClusterId),
     {error, ?ERROR_COULD_SEND_OBJ};
-send_1([_|Rest], ClusterId, StackedInfo, CompressedObjs, ?DEF_MAX_RETRY_TIMES) ->
-    send_1(Rest, ClusterId, StackedInfo, CompressedObjs, 0);
+send_1([_|Rest], ClusterId, StackedInfo, BinObjs, ?DEF_MAX_RETRY_TIMES) ->
+    send_1(Rest, ClusterId, StackedInfo, BinObjs, 0);
 send_1([#?CLUSTER_MEMBER{node = Node,
                          port = Port}|Rest] = ClusterMembers,
-       ClusterId, StackedInfo, CompressedObjs, RetryTimes) ->
+       ClusterId, StackedInfo, BinObjs, RetryTimes) ->
     Node_1 = list_to_atom(lists:append([atom_to_list(Node),
                                         ":",
                                         integer_to_list(Port)])),
@@ -496,11 +491,11 @@ send_1([#?CLUSTER_MEMBER{node = Node,
         Msg when Msg == timeout orelse
                  element(1, Msg) == badrpc ->
             send_1(ClusterMembers, ClusterId,
-                   StackedInfo, CompressedObjs, RetryTimes + 1);
+                   StackedInfo, BinObjs, RetryTimes + 1);
         _ ->
             Timeout = ?env_mdcr_req_timeout(),
             Ret = case leo_rpc:call(Node_1, ?MODULE, store,
-                                    [ClusterId, CompressedObjs], Timeout) of
+                                    [ClusterId, BinObjs], Timeout) of
                       {ok, RetL} ->
                           {ok, RetL};
                       {error, Cause} ->
@@ -516,7 +511,7 @@ send_1([#?CLUSTER_MEMBER{node = Node,
                     Ret;
                 {error,_Cause} ->
                     send_1(Rest, ClusterId,
-                           StackedInfo, CompressedObjs, 0)
+                           StackedInfo, BinObjs, 0)
             end
     end.
 

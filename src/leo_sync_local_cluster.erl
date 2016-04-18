@@ -71,21 +71,14 @@ stack(DestNodes, AddrId, Key, Metadata, Object) ->
 
 %% Store stacked objects
 %%
--spec(store(CompressedObjs) ->
-             ok | {error, any()} when CompressedObjs::binary()).
-store(CompressedObjs) ->
-    %% Unpack the compressed object,
-    %% then replicate them
-    case catch lz4:unpack(CompressedObjs) of
-        {ok, OriginalObjects} ->
-            case slice_and_replicate(OriginalObjects) of
-                ok ->
-                    ok;
-                {error, _Cause} ->
-                    {error, fail_storing_files}
-            end;
-        {_, Cause} ->
-            {error, Cause}
+-spec(store(BinObjs) ->
+             ok | {error, any()} when BinObjs::binary()).
+store(BinObjs) ->
+    case slice_and_replicate(BinObjs) of
+        ok ->
+            ok;
+        {error, _Cause} ->
+            {error, fail_storing_files}
     end.
 
 
@@ -94,14 +87,14 @@ store(CompressedObjs) ->
 %%--------------------------------------------------------------------
 %% @doc Handle send object to a remote-node.
 %%
-handle_send(Node,_StackedInfo, CompressedObjs) ->
+handle_send(Node,_StackedInfo, BinObjs) ->
     %% Check stress level of this node by the watchdog's status
     RPCKey = rpc:async_call(Node, leo_watchdog_state,
                             find_not_safe_items, [?WD_EXCLUDE_ITEMS]),
     case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
         {value, not_found} ->
             %% Send a compressed objects to the remote-node
-            handle_send_1(Node, CompressedObjs);
+            handle_send_1(Node, BinObjs);
         {value, {ok, ErrorItems}} ->
             ?debug("store/1", "node:~p, error-items:~p",
                    [Node, ErrorItems]),
@@ -115,8 +108,8 @@ handle_send(Node,_StackedInfo, CompressedObjs) ->
     end.
 
 %% @private
-handle_send_1(Node, CompressedObjs) ->
-    RPCKey = rpc:async_call(Node, ?MODULE, store, [CompressedObjs]),
+handle_send_1(Node, BinObjs) ->
+    RPCKey = rpc:async_call(Node, ?MODULE, store, [BinObjs]),
     case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
         {value, ok} ->
             ok;
