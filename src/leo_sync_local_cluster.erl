@@ -87,29 +87,39 @@ store(BinObjs) ->
 store(#?METADATA{addr_id = AddrId,
                  key = Key,
                  clock = Clock} = Metadata, Bin) ->
-    case leo_storage_handler_object:head(AddrId, Key, false) of
-        {ok, #?METADATA{clock = Clock_1}} when Clock == Clock_1 ->
-            ok;
-        _ ->
-            case leo_misc:get_env(leo_redundant_manager, ?PROP_RING_HASH) of
-                {ok, RingHashCur} ->
-                    case leo_object_storage_api:store(
-                           Metadata#?METADATA{ring_hash = RingHashCur}, Bin) of
-                        ok ->
-                            ok;
-                        {error, Cause} ->
+    case leo_watchdog_state:find_not_safe_items(?WD_EXCLUDE_ITEMS) of
+        not_found ->
+            case leo_storage_handler_object:head(AddrId, Key, false) of
+                {ok, #?METADATA{clock = Clock_1}} when Clock == Clock_1 ->
+                    ok;
+                {ok, #?METADATA{clock = Clock_1}} when Clock < Clock_1 ->
+                    {error, inconsistent_obj};
+                _ ->
+                    case leo_misc:get_env(leo_redundant_manager, ?PROP_RING_HASH) of
+                        {ok, RingHashCur} ->
+                            case leo_object_storage_api:store(
+                                   Metadata#?METADATA{ring_hash = RingHashCur}, Bin) of
+                                ok ->
+                                    ok;
+                                {error, Cause} ->
+                                    ?warn("store/2",
+                                          [{key, binary_to_list(Metadata#?METADATA.key)},
+                                           {cause, Cause}]),
+                                    {error, Cause}
+                            end;
+                        _ ->
+                            Reason = "Current ring-hash is not found",
                             ?warn("store/2",
                                   [{key, binary_to_list(Metadata#?METADATA.key)},
-                                   {cause, Cause}]),
-                            {error, Cause}
-                    end;
-                _ ->
-                    Reason = "Current ring-hash is not found",
-                    ?warn("store/2",
-                          [{key, binary_to_list(Metadata#?METADATA.key)},
-                           {cause, Reason}]),
-                    {error, Reason}
-            end
+                                   {cause, Reason}]),
+                            {error, Reason}
+                    end
+            end;
+        {ok, ErrorItems} ->
+            ?debug("store/2", "error-items:~p", [ErrorItems]),
+            {error, unavailable};
+        {error, Cause} ->
+            {error, Cause}
     end.
 
 

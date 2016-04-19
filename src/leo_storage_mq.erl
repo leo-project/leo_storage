@@ -85,29 +85,30 @@ start(RefSup, RootPath) ->
 
     ?TBL_REBALANCE_COUNTER = ets:new(?TBL_REBALANCE_COUNTER,
                                      [named_table, public, {read_concurrency, true}]),
-    start_1([{?QUEUE_ID_PER_OBJECT,        ?MSG_PATH_PER_OBJECT},
-             {?QUEUE_ID_SYNC_BY_VNODE_ID,  ?MSG_PATH_SYNC_VNODE_ID},
-             {?QUEUE_ID_REBALANCE,         ?MSG_PATH_REBALANCE},
-             {?QUEUE_ID_ASYNC_DELETION,    ?MSG_PATH_ASYNC_DELETION},
-             {?QUEUE_ID_RECOVERY_NODE,     ?MSG_PATH_RECOVERY_NODE},
-             {?QUEUE_ID_SYNC_OBJ_WITH_DC,  ?MSG_PATH_SYNC_OBJ_WITH_DC},
-             {?QUEUE_ID_COMP_META_WITH_DC, ?MSG_PATH_COMP_META_WITH_DC},
-             {?QUEUE_ID_DEL_DIR,           ?MSG_PATH_DEL_DIR}
+    start_1([{?QUEUE_ID_PER_OBJECT,        ?MSG_PATH_PER_OBJECT, 8},
+             {?QUEUE_ID_SYNC_BY_VNODE_ID,  ?MSG_PATH_SYNC_VNODE_ID, 1},
+             {?QUEUE_ID_REBALANCE,         ?MSG_PATH_REBALANCE, 8},
+             {?QUEUE_ID_ASYNC_DELETION,    ?MSG_PATH_ASYNC_DELETION, 1},
+             {?QUEUE_ID_RECOVERY_NODE,     ?MSG_PATH_RECOVERY_NODE, 1},
+             {?QUEUE_ID_SYNC_OBJ_WITH_DC,  ?MSG_PATH_SYNC_OBJ_WITH_DC, 3},
+             {?QUEUE_ID_COMP_META_WITH_DC, ?MSG_PATH_COMP_META_WITH_DC, 3},
+             {?QUEUE_ID_DEL_DIR,           ?MSG_PATH_DEL_DIR, 1}
             ], RefMqSup, RootPath_1).
 
 %% @private
 start_1([],_,_) ->
     ok;
-start_1([{Id, Path}|Rest], Sup, Root) ->
+start_1([{Id, Path, CntProcsPerDB}|Rest], Sup, Root) ->
     leo_mq_api:new(Sup, Id, [{?MQ_PROP_MOD, ?MODULE},
                              {?MQ_PROP_FUN, ?MQ_SUBSCRIBE_FUN},
                              {?MQ_PROP_ROOT_PATH, Root ++ Path},
-                             {?MQ_PROP_DB_NAME,   ?env_mq_backend_db()},
-                             {?MQ_PROP_DB_PROCS,  ?env_num_of_mq_procs()},
-                             {?MQ_PROP_BATCH_MSGS_MAX,  ?env_mq_num_of_batch_process_max()},
-                             {?MQ_PROP_BATCH_MSGS_REG,  ?env_mq_num_of_batch_process_reg()},
-                             {?MQ_PROP_INTERVAL_MAX,  ?env_mq_interval_between_batch_procs_max()},
-                             {?MQ_PROP_INTERVAL_REG,  ?env_mq_interval_between_batch_procs_reg()}
+                             {?MQ_PROP_DB_NAME, ?env_mq_backend_db()},
+                             {?MQ_PROP_DB_PROCS, ?env_num_of_mq_procs()},
+                             {?MQ_PROP_CNS_PROCS_PER_DB, CntProcsPerDB},
+                             {?MQ_PROP_BATCH_MSGS_MAX, ?env_mq_num_of_batch_process_max()},
+                             {?MQ_PROP_BATCH_MSGS_REG, ?env_mq_num_of_batch_process_reg()},
+                             {?MQ_PROP_INTERVAL_MAX, ?env_mq_interval_between_batch_procs_max()},
+                             {?MQ_PROP_INTERVAL_REG, ?env_mq_interval_between_batch_procs_reg()}
                             ]),
     start_1(Rest, Sup, Root).
 
@@ -288,17 +289,16 @@ handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
                     Ref = make_ref(),
                     case leo_storage_handler_object:get({Ref, Key}) of
                         {ok, Ref, Metadata, Bin} ->
-                            spawn(fun() ->
-                                          case rpc:call(SyncNode, leo_sync_local_cluster, store,
-                                                        [Metadata, Bin], ?DEF_REQ_TIMEOUT) of
-                                              ok ->
-                                                  ok;
-                                              _ ->
-                                                  ?MODULE:publish(?QUEUE_ID_PER_OBJECT, AddrId, Key,
-                                                                  SyncNode, true, ErrorType)
-                                          end
-                                  end),
-                            ok;
+                            case rpc:call(SyncNode, leo_sync_local_cluster, store,
+                                          [Metadata, Bin], ?DEF_REQ_TIMEOUT) of
+                                ok ->
+                                    ok;
+                                {error, inconsistent_obj} ->
+                                    ?MODULE:publish(?QUEUE_ID_PER_OBJECT, AddrId, Key, ErrorType);
+                                _ ->
+                                    ?MODULE:publish(?QUEUE_ID_PER_OBJECT, AddrId, Key,
+                                                    SyncNode, true, ErrorType)
+                            end;
                         {error, Ref, Cause} ->
                             {error, Cause};
                         _Other ->
@@ -720,6 +720,7 @@ correct_redundancies_3([], _, _) ->
 correct_redundancies_3(_, [], _) ->
     {error, 'not_fix_inconsistency'};
 correct_redundancies_3(InconsistentNodes, [Node|_] = NodeL, Metadata) ->
+    %% @TODO
     RPCKey = rpc:async_call(Node, leo_storage_api, synchronize,
                             [InconsistentNodes, Metadata]),
     Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
