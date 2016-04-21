@@ -85,26 +85,26 @@ start(RefSup, RootPath) ->
 
     ?TBL_REBALANCE_COUNTER = ets:new(?TBL_REBALANCE_COUNTER,
                                      [named_table, public, {read_concurrency, true}]),
-    start_1([{?QUEUE_ID_PER_OBJECT,        ?MSG_PATH_PER_OBJECT, 8},
-             {?QUEUE_ID_SYNC_BY_VNODE_ID,  ?MSG_PATH_SYNC_VNODE_ID, 1},
-             {?QUEUE_ID_REBALANCE,         ?MSG_PATH_REBALANCE, 8},
-             {?QUEUE_ID_ASYNC_DELETION,    ?MSG_PATH_ASYNC_DELETION, 1},
-             {?QUEUE_ID_RECOVERY_NODE,     ?MSG_PATH_RECOVERY_NODE, 1},
-             {?QUEUE_ID_SYNC_OBJ_WITH_DC,  ?MSG_PATH_SYNC_OBJ_WITH_DC, 3},
-             {?QUEUE_ID_COMP_META_WITH_DC, ?MSG_PATH_COMP_META_WITH_DC, 3},
-             {?QUEUE_ID_DEL_DIR,           ?MSG_PATH_DEL_DIR, 1}
+    start_1([{?QUEUE_ID_PER_OBJECT,        ?MSG_PATH_PER_OBJECT},
+             {?QUEUE_ID_SYNC_BY_VNODE_ID,  ?MSG_PATH_SYNC_VNODE_ID},
+             {?QUEUE_ID_REBALANCE,         ?MSG_PATH_REBALANCE},
+             {?QUEUE_ID_ASYNC_DELETION,    ?MSG_PATH_ASYNC_DELETION},
+             {?QUEUE_ID_RECOVERY_NODE,     ?MSG_PATH_RECOVERY_NODE},
+             {?QUEUE_ID_SYNC_OBJ_WITH_DC,  ?MSG_PATH_SYNC_OBJ_WITH_DC},
+             {?QUEUE_ID_COMP_META_WITH_DC, ?MSG_PATH_COMP_META_WITH_DC},
+             {?QUEUE_ID_DEL_DIR,           ?MSG_PATH_DEL_DIR}
             ], RefMqSup, RootPath_1).
 
 %% @private
 start_1([],_,_) ->
     ok;
-start_1([{Id, Path, CntProcsPerDB}|Rest], Sup, Root) ->
+start_1([{Id, Path}|Rest], Sup, Root) ->
     leo_mq_api:new(Sup, Id, [{?MQ_PROP_MOD, ?MODULE},
                              {?MQ_PROP_FUN, ?MQ_SUBSCRIBE_FUN},
                              {?MQ_PROP_ROOT_PATH, Root ++ Path},
                              {?MQ_PROP_DB_NAME, ?env_mq_backend_db()},
                              {?MQ_PROP_DB_PROCS, ?env_num_of_mq_procs()},
-                             {?MQ_PROP_CNS_PROCS_PER_DB, CntProcsPerDB},
+                             {?MQ_PROP_CNS_PROCS_PER_DB, 1},
                              {?MQ_PROP_BATCH_MSGS_MAX, ?env_mq_num_of_batch_process_max()},
                              {?MQ_PROP_BATCH_MSGS_REG, ?env_mq_num_of_batch_process_reg()},
                              {?MQ_PROP_INTERVAL_MAX, ?env_mq_interval_between_batch_procs_max()},
