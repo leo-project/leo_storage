@@ -255,7 +255,7 @@ synchronize(Node) ->
              {error, any()} when SyncTarget::[atom()]|binary(),
                                  SyncVal::#?METADATA{}|atom()).
 synchronize(InconsistentNodes, #?METADATA{addr_id = AddrId,
-                                          key     = Key}) ->
+                                          key = Key}) ->
     leo_storage_handler_object:replicate(InconsistentNodes, AddrId, Key);
 
 synchronize(Key, ErrorType) ->

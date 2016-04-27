@@ -37,7 +37,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -export([start/1, start/2,
-         publish/2, publish/3, publish/4, publish/5]).
+         publish/2, publish/3, publish/4, publish/5, publish/6]).
 -export([init/0, handle_call/1, handle_call/3]).
 
 -define(SLASH, "/").
@@ -110,12 +110,13 @@ start_1([{Id, Path}|Rest], Sup, Root) ->
     leo_mq_api:new(Sup, Id, [{?MQ_PROP_MOD, ?MODULE},
                              {?MQ_PROP_FUN, ?MQ_SUBSCRIBE_FUN},
                              {?MQ_PROP_ROOT_PATH, Root ++ Path},
-                             {?MQ_PROP_DB_NAME,   ?env_mq_backend_db()},
-                             {?MQ_PROP_DB_PROCS,  ?env_num_of_mq_procs()},
-                             {?MQ_PROP_BATCH_MSGS_MAX,  ?env_mq_num_of_batch_process_max()},
-                             {?MQ_PROP_BATCH_MSGS_REG,  ?env_mq_num_of_batch_process_reg()},
-                             {?MQ_PROP_INTERVAL_MAX,  ?env_mq_interval_between_batch_procs_max()},
-                             {?MQ_PROP_INTERVAL_REG,  ?env_mq_interval_between_batch_procs_reg()}
+                             {?MQ_PROP_DB_NAME, ?env_mq_backend_db()},
+                             {?MQ_PROP_DB_PROCS, ?env_num_of_mq_procs()},
+                             {?MQ_PROP_CNS_PROCS_PER_DB, 1},
+                             {?MQ_PROP_BATCH_MSGS_MAX, ?env_mq_num_of_batch_process_max()},
+                             {?MQ_PROP_BATCH_MSGS_REG, ?env_mq_num_of_batch_process_reg()},
+                             {?MQ_PROP_INTERVAL_MAX, ?env_mq_interval_between_batch_procs_max()},
+                             {?MQ_PROP_INTERVAL_REG, ?env_mq_interval_between_batch_procs_reg()}
                             ]),
     start_1(Rest, Sup, Root).
 
@@ -215,11 +216,11 @@ publish(_,_,_) ->
 publish(?QUEUE_ID_PER_OBJECT = Id, AddrId, Key, ErrorType) ->
     KeyBin = term_to_binary({ErrorType, Key}),
     MessageBin = term_to_binary(
-                   #inconsistent_data_message{id = leo_date:clock(),
-                                              type = ErrorType,
-                                              addr_id = AddrId,
-                                              key = Key,
-                                              timestamp = leo_date:now()}),
+                   #?MSG_INCONSISTENT_DATA{id = leo_date:clock(),
+                                           type = ErrorType,
+                                           addr_id = AddrId,
+                                           key = Key,
+                                           timestamp = leo_date:now()}),
     leo_mq_api:publish(Id, KeyBin, MessageBin);
 
 publish(?QUEUE_ID_SYNC_OBJ_WITH_DC = Id, ClusterId, AddrId, Key) ->
@@ -279,6 +280,20 @@ publish(?QUEUE_ID_SYNC_OBJ_WITH_DC = Id, ClusterId, AddrId, Key, Del) ->
 publish(_,_,_,_,_) ->
     {error, badarg}.
 
+publish(?QUEUE_ID_PER_OBJECT = Id, AddrId, Key, SyncNode, IsForceSync, ErrorType) ->
+    KeyBin = term_to_binary({ErrorType, Key}),
+    MessageBin = term_to_binary(
+                   #?MSG_INCONSISTENT_DATA{id = leo_date:clock(),
+                                           type = ErrorType,
+                                           addr_id = AddrId,
+                                           key = Key,
+                                           sync_node = SyncNode,
+                                           is_force_sync = IsForceSync,
+                                           timestamp = leo_date:now()}),
+    leo_mq_api:publish(Id, KeyBin, MessageBin);
+publish(_,_,_,_,_,_) ->
+    {error, badarg}.
+
 
 %% -------------------------------------------------------------------
 %% Callbacks
@@ -313,10 +328,47 @@ handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
             ?error("handle_call/1 - QUEUE_ID_PER_OBJECT",
                    [{cause, Cause}]),
             {error, Cause};
-        _ ->
-            ?error("handle_call/1 - QUEUE_ID_PER_OBJECT",
-                   [{cause, 'unexpected_term'}]),
-            {error, 'unexpected_term'}
+        Term ->
+            case ?transform_inconsistent_data_message(Term) of
+                {ok, #?MSG_INCONSISTENT_DATA{addr_id = AddrId,
+                                             key = Key,
+                                             type = ErrorType,
+                                             sync_node = SyncNode,
+                                             is_force_sync = true}} when SyncNode /= undefined ->
+                    Ref = make_ref(),
+                    case leo_storage_handler_object:get({Ref, Key}) of
+                        {ok, Ref, Metadata, Bin} ->
+                            case rpc:call(SyncNode, leo_sync_local_cluster, store,
+                                          [Metadata, Bin], ?DEF_REQ_TIMEOUT) of
+                                ok ->
+                                    ok;
+                                {error, inconsistent_obj} ->
+                                    ?MODULE:publish(?QUEUE_ID_PER_OBJECT, AddrId, Key, ErrorType);
+                                _ ->
+                                    ?MODULE:publish(?QUEUE_ID_PER_OBJECT, AddrId, Key,
+                                                    SyncNode, true, ErrorType)
+                            end;
+                        {error, Ref, Cause} ->
+                            {error, Cause};
+                        _Other ->
+                            {error, invalid_response}
+                    end;
+                {ok, #?MSG_INCONSISTENT_DATA{addr_id = AddrId,
+                                             key = Key,
+                                             type = ErrorType}} ->
+                    case correct_redundancies(Key) of
+                        ok ->
+                            ok;
+                        {error, Cause} ->
+                            ?warn("handle_call/1 - consume",
+                                  [{addr_id, AddrId},
+                                   {key, Key}, {cause, Cause}]),
+                            publish(?QUEUE_ID_PER_OBJECT, AddrId, Key, ErrorType),
+                            {error, Cause}
+                    end;
+                {error, Error} ->
+                    {error, Error}
+            end
     end;
 
 handle_call({consume, ?QUEUE_ID_SYNC_BY_VNODE_ID, MessageBin}) ->
@@ -636,15 +688,34 @@ recover_node_callback_1(_,_,_,[]) ->
 recover_node_callback_1(AddrId, Key, Node, RedundantNodes) ->
     case lists:member(Node, RedundantNodes) of
         true ->
-            case lists:member(erlang:node(), RedundantNodes) of
-                true ->
-                    ?MODULE:publish(?QUEUE_ID_PER_OBJECT,
-                                    AddrId, Key, ?ERR_TYPE_RECOVER_DATA);
-                false ->
-                    ok
+            case lists:delete(Node, RedundantNodes) of
+                [] ->
+                    ok;
+                RedundantNodes_1 ->
+                    recover_node_callback_2(RedundantNodes_1, AddrId, Key, Node)
             end;
         false ->
             ok
+    end.
+
+%% @private
+recover_node_callback_2([],_AddrId,_Key,_FixedNode) ->
+    ok;
+recover_node_callback_2([SrcNode|Rest], AddrId, Key, FixedNode) ->
+    case leo_misc:node_existence(SrcNode, ?DEF_REQ_TIMEOUT) of
+        true when SrcNode == erlang:node() ->
+            ?MODULE:publish(?QUEUE_ID_PER_OBJECT,
+                            AddrId, Key, FixedNode, true,
+                            ?ERR_TYPE_RECOVER_DATA);
+        true ->
+            case leo_redundant_manager_api:get_member_by_node(SrcNode) of
+                {ok, #member{state = ?STATE_RUNNING}} ->
+                    ok;
+                _ ->
+                    recover_node_callback_2(Rest, AddrId, Key, FixedNode)
+            end;
+        false ->
+            recover_node_callback_2(Rest, AddrId, Key, FixedNode)
     end.
 
 
@@ -844,6 +915,7 @@ correct_redundancies_3([], _, _) ->
 correct_redundancies_3(_, [], _) ->
     {error, 'not_fix_inconsistency'};
 correct_redundancies_3(InconsistentNodes, [Node|_] = NodeL, Metadata) ->
+    %% @TODO
     RPCKey = rpc:async_call(Node, leo_storage_api, synchronize,
                             [InconsistentNodes, Metadata]),
     Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
