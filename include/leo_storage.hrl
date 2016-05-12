@@ -387,16 +387,16 @@
 -endif.
 
 
--type(queue_id()   :: ?QUEUE_ID_PER_OBJECT |
-                      ?QUEUE_ID_SYNC_BY_VNODE_ID |
-                      ?QUEUE_ID_REBALANCE |
-                      ?QUEUE_ID_ASYNC_DELETION |
-                      ?QUEUE_ID_RECOVERY_NODE |
-                      ?QUEUE_ID_SYNC_OBJ_WITH_DC |
-                      ?QUEUE_ID_COMP_META_WITH_DC |
-                      ?QUEUE_ID_DEL_DIR |
-                      ?QUEUE_ID_REQ_DEL_DIR
-                      ).
+-type(queue_id():: ?QUEUE_ID_PER_OBJECT |
+                   ?QUEUE_ID_SYNC_BY_VNODE_ID |
+                   ?QUEUE_ID_REBALANCE |
+                   ?QUEUE_ID_ASYNC_DELETION |
+                   ?QUEUE_ID_RECOVERY_NODE |
+                   ?QUEUE_ID_SYNC_OBJ_WITH_DC |
+                   ?QUEUE_ID_COMP_META_WITH_DC |
+                   ?QUEUE_ID_DEL_DIR |
+                   ?QUEUE_ID_REQ_DEL_DIR
+                   ).
 
 -define(mq_id_and_alias, [{leo_delete_dir_queue,        "remove directories"},
                           {leo_req_delete_dir_queue,    "request removing directories"},

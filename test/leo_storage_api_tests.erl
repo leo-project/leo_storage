@@ -46,8 +46,7 @@ api_test_() ->
                            fun start_/1,
                            fun stop_/1,
                            fun attach_/1,
-                           fun get_node_status_/1,
-                           fun rebalance_/1
+                           fun get_node_status_/1
                           ]]}.
 
 setup() ->
@@ -206,11 +205,15 @@ synchronize_([Node0, _]) ->
 
     meck:new(leo_storage_mq, [non_strict]),
     meck:expect(leo_storage_mq, publish,
-                fun(_Q, _VNodeId, _Key, _ErrorType) ->
+                fun(_,_,_) ->
                         ok
                 end),
     meck:expect(leo_storage_mq, publish,
-                fun(_Q, _VNodeId, _Node) ->
+                fun(_,_,_,_) ->
+                        ok
+                end),
+    meck:expect(leo_storage_mq, publish,
+                fun(_,_,_,_,_) ->
                         ok
                 end),
 
@@ -248,26 +251,4 @@ get_node_status_(_) ->
     application:stop(mnesia),
     ok.
 
-rebalance_([Node0, Node1]) ->
-    meck:new(leo_storage_mq, [non_strict]),
-    meck:expect(leo_storage_mq, publish,
-                fun(_Q, _VNodeId, _Node) ->
-                        ok
-                end),
-
-    meck:new(leo_redundant_manager_api, [non_strict]),
-    meck:expect(leo_redundant_manager_api, force_sync_workers,
-                fun() ->
-                        ok
-                end),
-
-    ok = leo_storage_api:rebalance([{0,   Node0},
-                                    {255, Node1}]),
-    Res = meck:history(leo_storage_mq),
-    ?assertEqual(2, length(Res)),
-
-    meck:unload(),
-    ok.
-
 -endif.
-
