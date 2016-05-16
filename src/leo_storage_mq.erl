@@ -211,7 +211,8 @@ publish(_,_,_,_) ->
 -spec(publish(queue_id(), any(), any(), any(), any()) ->
              ok | {error, any()}).
 publish(?QUEUE_ID_REBALANCE = Id, Node, VNodeId, AddrId, Key) ->
-    KeyBin = term_to_binary({Node, AddrId, Key}),
+    Hash = erlang:crc32(term_to_binary({Node, AddrId, Key})),
+    KeyBin = term_to_binary({Hash, Node, AddrId, Key}),
     MessageBin = term_to_binary(
                    #rebalance_message{id = leo_date:clock(),
                                       vnode_id = VNodeId,
