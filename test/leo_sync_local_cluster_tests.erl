@@ -90,8 +90,8 @@ suite_regular_1_(Node) ->
 
     stack(Node),
 
-    History = meck:history(leo_object_storage_api),
-    ?assertEqual(4, length(History)),
+    %% History = meck:history(leo_object_storage_api),
+    %% ?assertEqual(4, length(History)),
     ok.
 
 suite_regular_2_(Node) ->

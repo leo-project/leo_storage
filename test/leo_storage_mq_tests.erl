@@ -267,6 +267,14 @@ subscribe_2_({Test0Node, _Test1Node}) ->
                 fun(_,_,_) ->
                         ok
                 end),
+    meck:expect(leo_storage_handler_object, replicate,
+                fun(_,_,_) ->
+                        ok
+                end),
+    meck:expect(leo_storage_handler_object, get,
+                fun({_Ref,_}) ->
+                        {ok,_Ref, <<>>, <<>>}
+                end),
 
     meck:expect(leo_redundant_manager_api, get_member_by_node,
                 fun(_Node) ->
@@ -284,7 +292,8 @@ subscribe_2_({Test0Node, _Test1Node}) ->
                 end),
 
     timer:sleep(100),
-    leo_storage_mq:handle_call({consume, ?QUEUE_ID_REBALANCE, ?TEST_MSG_3}),
+    leo_storage_mq:handle_call(
+      {consume, ?QUEUE_ID_REBALANCE, ?TEST_MSG_3}),
 
     true = ets:delete(?TBL_REBALANCE_COUNTER),
     ok.

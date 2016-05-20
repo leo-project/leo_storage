@@ -255,7 +255,7 @@ synchronize(Node) ->
              {error, any()} when SyncTarget::[atom()]|binary(),
                                  SyncVal::#?METADATA{}|atom()).
 synchronize(InconsistentNodes, #?METADATA{addr_id = AddrId,
-                                          key     = Key}) ->
+                                          key = Key}) ->
     leo_storage_handler_object:replicate(InconsistentNodes, AddrId, Key);
 
 synchronize(Key, ErrorType) ->
@@ -495,6 +495,21 @@ get_info(_) ->
 -spec(rebalance(RebalanceList) ->
              ok | {error, any()} when RebalanceList::[tuple()]).
 rebalance(RebalanceList) ->
+    %% To reduce manager access
+    %% from storage-nods at the same time
+    MaxInterval = 20,
+    MinInterval = 5,
+    Interval = erlang:phash2(leo_date:clock(), MaxInterval),
+    Interval_1 = case (Interval < MinInterval) of
+                     true ->
+                         MinInterval +
+                             erlang:phash2(leo_date:clock(), MinInterval);
+                     false ->
+                         Interval
+                 end,
+    timer:sleep(timer:seconds(Interval_1)),
+
+    %% Do rebalance
     catch leo_redundant_manager_api:force_sync_workers(),
     rebalance_1(RebalanceList).
 
@@ -509,7 +524,9 @@ rebalance(RebalanceList, MembersCur, MembersPrev) ->
            ?SYNC_TARGET_BOTH, [{?VER_CUR, MembersCur},
                                {?VER_PREV, MembersPrev}]) of
         {ok, Hashes} ->
-            ok = rebalance(RebalanceList),
+            spawn(fun() ->
+                          rebalance(RebalanceList)
+                  end),
             {ok, Hashes};
         Error ->
             Error

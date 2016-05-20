@@ -112,6 +112,43 @@
           timestamp = 0 :: non_neg_integer(),
           times = 0 :: non_neg_integer()}).
 
+-record(inconsistent_data_message_1, {
+          id = 0 :: non_neg_integer(),
+          type :: atom(),
+          addr_id = 0 :: non_neg_integer(),
+          key :: any(),
+          meta :: tuple(),
+          sync_node :: atom(),
+          is_force_sync = false :: boolean(),
+          timestamp = 0 :: non_neg_integer(),
+          times = 0 :: non_neg_integer()}).
+-define(MSG_INCONSISTENT_DATA, 'inconsistent_data_message_1').
+-define(transform_inconsistent_data_message(_Msg),
+        begin
+            case _Msg of
+                #inconsistent_data_message{id = _Id,
+                                           type = _Type,
+                                           addr_id = _AddrId,
+                                           key = _Key,
+                                           meta = _Meta,
+                                           timestamp = _Timestamp,
+                                           times = _Time} ->
+                    {ok, #inconsistent_data_message_1{
+                            id = _Id,
+                            type = _Type,
+                            addr_id = _AddrId,
+                            key = _Key,
+                            meta = _Meta,
+                            is_force_sync = false,
+                            timestamp = _Timestamp,
+                            times = _Time}};
+                #inconsistent_data_message_1{} ->
+                    {ok,_Msg};
+                _ ->
+                    {error, invalid_record}
+            end
+        end).
+
 -record(inconsistent_index_message, {
           id = 0 :: non_neg_integer(),
           type :: atom(),
@@ -350,16 +387,16 @@
 -endif.
 
 
--type(queue_id()   :: ?QUEUE_ID_PER_OBJECT |
-                      ?QUEUE_ID_SYNC_BY_VNODE_ID |
-                      ?QUEUE_ID_REBALANCE |
-                      ?QUEUE_ID_ASYNC_DELETION |
-                      ?QUEUE_ID_RECOVERY_NODE |
-                      ?QUEUE_ID_SYNC_OBJ_WITH_DC |
-                      ?QUEUE_ID_COMP_META_WITH_DC |
-                      ?QUEUE_ID_DEL_DIR |
-                      ?QUEUE_ID_REQ_DEL_DIR
-                      ).
+-type(queue_id():: ?QUEUE_ID_PER_OBJECT |
+                   ?QUEUE_ID_SYNC_BY_VNODE_ID |
+                   ?QUEUE_ID_REBALANCE |
+                   ?QUEUE_ID_ASYNC_DELETION |
+                   ?QUEUE_ID_RECOVERY_NODE |
+                   ?QUEUE_ID_SYNC_OBJ_WITH_DC |
+                   ?QUEUE_ID_COMP_META_WITH_DC |
+                   ?QUEUE_ID_DEL_DIR |
+                   ?QUEUE_ID_REQ_DEL_DIR
+                   ).
 
 -define(mq_id_and_alias, [{leo_delete_dir_queue,        "remove directories"},
                           {leo_req_delete_dir_queue,    "request removing directories"},
