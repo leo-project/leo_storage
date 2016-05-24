@@ -58,7 +58,6 @@
 %% API
 %%--------------------------------------------------------------------
 %% @doc create queues and launch mq-servers.
-%%
 -spec(start(RootPath) ->
              ok | {error, any()} when RootPath::binary()).
 start(RootPath) ->
@@ -122,7 +121,6 @@ start_1([{Id, Path}|Rest], Sup, Root) ->
 
 
 %% @doc Input a message into the queue.
-%%
 -spec(publish(queue_id(), atom()|binary()) ->
              ok | {error, any()}).
 publish(?QUEUE_ID_RECOVERY_NODE = Id, Node) ->
@@ -249,7 +247,8 @@ publish(_,_,_,_) ->
 -spec(publish(queue_id(), any(), any(), any(), any()) ->
              ok | {error, any()}).
 publish(?QUEUE_ID_REBALANCE = Id, Node, VNodeId, AddrId, Key) ->
-    KeyBin = term_to_binary({Node, AddrId, Key}),
+    Hash = erlang:crc32(term_to_binary({Node, AddrId, Key})),
+    KeyBin = term_to_binary({Hash, Node, AddrId, Key}),
     MessageBin = term_to_binary(
                    #rebalance_message{id = leo_date:clock(),
                                       vnode_id = VNodeId,
@@ -299,14 +298,13 @@ publish(_,_,_,_,_,_) ->
 %% Callbacks
 %% -------------------------------------------------------------------
 %% @doc Initializer
-%%
 -spec(init() -> ok | {error, any()}).
 init() ->
     ok.
 
 
 %% @doc Subscribe a message from the queue.
-%%
+%% @private
 -spec(handle_call({consume, any() | queue_id() , any() | binary()}) ->
              ok | {error, any()}).
 handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
@@ -332,27 +330,10 @@ handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
             case ?transform_inconsistent_data_message(Term) of
                 {ok, #?MSG_INCONSISTENT_DATA{addr_id = AddrId,
                                              key = Key,
-                                             type = ErrorType,
+                                             %% type = ErrorType,
                                              sync_node = SyncNode,
                                              is_force_sync = true}} when SyncNode /= undefined ->
-                    Ref = make_ref(),
-                    case leo_storage_handler_object:get({Ref, Key}) of
-                        {ok, Ref, Metadata, Bin} ->
-                            case rpc:call(SyncNode, leo_sync_local_cluster, store,
-                                          [Metadata, Bin], ?DEF_REQ_TIMEOUT) of
-                                ok ->
-                                    ok;
-                                {error, inconsistent_obj} ->
-                                    ?MODULE:publish(?QUEUE_ID_PER_OBJECT, AddrId, Key, ErrorType);
-                                _ ->
-                                    ?MODULE:publish(?QUEUE_ID_PER_OBJECT, AddrId, Key,
-                                                    SyncNode, true, ErrorType)
-                            end;
-                        {error, Ref, Cause} ->
-                            {error, Cause};
-                        _Other ->
-                            {error, invalid_response}
-                    end;
+                    send_object_to_remote_node(SyncNode, AddrId, Key);
                 {ok, #?MSG_INCONSISTENT_DATA{addr_id = AddrId,
                                              key = Key,
                                              type = ErrorType}} ->
@@ -374,7 +355,7 @@ handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
 handle_call({consume, ?QUEUE_ID_SYNC_BY_VNODE_ID, MessageBin}) ->
     case catch binary_to_term(MessageBin) of
         #sync_unit_of_vnode_message{vnode_id = ToVNodeId,
-                                    node     = Node} ->
+                                    node = Node} ->
             {ok, Res} = leo_redundant_manager_api:range_of_vnodes(ToVNodeId),
             {ok, {CurRingHash, _PrevRingHash}} =
                 leo_redundant_manager_api:checksum(?CHECKSUM_RING),
@@ -651,7 +632,7 @@ handle_call(_,_,_) ->
 %% INNTERNAL FUNCTIONS-1
 %%--------------------------------------------------------------------
 %% @doc synchronize by vnode-id.
-%%
+%% @private
 -spec(recover_node(atom()) ->
              ok).
 recover_node(Node) ->
@@ -719,8 +700,32 @@ recover_node_callback_2([SrcNode|Rest], AddrId, Key, FixedNode) ->
     end.
 
 
+%% @doc Send object to a remote-node
+%% @private
+send_object_to_remote_node(Node, AddrId, Key) ->
+    Ref = make_ref(),
+    case leo_storage_handler_object:get({Ref, Key}) of
+        {ok, Ref, Metadata, Bin} ->
+            case rpc:call(Node, leo_sync_local_cluster, store,
+                          [Metadata, Bin], ?DEF_REQ_TIMEOUT) of
+                ok ->
+                    ok;
+                {error, inconsistent_obj} ->
+                    ?MODULE:publish(?QUEUE_ID_PER_OBJECT,
+                                    AddrId, Key, ?ERR_TYPE_RECOVER_DATA);
+                _ ->
+                    ?MODULE:publish(?QUEUE_ID_PER_OBJECT, AddrId, Key,
+                                    Node, true, ?ERR_TYPE_RECOVER_DATA)
+            end;
+        {error, Ref, Cause} ->
+            {error, Cause};
+        _Other ->
+            {error, invalid_response}
+    end.
+
+
 %% @doc synchronize by vnode-id.
-%%
+%% @private
 -spec(sync_vnodes(atom(), integer(), list()) ->
              ok).
 sync_vnodes(_, _, []) ->
@@ -761,7 +766,7 @@ sync_vnodes_callback(SyncTarget, Node, FromAddrId, ToAddrId)->
                                 AddrId =< ToAddrId) of
                               %% for replicated object(s) and parents
                               true ->
-                                  case catch leo_redundant_manager_api:get_redundancies_by_addr_id(put, AddrId) of
+                                  case catch leo_redundant_manager_api:get_redundancies_by_key(Key) of
                                       {ok, #redundancies{nodes = RedundantNodeL}} ->
                                           NodeL = [N || #redundant_node{node = N} <- RedundantNodeL],
                                           {true, NodeL};
@@ -819,24 +824,22 @@ find_node_from_redundancies([_|Rest], Node) ->
 
 
 %% @doc correct_redundancies/1 - first.
-%%
+%% @private
 -spec(correct_redundancies(binary()) ->
              ok | {error, any()}).
 correct_redundancies(Key) ->
     case leo_redundant_manager_api:get_redundancies_by_key(Key) of
         {ok, #redundancies{nodes = Redundancies,
-                           id    = AddrId}} ->
-            Redundancies_1 = get_redundancies_with_replicas(
-                               AddrId, Key, Redundancies),
-            correct_redundancies_1(Key, AddrId, Redundancies_1, [], []);
+                           id = AddrId}} ->
+            correct_redundancies_1(Key, AddrId, Redundancies, [], []);
         {error, Cause} ->
             ?warn("correct_redundancies/1",
                   [{key, Key}, {cause, Cause}]),
             {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
     end.
 
-%% correct_redundancies_1/5 - next.
-%%
+%% @doc correct_redundancies_1/5 - next.
+%% @private
 -spec(correct_redundancies_1(binary(), integer(), list(), list(), list()) ->
              ok | {error, any()}).
 correct_redundancies_1(_Key,_AddrId, [], [], _ErrorNodes) ->
@@ -868,8 +871,8 @@ correct_redundancies_1(Key, AddrId, [#redundant_node{node = Node}|T], Metadatas,
             correct_redundancies_1(Key, AddrId, T, Metadatas, [Node|ErrorNodes])
     end.
 
-%% correct_redundancies_2/3
-%%
+%% @doc correct_redundancies_2/3
+%% @private
 -spec(correct_redundancies_2(list(), list()) ->
              ok | {error, any()}).
 correct_redundancies_2(ListOfMetadata, ErrorNodes) ->
@@ -906,8 +909,8 @@ correct_redundancies_2(ListOfMetadata, ErrorNodes) ->
     correct_redundancies_3(ErrorNodes ++ InconsistentNodes, CorrectNodes, Metadata).
 
 
-%% correct_redundancies_3/4 - last.
-%%
+%% @doc correct_redundancies_3/4 - last.
+%% @private
 -spec(correct_redundancies_3(list(), list(), #?METADATA{}) ->
              ok | {error, any()}).
 correct_redundancies_3([], _, _) ->
@@ -915,7 +918,6 @@ correct_redundancies_3([], _, _) ->
 correct_redundancies_3(_, [], _) ->
     {error, 'not_fix_inconsistency'};
 correct_redundancies_3(InconsistentNodes, [Node|_] = NodeL, Metadata) ->
-    %% @TODO
     RPCKey = rpc:async_call(Node, leo_storage_api, synchronize,
                             [InconsistentNodes, Metadata]),
     Ret = case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
@@ -976,7 +978,7 @@ rebalance_1(#rebalance_message{node = Node,
         {ok, #member{state = ?STATE_RUNNING}} ->
             ok = decrement_counter(?TBL_REBALANCE_COUNTER, VNodeId),
 
-            case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
+            case leo_redundant_manager_api:get_redundancies_by_key(Key) of
                 {ok, #redundancies{nodes = Redundancies}} ->
                     Ret = delete_node_from_redundancies(Redundancies, Node, []),
                     rebalance_2(Ret, Msg);
@@ -1004,19 +1006,7 @@ rebalance_2({ok, Redundancies}, #rebalance_message{node = Node,
                        AddrId, Key, Redundancies),
     case find_node_from_redundancies(Redundancies_1, erlang:node()) of
         true ->
-            case leo_storage_handler_object:replicate([Node], AddrId, Key) of
-                ok ->
-                    ok;
-                not_found = Cause ->
-                    ?warn("rebalance_2/2",
-                          [{addr_id, AddrId}, {key, Key},
-                           {cause, Cause}]),
-                    ok;
-                Error ->
-                    ok = publish(?QUEUE_ID_PER_OBJECT,
-                                 AddrId, Key, ?ERR_TYPE_REPLICATE_DATA),
-                    Error
-            end;
+            send_object_to_remote_node(Node, AddrId, Key);
         false ->
             ?warn("rebalance_2/2",
                   [{node, Node}, {addr_id, AddrId},
