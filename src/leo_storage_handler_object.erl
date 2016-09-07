@@ -74,8 +74,9 @@ get({Ref, Key}) ->
         {ok, #redundancies{id = AddrId}} ->
             IsForcedCheck = true,
             case get_fun(AddrId, Key, IsForcedCheck) of
-                {ok, Metadata, #?OBJECT{data = Bin}} ->
-                    {ok, Ref, Metadata, Bin};
+                {ok, Metadata, #?OBJECT{data = Bin,
+                                        meta = CMetaBin}} ->
+                    {ok, Ref, Metadata, Bin, CMetaBin};
                 {error, Cause} ->
                     {error, Ref, Cause}
             end;
@@ -85,7 +86,7 @@ get({Ref, Key}) ->
 
 %% @doc get object (from storage-node#2).
 -spec(get(ReadParams, Redundancies) ->
-             {ok, #?METADATA{}, binary()} |
+             {ok, #?METADATA{}, binary(), binary()} |
              {ok, match} |
              {error, any()} when ReadParams::#read_parameter{},
                                  Redundancies::[#redundant_node{}]).
@@ -105,7 +106,7 @@ get(#read_parameter{addr_id = AddrId} = ReadParameter,_Redundancies) ->
 
 %% @doc Retrieve an object which is requested from gateway.
 -spec(get(AddrId, Key, ReqId) ->
-             {ok, #?METADATA{}, binary()} |
+             {ok, #?METADATA{}, binary(), binary()} |
              {error, any()} when AddrId::integer(),
                                  Key::binary(),
                                  ReqId::integer()).
@@ -117,7 +118,7 @@ get(AddrId, Key, ReqId) ->
 
 %% @doc Retrieve an object which is requested from gateway w/etag.
 -spec(get(AddrId, Key, ETag, ReqId) ->
-             {ok, #?METADATA{}, binary()} |
+             {ok, #?METADATA{}, binary(), binary()} |
              {ok, match} |
              {error, any()} when AddrId::integer(),
                                  Key::binary(),
@@ -132,7 +133,7 @@ get(AddrId, Key, ETag, ReqId) ->
 
 %% @doc Retrieve a part of an object.
 -spec(get(AddrId, Key, StartPos, EndPos, ReqId) ->
-             {ok, #?METADATA{}, binary()} |
+             {ok, #?METADATA{}, binary(), binary()} |
              {ok, match} |
              {error, any()} when AddrId::integer(),
                                  Key::binary(),
@@ -549,7 +550,8 @@ head_1([#redundant_node{node = Node,
     RPCKey = rpc:async_call(Node, leo_object_storage_api, head, [{AddrId, Key}]),
     case rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
         {value, {ok, MetaBin}} ->
-            {ok, binary_to_term(MetaBin)};
+            Meta = binary_to_term(MetaBin),
+            {ok, Meta};
         _ ->
             head_1(Rest, AddrId, Key)
     end;
@@ -633,12 +635,14 @@ replicate(DestNodes, AddrId, Key) ->
             case binary_to_term(MetaBin) of
                 #?METADATA{del = ?DEL_FALSE} = Metadata ->
                     case ?MODULE:get({Ref, Key}) of
-                        {ok, Ref, Metadata, Bin} ->
+                        {ok, Ref, Metadata, Bin, _CMetaBin} ->
+                            %% @todo Handle Custom Metadata
                             Ret = leo_sync_local_cluster:stack(
                                     DestNodes, AddrId, Key, Metadata, Bin),
                             Object_1 = leo_object_storage_transformer:metadata_to_object(Metadata),
                             Object_2 = Object_1#?OBJECT{method = ?CMD_PUT,
                                                         data = Bin},
+                            %% @todo Handle Custom Metadata
                             ok = leo_sync_remote_cluster:defer_stack(Object_2),
                             Ret;
                         {error, Ref, Cause} ->
@@ -654,6 +658,7 @@ replicate(DestNodes, AddrId, Key) ->
                                                 data = EmptyBin,
                                                 dsize = 0,
                                                 del = ?DEL_TRUE},
+                    %% @todo Handle Custom Metadata
                     ok = leo_sync_remote_cluster:defer_stack(Object_2),
                     Ret;
                 _ ->
@@ -884,7 +889,7 @@ get_active_redundancies(Quorum, Redundancies) ->
 %% @doc read reapir - compare with remote-node's meta-data.
 %% @private
 -spec(read_and_repair(ReadParams, Redundancies) ->
-             {ok, #?METADATA{}, binary()} |
+             {ok, #?METADATA{}, binary(), binary()} |
              {ok, match} |
              {error, any()} when ReadParams::#read_parameter{},
                                  Redundancies::[#redundant_node{}]).
@@ -909,7 +914,7 @@ read_and_repair_1(ReadParams, [Node|Rest], AvailableNodes, Errors) ->
 
 %% @private
 -spec(read_and_repair_2(ReadParams, Redundancies, Redundancies) ->
-             {ok, #?METADATA{}, binary()} |
+             {ok, #?METADATA{}, binary(), binary()} |
              {ok, match} |
              {error, any()} when ReadParams::#read_parameter{},
                                  Redundancies::[atom()]).
@@ -966,8 +971,9 @@ read_and_repair_2(ReadParameter, #redundant_node{node = Node}, Redundancies) ->
     RetRPC = case catch rpc:nb_yield(RPCKey, ?DEF_REQ_TIMEOUT) of
                  {'EXIT', Cause} ->
                      {error, Cause};
-                 {value, {ok, Ref, Meta, Bin}} ->
-                     {ok, Meta, #?OBJECT{data = Bin}};
+                 {value, {ok, Ref, Meta, Bin, CMetaBin}} ->
+                     {ok, Meta, #?OBJECT{data = Bin,
+                                         meta = CMetaBin}};
                  {value, {error, Ref, Cause}} ->
                      {error, Cause};
                  {value, {badrpc, Cause}} ->
@@ -980,14 +986,16 @@ read_and_repair_2(ReadParameter, #redundant_node{node = Node}, Redundancies) ->
     read_and_repair_3(RetRPC, ReadParameter, Redundancies).
 
 %% @private
-read_and_repair_3({ok, Metadata, #?OBJECT{data = Bin}}, #read_parameter{}, []) ->
-    {ok, Metadata, Bin};
+read_and_repair_3({ok, Metadata, #?OBJECT{data = Bin,
+                                          meta = CMetaBin}}, #read_parameter{}, []) ->
+    {ok, Metadata, Bin, CMetaBin};
 read_and_repair_3({ok, match} = Reply, #read_parameter{},_Redundancies) ->
     Reply;
-read_and_repair_3({ok, Metadata, #?OBJECT{data = Bin}},
+read_and_repair_3({ok, Metadata, #?OBJECT{data = Bin,
+                                          meta = CMetaBin}},
                   #read_parameter{quorum = Quorum} = ReadParameter, Redundancies) ->
     Fun = fun(ok) ->
-                  {ok, Metadata, Bin};
+                  {ok, Metadata, Bin, CMetaBin};
              ({error, unavailable} = Ret) ->
                   Ret;
              ({error,_Cause}) ->
