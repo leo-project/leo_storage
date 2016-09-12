@@ -115,6 +115,7 @@ get(#read_parameter{addr_id = AddrId} = ReadParameter,_Redundancies) ->
                                  Key::binary(),
                                  ReqId::integer()).
 get(AddrId, Key, ReqId) ->
+    ?debug("get/3", [{key, Key}, {req_id, ReqId}]),
     get(#read_parameter{ref = make_ref(),
                         addr_id   = AddrId,
                         key       = Key,
@@ -130,6 +131,7 @@ get(AddrId, Key, ReqId) ->
                                  ETag::integer(),
                                  ReqId::integer()).
 get(AddrId, Key, ETag, ReqId) ->
+    ?debug("get/4", [{key, Key}, {req_id, ReqId}]),
     get(#read_parameter{ref = make_ref(),
                         addr_id   = AddrId,
                         key       = Key,
@@ -147,6 +149,7 @@ get(AddrId, Key, ETag, ReqId) ->
                                  EndPos::integer(),
                                  ReqId::integer()).
 get(AddrId, Key, StartPos, EndPos, ReqId) ->
+    ?debug("get/5", [{key, Key}, {req_id, ReqId}]),
     get(#read_parameter{ref = make_ref(),
                         addr_id   = AddrId,
                         key       = Key,
@@ -218,6 +221,7 @@ get_fun(AddrId, Key, StartPos, EndPos, IsForcedCheck) ->
 put({Object, Ref}) ->
     AddrId = Object#?OBJECT.addr_id,
     Key    = Object#?OBJECT.key,
+    ?debug("put/1", [{key, Key}]),
 
     case Object#?OBJECT.del of
         ?DEL_TRUE->
@@ -256,6 +260,8 @@ put({Object, Ref}) ->
                                               ETag::{etag, integer()}).
 put(Object, ReqId) ->
     ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
+    ?debug("put/2", [{key, Object#?OBJECT.key},{req_id, ReqId}]),
+
     replicate_fun(?REP_LOCAL, ?CMD_PUT, Object#?OBJECT.addr_id,
                   Object#?OBJECT{method = ?CMD_PUT,
                                  clock  = leo_date:clock(),
@@ -415,6 +421,8 @@ delete(Object, ReqId) ->
                                       ReqId::integer()|reference(),
                                       CheckUnderDir::boolean()).
 delete(Object, ReqId, CheckUnderDir) ->
+    ?debug("delete/3", [{key, Object#?OBJECT.key},{req_id, ReqId}]),
+
     ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
     case replicate_fun(?REP_LOCAL, ?CMD_DELETE,
                        Object#?OBJECT.addr_id,
@@ -536,6 +544,8 @@ head(AddrId, Key) ->
                                                     CanRetry::boolean()).
 head(AddrId, Key, false) ->
     %% No retry when being invoked from recover/rebalance
+    ?debug("head/3", [{key, Key}]),
+
     case leo_object_storage_api:head({AddrId, Key}) of
         {ok, MetaBin} ->
             {ok, binary_to_term(MetaBin)};
@@ -546,6 +556,7 @@ head(AddrId, Key, false) ->
             {error, Cause}
     end;
 head(AddrId, Key, true) ->
+    ?debug("head/3", [{key, Key}]),
     case leo_redundant_manager_api:get_redundancies_by_addr_id(get, AddrId) of
         {ok, #redundancies{nodes = Redundancies}} ->
             head_1(Redundancies, AddrId, Key);
