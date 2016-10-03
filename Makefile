@@ -1,4 +1,4 @@
-.PHONY: all compile xref eunit check_plt build_plt dialyzer doc callgraph graphviz clean distclean
+.PHONY: all get_deps compile xref eunit check_plt build_plt dialyzer doc callgraph graphviz clean distclean
 
 REBAR := ./rebar
 APPS = erts kernel stdlib sasl crypto compiler inets mnesia public_key runtime_tools snmp syntax_tools tools xmerl webtool ssl
@@ -9,11 +9,11 @@ DOT_FILE = leo_storage.dot
 CALL_GRAPH_FILE = leo_storage.png
 
 REBAR := ./rebar
-all: deps compile xref eunit
-deps:
+all: get_deps compile xref eunit
+get_deps:
 	@$(REBAR) get-deps
 compile:
-	find . -name rebar.config|xargs sed -i 's/require_otp_vsn,\s\+"\(.\+\)"/require_otp_vsn, "R16B*|17|18|19"/g'
+	$(SHELL) -c ./replace_otp_vsn.sh
 	@$(REBAR) compile
 xref:
 	@$(REBAR) xref skip_deps=true
