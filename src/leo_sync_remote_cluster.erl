@@ -336,7 +336,7 @@ handle_fail(UId, [{AddrId, Key}|Rest] = _StackInfo) ->
              ok | {error, any()}).
 stack_fun(ClusterId, #?OBJECT{addr_id = AddrId,
                               key = Key,
-                              cmeta = CMeta} = Object) ->
+                              meta = CMeta} = Object) ->
     case leo_cluster_tbl_conf:get() of
         {ok, #?SYSTEM_CONF{
                  cluster_id = MDC_ClusterId,
@@ -350,7 +350,7 @@ stack_fun(ClusterId, #?OBJECT{addr_id = AddrId,
             Object_1 =  Object#?OBJECT{cluster_id = MDC_ClusterId,
                                        num_of_replicas = MDC_NumOfReplicas,
                                        msize = CMetaLen,
-                                       cmeta = CMeta_1},
+                                       meta = CMeta_1},
             ObjBin = term_to_binary(Object_1),
             ObjSize = byte_size(ObjBin),
             Data = << ObjSize:?DEF_BIN_OBJ_SIZE, ObjBin/binary,
