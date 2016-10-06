@@ -163,7 +163,7 @@ get_a1_({Node0, Node1}) ->
 
     Ref = make_ref(),
     Res = leo_storage_handler_object:get({Ref, ?TEST_KEY_0}),
-    ?assertEqual({ok, Ref, ?TEST_META_0, <<>>}, Res),
+    ?assertEqual({ok, Ref, ?TEST_META_0, <<>>, <<>>}, Res),
     ok.
 
 %%--------------------------------------------------------------------
