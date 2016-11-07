@@ -1,4 +1,4 @@
-.PHONY: all get_deps compile xref eunit check_plt build_plt dialyzer doc callgraph graphviz clean distclean
+.PHONY: all get_deps compile xref eunit release check_plt build_plt dialyzer doc callgraph graphviz clean distclean
 
 REBAR := ./rebar
 APPS = erts kernel stdlib sasl crypto compiler inets mnesia public_key runtime_tools snmp syntax_tools tools xmerl webtool ssl
@@ -19,6 +19,10 @@ xref:
 	@$(REBAR) xref skip_deps=true
 eunit:
 	@$(REBAR) eunit skip_deps=true
+release:
+	rm -rf rel/leo_storage
+	@$(REBAR) compile
+	(cd rel/ && ../rebar generate)
 check_plt:
 	@$(REBAR) compile
 	dialyzer --check_plt --plt $(PLT_FILE) --apps $(APPS)
