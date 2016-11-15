@@ -105,14 +105,14 @@ repair(#read_parameter{quorum = ReadQuorum,
                                               Callback::function()).
 loop(0,_Ref,_From,_NumOfNodes, {_,_,_E}, Callback) ->
     Callback(ok);
-loop(R,_Ref,_From, NumOfNodes, {_,_, E}, Callback) when (NumOfNodes - R) < length(E) ->
+loop(_R,_Ref,_From, 0, {_,_, E}, Callback) ->
     Callback({error, E});
 loop(R, Ref, From, NumOfNodes, {ReqId, Key, E} = Args, Callback) ->
     receive
         {Ref, ok} ->
-            loop(R-1, Ref, From, NumOfNodes, Args, Callback);
+            loop(R-1, Ref, From, NumOfNodes-1, Args, Callback);
         {Ref, {error, {Node, Cause}}} ->
-            loop(R,   Ref, From, NumOfNodes, {ReqId, Key, [{Node, Cause}|E]}, Callback)
+            loop(R,   Ref, From, NumOfNodes-1, {ReqId, Key, [{Node, Cause}|E]}, Callback)
     after
         ?DEF_REQ_TIMEOUT ->
             case (R > 0) of
