@@ -845,6 +845,15 @@
   {default, 1}
  ]}.
 
+%% @doc Is enable access log
+{mapping,
+ "log.is_enable_access_log",
+ "leo_storage.is_enable_access_log",
+ [
+  {datatype, {enum, [true, false]}},
+  {default, false}
+ ]}.
+
 %% @doc Output log file(s) - erlang
 {mapping,
  "log.erlang",

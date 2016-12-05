@@ -102,6 +102,9 @@ replication.recovery.stacking_timeout = 10
 ## Log level: [0:debug, 1:info, 2:warn, 3:error]
 log.log_level = 2
 
+## Is enable access-log [true, false]
+log.is_enable_access_log = true
+
 ## Output log file(s) - Erlang's log
 log.erlang = /var/leofs/log/erlang
 
