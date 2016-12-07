@@ -81,12 +81,14 @@ get({Ref, Key}) ->
                     {ok, Ref, Metadata, Bin};
                 {error, Cause} ->
                     ?access_log_storage_get(Key, 0, BeginTime, "error"),
-                    ?error("get/1", [{from, storage}, {method, get}, {key, Key}, {cause, Cause}]),
+                    ?error("get/1", [{from, storage}, {method, get},
+                                     {key, Key}, {cause, Cause}]),
                     {error, Ref, Cause}
             end;
         _ ->
             ?access_log_storage_get(Key, 0, BeginTime, "error"),
-            ?error("get/1", [{from, storage}, {method, get}, {key, Key}, {cause, ?ERROR_COULD_NOT_GET_REDUNDANCY}]),
+            ?error("get/1", [{from, storage}, {method, get},
+                             {key, Key}, {cause, ?ERROR_COULD_NOT_GET_REDUNDANCY}]),
             {error, Ref, ?ERROR_COULD_NOT_GET_REDUNDANCY}
     end.
 
@@ -109,7 +111,8 @@ get(#read_parameter{addr_id = AddrId} = ReadParameter,_Redundancies) ->
                 Redundancies);
         _Error ->
             ?access_log_storage_get(ReadParameter#read_parameter.key, 0, BeginTime, "error"),
-            ?error("get/2", [{from, storage}, {method, get}, {key, ReadParameter#read_parameter.key}, {cause, ?ERROR_COULD_NOT_GET_REDUNDANCY}]),
+            ?error("get/2", [{from, storage}, {method, get},
+                             {key, ReadParameter#read_parameter.key}, {cause, ?ERROR_COULD_NOT_GET_REDUNDANCY}]),
             {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
     end.
 
@@ -132,7 +135,8 @@ get(AddrId, Key, ReqId) ->
             ?access_log_get(Key, byte_size(Bin), ReqId, BeginTime, "ok");
         {error, Cause} ->
             ?access_log_get(Key, 0, ReqId, BeginTime, "error"),
-            ?error("get/3", [{from, gateway}, {method, get}, {key, Key}, {req_id, ReqId}, {cause, Cause}])
+            ?error("get/3", [{from, gateway}, {method, get},
+                             {key, Key}, {req_id, ReqId}, {cause, Cause}])
     end,
     Ret.
 
@@ -160,7 +164,8 @@ get(AddrId, Key, ETag, ReqId) ->
             ?access_log_get(Key, byte_size(Bin), ReqId, BeginTime, "ok");
         {error, Cause} ->
             ?access_log_get(Key, 0, ReqId, BeginTime, "error"),
-            ?error("get/4", [{from, gateway}, {method, get}, {key, Key}, {req_id, ReqId}, {etag, ETag}, {cause, Cause}])
+            ?error("get/4", [{from, gateway}, {method, get},
+                             {key, Key}, {req_id, ReqId}, {etag, ETag}, {cause, Cause}])
     end,
     Ret.
 
@@ -187,7 +192,8 @@ get(AddrId, Key, StartPos, EndPos, ReqId) ->
             ?access_log_range_get(Key, StartPos, EndPos, byte_size(Bin), ReqId, BeginTime, "ok");
         {error, Cause} ->
             ?access_log_range_get(Key, StartPos, EndPos, 0, ReqId, BeginTime, "error"),
-            ?error("get/5", [{from, gateway}, {method, get}, {key, Key}, {req_id, ReqId}, {start_pos, StartPos}, {end_pos, EndPos}, {cause, Cause}])
+            ?error("get/5", [{from, gateway}, {method, get},
+                             {key, Key}, {req_id, ReqId}, {start_pos, StartPos}, {end_pos, EndPos}, {cause, Cause}])
     end,
     Ret.
 
@@ -302,7 +308,8 @@ put(Object, ReqId) ->
             ?access_log_put(Object#?OBJECT.key, Object#?OBJECT.dsize, ReqId, BeginTime, "ok"); 
         {error, Cause} ->
             ?access_log_put(Object#?OBJECT.key, Object#?OBJECT.dsize, ReqId, BeginTime, "error"),
-            ?error("put/2", [{from, gateway}, {method, put}, {key, Object#?OBJECT.key}, {req_id, ReqId}, {cause, Cause}])
+            ?error("put/2", [{from, gateway}, {method, put},
+                             {key, Object#?OBJECT.key}, {req_id, ReqId}, {cause, Cause}])
     end,
     Ret.
 
@@ -337,7 +344,8 @@ put(Ref, From, Object, ReqId) ->
             erlang:send(From, {Ref, {ok, 0}});
         {error, Cause} ->
             ?access_log_storage_put(Method, Key, 0, ReqId, BeginTime, "error"),
-            ?error("put/4", [{from, storage}, {method, Method}, {key, Key}, {req_id, ReqId}, {cause, Cause}]),
+            ?error("put/4", [{from, storage}, {method, Method},
+                             {key, Key}, {req_id, ReqId}, {cause, Cause}]),
             erlang:send(From, {Ref, {error, {node(), Cause}}})
     end.
 
@@ -483,7 +491,8 @@ delete(Object, ReqId, CheckUnderDir) ->
             delete_1({error, Cause}, Object, CheckUnderDir);
         {error, Cause} ->
             ?access_log_delete(Key, Object#?OBJECT.dsize, ReqId, BeginTime, "error"),
-            ?error("delete/3", [{from, gateway}, {method, del}, {key, Object#?OBJECT.key}, {req_id, ReqId}, {cause, Cause}]),
+            ?error("delete/3", [{from, gateway}, {method, del},
+                                {key, Object#?OBJECT.key}, {req_id, ReqId}, {cause, Cause}]),
             {error, Cause}
     end.
 
