@@ -573,7 +573,18 @@ get_disk_usage([], Dict) ->
                     end,
                     {0, 0},
                     Dict),
-    {ok, Ret};
+    %% https://github.com/leo-project/leofs/issues/536
+    %% div by replication factor n in SystemConf
+    case leo_cluster_tbl_conf:get() of
+        {ok, SystemConf} ->
+            N = SystemConf#?SYSTEM_CONF.n,
+            {Total, Free} = Ret,
+            {ok, {Total / N, Free / N}};
+        not_found ->
+            {error, not_found};
+        {error, Cause} ->
+            {error, Cause}
+    end;
 get_disk_usage([Path|Rest], Dict) ->
     case leo_file:file_get_mount_path(Path) of
         {ok, {MountPath, TotalSize, UsedPercentage}} ->
