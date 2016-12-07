@@ -228,7 +228,17 @@ launch_logger() ->
                      DefLogDir
              end,
     LogLevel = ?env_log_level(leo_storage),
-    leo_logger_client_message:new(LogDir, LogLevel, log_file_appender()).
+    ok = leo_logger_client_message:new(LogDir, LogLevel, log_file_appender()),
+
+    %% access-logger (file-appender)
+    case application:get_env(leo_storage, is_enable_access_log) of
+        {ok, true} ->
+            ok = leo_logger_client_base:new(?LOG_GROUP_ID_ACCESS, ?LOG_ID_ACCESS,
+                                            LogDir, ?LOG_FILENAME_ACCESS);
+        _ ->
+            void
+    end,
+    ok.
 
 
 %% @doc Launch Object-Storage

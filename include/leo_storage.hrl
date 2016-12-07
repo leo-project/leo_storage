@@ -529,3 +529,143 @@
             _ ->
                 ?DEF_MAX_NUM_OF_PROCS
         end).
+
+%%----------------------------------------------------------------------
+%% FOR ACCESS-LOG
+%%----------------------------------------------------------------------
+%% access-log
+-define(LOG_GROUP_ID_ACCESS, 'log_grp_access_log').
+-define(LOG_ID_ACCESS, 'log_id_access_log').
+-define(LOG_FILENAME_ACCESS, "access").
+
+-define(access_log_get(Key, Size, ReqId, Begin, Msg),
+        begin
+            Latency = erlang:round((leo_date:clock() - Begin) / 1000),
+            leo_logger_client_base:append(
+              {?LOG_ID_ACCESS,
+               #message_log{ format  = "[GET]\t[Gateway]\t~s\t~w\t~w\t~s\t~w\t~w\t~s\n",
+                             message = [Key,
+                                        Size,
+                                        ReqId,
+                                        leo_date:date_format(),
+                                        leo_date:clock(),
+                                        Latency,
+                                        Msg
+                                       ]}
+              })
+        end).
+
+-define(access_log_storage_get(Key, Size, Begin, Msg),
+        begin
+            Latency = erlang:round((leo_date:clock() - Begin) / 1000),
+            leo_logger_client_base:append(
+              {?LOG_ID_ACCESS,
+               #message_log{ format  = "[GET]\t[Storage]\t~s\t~w\t\t~s\t~w\t~w\t~s\n",
+                             message = [Key,
+                                        Size,
+                                        leo_date:date_format(),
+                                        leo_date:clock(),
+                                        Latency,
+                                        Msg
+                                       ]}
+              })
+        end).
+
+-define(access_log_range_get(Key, Start, End, Size, ReqId, Begin, Msg),
+        begin
+            Latency = erlang:round((leo_date:clock() - Begin) / 1000),
+            leo_logger_client_base:append(
+              {?LOG_ID_ACCESS,
+               #message_log{ format  = "[GET]\t[Gateway]\t~s[~w-~w]\t~w\t~w\t~s\t~w\t~w\t~s\n",
+                             message = [Key,
+                                        Start,
+                                        End,
+                                        Size,
+                                        ReqId,
+                                        leo_date:date_format(),
+                                        leo_date:clock(),
+                                        Latency,
+                                        Msg
+                                       ]}
+              })
+        end).
+
+-define(access_log_storage_put(Method, Key, Size, ReqId, Begin, Msg),
+        begin
+            case Method of
+                ?CMD_DELETE ->
+                    ?access_log_storage_delete(Key, Size, ReqId, Begin, Msg);
+                ?CMD_PUT ->
+                    ?access_log_storage_put(Key, Size, ReqId, Begin, Msg)
+            end
+        end).
+
+-define(access_log_storage_delete(Key, Size, ReqId, Begin, Msg),
+        begin
+            Latency = erlang:round((leo_date:clock() - Begin) / 1000),
+            leo_logger_client_base:append(
+              {?LOG_ID_ACCESS,
+               #message_log{ format  = "[DEL]\t[Storage]\t~s\t~w\t~w\t~s\t~w\t~w\t~s\n",
+                             message = [Key,
+                                        Size,
+                                        ReqId,
+                                        leo_date:date_format(),
+                                        leo_date:clock(),
+                                        Latency,
+                                        Msg
+                                       ]}
+              })
+        end).
+
+-define(access_log_storage_put(Key, Size, ReqId, Begin, Msg),
+        begin
+            Latency = erlang:round((leo_date:clock() - Begin) / 1000),
+            leo_logger_client_base:append(
+              {?LOG_ID_ACCESS,
+               #message_log{ format  = "[PUT]\t[Storage]\t~s\t~w\t~w\t~s\t~w\t~w\t~s\n",
+                             message = [Key,
+                                        Size,
+                                        ReqId,
+                                        leo_date:date_format(),
+                                        leo_date:clock(),
+                                        Latency,
+                                        Msg
+                                       ]}
+              })
+        end).
+
+-define(access_log_put(Key, Size, ReqId, Begin, Msg),
+        begin
+            Latency = erlang:round((leo_date:clock() - Begin) / 1000),
+            leo_logger_client_base:append(
+              {?LOG_ID_ACCESS,
+               #message_log{ format  = "[PUT]\t[Gateway]\t~s\t~w\t~w\t~s\t~w\t~w\t~s\n",
+                             message = [Key,
+                                        Size,
+                                        ReqId,
+                                        leo_date:date_format(),
+                                        leo_date:clock(),
+                                        Latency,
+                                        Msg
+                                       ]}
+              })
+        end).
+
+-define(access_log_delete(Key, Size, ReqId, Begin, Msg),
+        begin
+            Latency = erlang:round((leo_date:clock() - Begin) / 1000),
+            leo_logger_client_base:append(
+              {?LOG_ID_ACCESS,
+               #message_log{ format  = "[PUT]\t[Gateway]\t~s\t~w\t~w\t~s\t~w\t~w\t~s\n",
+                             message = [Key,
+                                        Size,
+                                        ReqId,
+                                        leo_date:date_format(),
+                                        leo_date:clock(),
+                                        Latency,
+                                        Msg
+                                       ]}
+              })
+        end).
+
+
