@@ -558,7 +558,12 @@ get_disk_usage() ->
                    [] -> [];
                    Devices ->
                        lists:map(fun(Item) ->
-                                         leo_misc:get_value(path, Item)
+                                         %% https://github.com/leo-project/leofs/issues/533
+                                         %% as leo_file:get_mount_path expect to take a path
+                                         %% that represets a file|directory on a mount point(not mount point itself)
+                                         %% also need to take care such leo_commons's **semantic** backward compatibility
+                                         %% so we need to add an additional element here.
+                                         filename:join(leo_misc:get_value(path, Item), "log")
                                  end, Devices)
                end,
     get_disk_usage(PathList, dict:new()).
