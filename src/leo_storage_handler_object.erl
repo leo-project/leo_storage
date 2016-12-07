@@ -69,7 +69,7 @@
              {ok, reference(), binary(), binary(), binary()} |
              {error, reference(), any()} when RefAndKey::{reference(), binary()}).
 get({Ref, Key}) ->
-    ?debug("[Storage] get/1", "[get] Key:~p", [Key]),
+    ?debug("get/1", [{from, storage}, {method, get}, {key, Key}]),
     ok = leo_metrics_req:notify(?STAT_COUNT_GET),
     BeginTime = leo_date:clock(),
     case leo_redundant_manager_api:get_redundancies_by_key(get, Key) of
@@ -81,12 +81,12 @@ get({Ref, Key}) ->
                     {ok, Ref, Metadata, Bin};
                 {error, Cause} ->
                     ?access_log_storage_get(Key, 0, BeginTime, "error"),
-                    ?error("[Storage] get/1", "[get] Key:~p, Error:~p", [Key, Cause]),
+                    ?error("get/1", [{from, storage}, {method, get}, {key, Key}, {cause, Cause}]),
                     {error, Ref, Cause}
             end;
         _ ->
             ?access_log_storage_get(Key, 0, BeginTime, "error"),
-            ?error("[Storage] get/1", "[get] Key:~p, Error:Could Not Get Redundancy", [Key]),
+            ?error("get/1", [{from, storage}, {method, get}, {key, Key}, {cause, ?ERROR_COULD_NOT_GET_REDUNDANCY}]),
             {error, Ref, ?ERROR_COULD_NOT_GET_REDUNDANCY}
     end.
 
@@ -109,7 +109,7 @@ get(#read_parameter{addr_id = AddrId} = ReadParameter,_Redundancies) ->
                 Redundancies);
         _Error ->
             ?access_log_storage_get(ReadParameter#read_parameter.key, 0, BeginTime, "error"),
-            ?error("[Storage] get/2", "[get] Key:~p, Error:~p", [ReadParameter#read_parameter.key, ?ERROR_COULD_NOT_GET_REDUNDANCY]),
+            ?error("get/2", [{from, storage}, {method, get}, {key, ReadParameter#read_parameter.key}, {cause, ?ERROR_COULD_NOT_GET_REDUNDANCY}]),
             {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
     end.
 
@@ -121,7 +121,7 @@ get(#read_parameter{addr_id = AddrId} = ReadParameter,_Redundancies) ->
                                  ReqId::integer()).
 get(AddrId, Key, ReqId) ->
     BeginTime = leo_date:clock(),
-    ?debug("[Gateway] get/3", "[get] Key:~p, Req ID:~p", [Key, ReqId]),
+    ?debug("get/3", [{from, gateway}, {method, get}, {key, Key}, {req_id, ReqId}]),
     Ret =
     get(#read_parameter{ref = make_ref(),
                         addr_id = AddrId,
@@ -132,7 +132,7 @@ get(AddrId, Key, ReqId) ->
             ?access_log_get(Key, byte_size(Bin), ReqId, BeginTime, "ok");
         {error, Cause} ->
             ?access_log_get(Key, 0, ReqId, BeginTime, "error"),
-            ?error("[Gateway] get/3", "[get] Key:~p, Req ID:~p, Error:~p", [Key, ReqId, Cause])
+            ?error("get/3", [{from, gateway}, {method, get}, {key, Key}, {req_id, ReqId}, {cause, Cause}])
     end,
     Ret.
 
@@ -146,7 +146,7 @@ get(AddrId, Key, ReqId) ->
                                  ReqId::integer()).
 get(AddrId, Key, ETag, ReqId) ->
     BeginTime = leo_date:clock(),
-    ?debug("[Gateway] get/4", "[get] Key:~p, Req ID:~p, ETag:~p", [Key, ReqId, ETag]),
+    ?debug("get/4", [{from, gateway}, {method, get}, {key, Key}, {req_id, ReqId}, {etag, ETag}]),
     Ret =
     get(#read_parameter{ref = make_ref(),
                         addr_id = AddrId,
@@ -160,7 +160,7 @@ get(AddrId, Key, ETag, ReqId) ->
             ?access_log_get(Key, byte_size(Bin), ReqId, BeginTime, "ok");
         {error, Cause} ->
             ?access_log_get(Key, 0, ReqId, BeginTime, "error"),
-            ?error("[Gateway] get/4", "[get] Key:~p, Req ID:~p, Error:~p", [Key, ReqId, Cause])
+            ?error("get/4", [{from, gateway}, {method, get}, {key, Key}, {req_id, ReqId}, {etag, ETag}, {cause, Cause}])
     end,
     Ret.
 
@@ -174,7 +174,7 @@ get(AddrId, Key, ETag, ReqId) ->
                                  ReqId::integer()).
 get(AddrId, Key, StartPos, EndPos, ReqId) ->
     BeginTime = leo_date:clock(),
-    ?debug("[Gateway] get/5", "[get] Key:~p, Req ID:~p, Range:~p-~p", [Key, ReqId, StartPos, EndPos]),
+    ?debug("get/5", [{from, gateway}, {method, get}, {key, Key}, {req_id, ReqId}, {start_pos, StartPos}, {end_pos, EndPos}]),
     Ret = 
     get(#read_parameter{ref = make_ref(),
                         addr_id = AddrId,
@@ -187,7 +187,7 @@ get(AddrId, Key, StartPos, EndPos, ReqId) ->
             ?access_log_range_get(Key, StartPos, EndPos, byte_size(Bin), ReqId, BeginTime, "ok");
         {error, Cause} ->
             ?access_log_range_get(Key, StartPos, EndPos, 0, ReqId, BeginTime, "error"),
-            ?error("[Gateway] get/5", "[get] Key:~p, Req ID:~p, Range:~p-~p, Error:~p", [Key, ReqId, StartPos, EndPos, Cause])
+            ?error("get/5", [{from, gateway}, {method, get}, {key, Key}, {req_id, ReqId}, {start_pos, StartPos}, {end_pos, EndPos}, {cause, Cause}])
     end,
     Ret.
 
@@ -290,7 +290,7 @@ put({Object, Ref}) ->
                                               ETag::{etag, integer()}).
 put(Object, ReqId) ->
     BeginTime = leo_date:clock(),
-    ?debug("[Gateway] put/2", "[put] Key:~p, Req ID:~p", [Object#?OBJECT.key, ReqId]),
+    ?debug("put/2", [{from, gateway}, {method, put}, {key, Object#?OBJECT.key}, {req_id, ReqId}]),
     ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
     Ret = 
     replicate_fun(?REP_LOCAL, ?CMD_PUT, Object#?OBJECT.addr_id,
@@ -302,7 +302,7 @@ put(Object, ReqId) ->
             ?access_log_put(Object#?OBJECT.key, Object#?OBJECT.dsize, ReqId, BeginTime, "ok"); 
         {error, Cause} ->
             ?access_log_put(Object#?OBJECT.key, Object#?OBJECT.dsize, ReqId, BeginTime, "error"),
-            ?error("[Gateway] put/2", "[put] Key:~p, Req ID: ~p, Error:~p", [Object#?OBJECT.key, ReqId, Cause])
+            ?error("put/2", [{from, gateway}, {method, put}, {key, Object#?OBJECT.key}, {req_id, ReqId}, {cause, Cause}])
     end,
     Ret.
 
@@ -325,7 +325,7 @@ put(Ref, From, Object, ReqId) ->
                      ?CMD_PUT
              end,
     Key = Object#?OBJECT.key,
-    ?debug("[Storage] put/4", "[~p] Key:~p", [Method, Key]),
+    ?debug("put/4", [{from, storage}, {method, Method}, {key, Key}, {req_id, ReqId}]),
 
     case replicate_fun(?REP_REMOTE, Method, Object) of
         {ok, ETag} ->
@@ -337,7 +337,7 @@ put(Ref, From, Object, ReqId) ->
             erlang:send(From, {Ref, {ok, 0}});
         {error, Cause} ->
             ?access_log_storage_put(Method, Key, 0, ReqId, BeginTime, "error"),
-            ?error("[Storage] put/4", "[~p] Key:~p, Error:~p", [Method, Object#?OBJECT.key, Cause]),
+            ?error("put/4", [{from, storage}, {method, Method}, {key, Key}, {req_id, ReqId}, {cause, Cause}]),
             erlang:send(From, {Ref, {error, {node(), Cause}}})
     end.
 
@@ -465,7 +465,7 @@ delete(Object, ReqId) ->
 delete(Object, ReqId, CheckUnderDir) ->
     BeginTime = leo_date:clock(),
     Key = Object#?OBJECT.key,
-    ?debug("[Gateway] delete/3", "[del] Key:~p, ReqId:~p", [Key, ReqId]),
+    ?debug("delete/3", [{from, gateway}, {method, del}, {key, Key}, {req_id, ReqId}]),
     ok = leo_metrics_req:notify(?STAT_COUNT_DEL),
     case replicate_fun(?REP_LOCAL, ?CMD_DELETE,
                        Object#?OBJECT.addr_id,
@@ -483,7 +483,7 @@ delete(Object, ReqId, CheckUnderDir) ->
             delete_1({error, Cause}, Object, CheckUnderDir);
         {error, Cause} ->
             ?access_log_delete(Key, Object#?OBJECT.dsize, ReqId, BeginTime, "error"),
-            ?error("[Gateway] delete/3", "Key:~p, Req ID:~p, Error:~p", [Object#?OBJECT.key, ReqId, Cause]),
+            ?error("delete/3", [{from, gateway}, {method, del}, {key, Object#?OBJECT.key}, {req_id, ReqId}, {cause, Cause}]),
             {error, Cause}
     end.
 
