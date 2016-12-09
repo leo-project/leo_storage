@@ -543,7 +543,7 @@
             Latency = erlang:round((leo_date:clock() - Begin) / 1000),
             leo_logger_client_base:append(
               {?LOG_ID_ACCESS,
-               #message_log{ format  = "[GET]\t[Gateway]\t~s\t~w\t~w\t~s\t~w\t~w\t~s\n",
+               #message_log{ format  = "[GET]\t[Gateway]\t~s\t~w\t~w\t~s\t~w\t~w\t~p\n",
                              message = [Key,
                                         Size,
                                         ReqId,
@@ -560,7 +560,7 @@
             Latency = erlang:round((leo_date:clock() - Begin) / 1000),
             leo_logger_client_base:append(
               {?LOG_ID_ACCESS,
-               #message_log{ format  = "[GET]\t[Storage]\t~s\t~w\t\t~s\t~w\t~w\t~s\n",
+               #message_log{ format  = "[GET]\t[Storage]\t~s\t~w\t\t~s\t~w\t~w\t~p\n",
                              message = [Key,
                                         Size,
                                         leo_date:date_format(),
@@ -576,7 +576,7 @@
             Latency = erlang:round((leo_date:clock() - Begin) / 1000),
             leo_logger_client_base:append(
               {?LOG_ID_ACCESS,
-               #message_log{ format  = "[GET]\t[Gateway]\t~s[~w-~w]\t~w\t~w\t~s\t~w\t~w\t~s\n",
+               #message_log{ format  = "[GET]\t[Gateway]\t~s[~w-~w]\t~w\t~w\t~s\t~w\t~w\t~p\n",
                              message = [Key,
                                         Start,
                                         End,
@@ -605,7 +605,7 @@
             Latency = erlang:round((leo_date:clock() - Begin) / 1000),
             leo_logger_client_base:append(
               {?LOG_ID_ACCESS,
-               #message_log{ format  = "[DEL]\t[Storage]\t~s\t~w\t~w\t~s\t~w\t~w\t~s\n",
+               #message_log{ format  = "[DEL]\t[Storage]\t~s\t~w\t~w\t~s\t~w\t~w\t~p\n",
                              message = [Key,
                                         Size,
                                         ReqId,
@@ -622,7 +622,7 @@
             Latency = erlang:round((leo_date:clock() - Begin) / 1000),
             leo_logger_client_base:append(
               {?LOG_ID_ACCESS,
-               #message_log{ format  = "[PUT]\t[Storage]\t~s\t~w\t~w\t~s\t~w\t~w\t~s\n",
+               #message_log{ format  = "[PUT]\t[Storage]\t~s\t~w\t~w\t~s\t~w\t~w\t~p\n",
                              message = [Key,
                                         Size,
                                         ReqId,
@@ -639,7 +639,7 @@
             Latency = erlang:round((leo_date:clock() - Begin) / 1000),
             leo_logger_client_base:append(
               {?LOG_ID_ACCESS,
-               #message_log{ format  = "[PUT]\t[Gateway]\t~s\t~w\t~w\t~s\t~w\t~w\t~s\n",
+               #message_log{ format  = "[PUT]\t[Gateway]\t~s\t~w\t~w\t~s\t~w\t~w\t~p\n",
                              message = [Key,
                                         Size,
                                         ReqId,
@@ -656,8 +656,9 @@
             Latency = erlang:round((leo_date:clock() - Begin) / 1000),
             leo_logger_client_base:append(
               {?LOG_ID_ACCESS,
-               #message_log{ format  = "[PUT]\t[Gateway]\t~s\t~w\t~w\t~s\t~w\t~w\t~s\n",
+               #message_log{ format  = "[DEL]\t[Gateway]\t~s\t~w\t~w\t~s\t~w\t~w\t~p\n",
                              message = [Key,
+
                                         Size,
                                         ReqId,
                                         leo_date:date_format(),
@@ -667,5 +668,3 @@
                                        ]}
               })
         end).
-
-

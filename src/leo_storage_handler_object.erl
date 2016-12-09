@@ -77,19 +77,20 @@ get({Ref, Key}) ->
             IsForcedCheck = true,
             case get_fun(AddrId, Key, IsForcedCheck) of
                 {ok, Metadata, #?OBJECT{data = Bin}} ->
-                    ?access_log_storage_get(Key, byte_size(Bin), BeginTime, "ok"),
+                    ?access_log_storage_get(Key, byte_size(Bin), BeginTime, ok),
                     {ok, Ref, Metadata, Bin};
                 {error, Cause} ->
-                    ?access_log_storage_get(Key, 0, BeginTime, "error"),
+                    ?access_log_storage_get(Key, 0, BeginTime, error),
                     ?error("get/1", [{from, storage}, {method, get},
                                      {key, Key}, {cause, Cause}]),
                     {error, Ref, Cause}
             end;
         _ ->
-            ?access_log_storage_get(Key, 0, BeginTime, "error"),
+            Cause = ?ERROR_COULD_NOT_GET_REDUNDANCY,
+            ?access_log_storage_get(Key, 0, BeginTime, {error, Cause}),
             ?error("get/1", [{from, storage}, {method, get},
-                             {key, Key}, {cause, ?ERROR_COULD_NOT_GET_REDUNDANCY}]),
-            {error, Ref, ?ERROR_COULD_NOT_GET_REDUNDANCY}
+                             {key, Key}, {cause, Cause}]),
+            {error, Ref, Cause}
     end.
 
 %% @doc get object (from storage-node#2).
@@ -110,10 +111,12 @@ get(#read_parameter{addr_id = AddrId} = ReadParameter,_Redundancies) ->
             get(ReadParameter#read_parameter{quorum = ReadQuorum},
                 Redundancies);
         _Error ->
-            ?access_log_storage_get(ReadParameter#read_parameter.key, 0, BeginTime, "error"),
+            Cause = ?ERROR_COULD_NOT_GET_REDUNDANCY,
+            ?access_log_storage_get(ReadParameter#read_parameter.key, 0, BeginTime, {error, Cause}),
             ?error("get/2", [{from, storage}, {method, get},
-                             {key, ReadParameter#read_parameter.key}, {cause, ?ERROR_COULD_NOT_GET_REDUNDANCY}]),
-            {error, ?ERROR_COULD_NOT_GET_REDUNDANCY}
+                             {key, ReadParameter#read_parameter.key},
+                             {cause, Cause}]),
+            {error, Cause}
     end.
 
 %% @doc Retrieve an object which is requested from gateway.
@@ -125,16 +128,15 @@ get(#read_parameter{addr_id = AddrId} = ReadParameter,_Redundancies) ->
 get(AddrId, Key, ReqId) ->
     BeginTime = leo_date:clock(),
     ?debug("get/3", [{from, gateway}, {method, get}, {key, Key}, {req_id, ReqId}]),
-    Ret =
-    get(#read_parameter{ref = make_ref(),
-                        addr_id = AddrId,
-                        key = Key,
-                        req_id = ReqId}, []),
+    Ret = get(#read_parameter{ref = make_ref(),
+                              addr_id = AddrId,
+                              key = Key,
+                              req_id = ReqId}, []),
     case Ret of
         {ok, _, Bin} ->
-            ?access_log_get(Key, byte_size(Bin), ReqId, BeginTime, "ok");
+            ?access_log_get(Key, byte_size(Bin), ReqId, BeginTime, ok);
         {error, Cause} ->
-            ?access_log_get(Key, 0, ReqId, BeginTime, "error"),
+            ?access_log_get(Key, 0, ReqId, BeginTime, error),
             ?error("get/3", [{from, gateway}, {method, get},
                              {key, Key}, {req_id, ReqId}, {cause, Cause}])
     end,
@@ -151,19 +153,18 @@ get(AddrId, Key, ReqId) ->
 get(AddrId, Key, ETag, ReqId) ->
     BeginTime = leo_date:clock(),
     ?debug("get/4", [{from, gateway}, {method, get}, {key, Key}, {req_id, ReqId}, {etag, ETag}]),
-    Ret =
-    get(#read_parameter{ref = make_ref(),
-                        addr_id = AddrId,
-                        key = Key,
-                        etag = ETag,
-                        req_id = ReqId}, []),
+    Ret = get(#read_parameter{ref = make_ref(),
+                              addr_id = AddrId,
+                              key = Key,
+                              etag = ETag,
+                              req_id = ReqId}, []),
     case Ret of
         {ok, match} ->
-            ?access_log_get(Key, 0, ReqId, BeginTime, "match");
+            ?access_log_get(Key, 0, ReqId, BeginTime, match);
         {ok, _, Bin} ->
-            ?access_log_get(Key, byte_size(Bin), ReqId, BeginTime, "ok");
+            ?access_log_get(Key, byte_size(Bin), ReqId, BeginTime, ok);
         {error, Cause} ->
-            ?access_log_get(Key, 0, ReqId, BeginTime, "error"),
+            ?access_log_get(Key, 0, ReqId, BeginTime, error),
             ?error("get/4", [{from, gateway}, {method, get},
                              {key, Key}, {req_id, ReqId}, {etag, ETag}, {cause, Cause}])
     end,
@@ -179,21 +180,22 @@ get(AddrId, Key, ETag, ReqId) ->
                                  ReqId::integer()).
 get(AddrId, Key, StartPos, EndPos, ReqId) ->
     BeginTime = leo_date:clock(),
-    ?debug("get/5", [{from, gateway}, {method, get}, {key, Key}, {req_id, ReqId}, {start_pos, StartPos}, {end_pos, EndPos}]),
-    Ret = 
-    get(#read_parameter{ref = make_ref(),
-                        addr_id = AddrId,
-                        key = Key,
-                        start_pos = StartPos,
-                        end_pos = EndPos,
-                        req_id = ReqId}, []),
+    ?debug("get/5", [{from, gateway}, {method, get}, {key, Key}, {req_id, ReqId},
+                     {start_pos, StartPos}, {end_pos, EndPos}]),
+    Ret = get(#read_parameter{ref = make_ref(),
+                              addr_id = AddrId,
+                              key = Key,
+                              start_pos = StartPos,
+                              end_pos = EndPos,
+                              req_id = ReqId}, []),
     case Ret of
         {ok, _, Bin} ->
-            ?access_log_range_get(Key, StartPos, EndPos, byte_size(Bin), ReqId, BeginTime, "ok");
+            ?access_log_range_get(Key, StartPos, EndPos, byte_size(Bin), ReqId, BeginTime, ok);
         {error, Cause} ->
-            ?access_log_range_get(Key, StartPos, EndPos, 0, ReqId, BeginTime, "error"),
+            ?access_log_range_get(Key, StartPos, EndPos, 0, ReqId, BeginTime, error),
             ?error("get/5", [{from, gateway}, {method, get},
-                             {key, Key}, {req_id, ReqId}, {start_pos, StartPos}, {end_pos, EndPos}, {cause, Cause}])
+                             {key, Key}, {req_id, ReqId},
+                             {start_pos, StartPos}, {end_pos, EndPos}, {cause, Cause}])
     end,
     Ret.
 
@@ -298,16 +300,15 @@ put(Object, ReqId) ->
     BeginTime = leo_date:clock(),
     ?debug("put/2", [{from, gateway}, {method, put}, {key, Object#?OBJECT.key}, {req_id, ReqId}]),
     ok = leo_metrics_req:notify(?STAT_COUNT_PUT),
-    Ret = 
-    replicate_fun(?REP_LOCAL, ?CMD_PUT, Object#?OBJECT.addr_id,
-                  Object#?OBJECT{method = ?CMD_PUT,
-                                 clock = leo_date:clock(),
-                                 req_id = ReqId}),
+    Ret = replicate_fun(?REP_LOCAL, ?CMD_PUT, Object#?OBJECT.addr_id,
+                        Object#?OBJECT{method = ?CMD_PUT,
+                                       clock = leo_date:clock(),
+                                       req_id = ReqId}),
     case Ret of
         {ok, _} ->
-            ?access_log_put(Object#?OBJECT.key, Object#?OBJECT.dsize, ReqId, BeginTime, "ok"); 
+            ?access_log_put(Object#?OBJECT.key, Object#?OBJECT.dsize, ReqId, BeginTime, ok);
         {error, Cause} ->
-            ?access_log_put(Object#?OBJECT.key, Object#?OBJECT.dsize, ReqId, BeginTime, "error"),
+            ?access_log_put(Object#?OBJECT.key, Object#?OBJECT.dsize, ReqId, BeginTime, error),
             ?error("put/2", [{from, gateway}, {method, put},
                              {key, Object#?OBJECT.key}, {req_id, ReqId}, {cause, Cause}])
     end,
@@ -336,14 +337,14 @@ put(Ref, From, Object, ReqId) ->
 
     case replicate_fun(?REP_REMOTE, Method, Object) of
         {ok, ETag} ->
-            ?access_log_storage_put(Method, Key, Object#?OBJECT.dsize, ReqId, BeginTime, "ok"),
+            ?access_log_storage_put(Method, Key, Object#?OBJECT.dsize, ReqId, BeginTime, ok),
             erlang:send(From, {Ref, {ok, ETag}});
         %% not found an object (during rebalance and delete-operation)
-        {error, not_found} when ReqId == 0 ->
-            ?access_log_storage_put(Method, Key, 0, ReqId, BeginTime, "not found"),
+        {error, Cause = not_found} when ReqId == 0 ->
+            ?access_log_storage_put(Method, Key, 0, ReqId, BeginTime, Cause),
             erlang:send(From, {Ref, {ok, 0}});
         {error, Cause} ->
-            ?access_log_storage_put(Method, Key, 0, ReqId, BeginTime, "error"),
+            ?access_log_storage_put(Method, Key, 0, ReqId, BeginTime, error),
             ?error("put/4", [{from, storage}, {method, Method},
                              {key, Key}, {req_id, ReqId}, {cause, Cause}]),
             erlang:send(From, {Ref, {error, {node(), Cause}}})
@@ -484,13 +485,13 @@ delete(Object, ReqId, CheckUnderDir) ->
                                       req_id = ReqId,
                                       del = ?DEL_TRUE}) of
         {ok,_} ->
-            ?access_log_delete(Key, Object#?OBJECT.dsize, ReqId, BeginTime, "ok"),
+            ?access_log_delete(Key, Object#?OBJECT.dsize, ReqId, BeginTime, ok),
             delete_1(ok, Object, CheckUnderDir);
-        {error, not_found = Cause} ->
-            ?access_log_delete(Key, Object#?OBJECT.dsize, ReqId, BeginTime, "not found"),
+        {error, Cause = not_found} ->
+            ?access_log_delete(Key, Object#?OBJECT.dsize, ReqId, BeginTime, Cause),
             delete_1({error, Cause}, Object, CheckUnderDir);
         {error, Cause} ->
-            ?access_log_delete(Key, Object#?OBJECT.dsize, ReqId, BeginTime, "error"),
+            ?access_log_delete(Key, Object#?OBJECT.dsize, ReqId, BeginTime, error),
             ?error("delete/3", [{from, gateway}, {method, del},
                                 {key, Object#?OBJECT.key}, {req_id, ReqId}, {cause, Cause}]),
             {error, Cause}
