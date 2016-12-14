@@ -135,6 +135,8 @@ get(AddrId, Key, ReqId) ->
     case Ret of
         {ok, _, Bin} ->
             ?access_log_get(Key, byte_size(Bin), ReqId, BeginTime, ok);
+        {error, Reply = not_found} ->
+            ?access_log_get(Key, 0, ReqId, BeginTime, Reply);
         {error, Cause} ->
             ?access_log_get(Key, 0, ReqId, BeginTime, error),
             ?error("get/3", [{from, gateway}, {method, get},
@@ -163,6 +165,8 @@ get(AddrId, Key, ETag, ReqId) ->
             ?access_log_get(Key, 0, ReqId, BeginTime, match);
         {ok, _, Bin} ->
             ?access_log_get(Key, byte_size(Bin), ReqId, BeginTime, ok);
+        {error, Reply = not_found} ->
+            ?access_log_get(Key, 0, ReqId, BeginTime, Reply);
         {error, Cause} ->
             ?access_log_get(Key, 0, ReqId, BeginTime, error),
             ?error("get/4", [{from, gateway}, {method, get},
@@ -191,6 +195,8 @@ get(AddrId, Key, StartPos, EndPos, ReqId) ->
     case Ret of
         {ok, _, Bin} ->
             ?access_log_range_get(Key, StartPos, EndPos, byte_size(Bin), ReqId, BeginTime, ok);
+        {error, Reply = not_found} ->
+            ?access_log_get(Key, 0, ReqId, BeginTime, Reply);
         {error, Cause} ->
             ?access_log_range_get(Key, StartPos, EndPos, 0, ReqId, BeginTime, error),
             ?error("get/5", [{from, gateway}, {method, get},
