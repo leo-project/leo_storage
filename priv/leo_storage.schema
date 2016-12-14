@@ -654,6 +654,17 @@
   {default, 4}
  ]}.
 
+
+%% @doc Perfetch size when skipping garbage
+{mapping,
+ "compaction.skip_prefetch_size",
+ "leo_object_storage.skip_prefetch_size",
+ [
+  {datatype, integer},
+  {default, 512}
+ ]}.
+
+
 %% @doc Regular waiting time/batch-proc (msec)
 {mapping,
  "compaction.waiting_time_regular",
@@ -688,15 +699,6 @@
  [
   {datatype, integer},
   {default, 1500}
- ]}.
-
-%% @doc Perfetch size when skipping garbage
-{mapping,
- "compaction.skip_prefetch_size",
- "leo_object_storage.skip_prefetch_size",
- [
-  {datatype, integer},
-  {default, 512}
  ]}.
 
 
