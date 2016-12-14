@@ -690,6 +690,15 @@
   {default, 1500}
  ]}.
 
+%% @doc Perfetch size when skipping garbage
+{mapping,
+ "compaction.skip_prefetch_size",
+ "leo_object_storage.skip_prefetch_size",
+ [
+  {datatype, integer},
+  {default, 512}
+ ]}.
+
 
 %% --------------------------------------------------------------------
 %% STORAGE - MQ
