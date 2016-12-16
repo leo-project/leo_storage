@@ -1297,7 +1297,7 @@
 
 
 %% @doc configuration path of the leofs gateway's snmp-agent
-%% See: http://www.leofs.org/docs/configuration.html#snmpa-setup
+%% See: http://leo-project.net/leofs/docs/configuration/configuration_4.html#index-2
 {mapping,
  "snmp_conf",
  "vm_args.-config",
