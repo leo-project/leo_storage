@@ -74,7 +74,7 @@ repair(#read_parameter{quorum = ReadQuorum,
                                                  <- Redundancies]),
             lists:foreach(
               fun(#redundant_node{available = false}) ->
-                      void;
+                      erlang:send(From, {Ref, {error, unavailable}});
                  (#redundant_node{can_read_repair = false}) ->
                       void;
                  (#redundant_node{node = Node,
@@ -87,7 +87,7 @@ repair(#read_parameter{quorum = ReadQuorum,
                                     compare(Ref, From, RPCKey, Node, Params)
                             end);
                  (_) ->
-                      void
+                      erlang:send(From, {Ref, ok})
               end, Redundancies),
             loop(ReadQuorum, Ref, From, NumOfNodes, {ReqId, Key, []}, Callback)
     end.
