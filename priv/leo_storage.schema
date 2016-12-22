@@ -188,6 +188,35 @@
   {default, 'leveldb'}
  ]}.
 
+%% Leo' Object-Storage (v1.3.1-)
+%% @doc eleveldb Write Buffer Size
+{mapping,
+ "backend_db.eleveldb.write_buf_size",
+ "leo_backend_db.eleveldb_write_buf_size",
+ [
+  {datatype, integer},
+  {default, 62914560}
+ ]}.
+
+%% Leo' Object-Storage (v1.3.1-)
+%% @doc eleveldb Max Open Files
+{mapping,
+ "backend_db.eleveldb.max_open_files",
+ "leo_backend_db.eleveldb_max_open_files",
+ [
+  {datatype, integer},
+  {default, 1000}
+ ]}.
+
+%% Leo' Object-Storage (v1.3.1-)
+%% @doc eleveldb SST Block Size
+{mapping,
+ "backend_db.eleveldb.sst_block_size",
+ "leo_backend_db.eleveldb_sst_block_size",
+ [
+  {datatype, integer},
+  {default, 4096}
+ ]}.
 
 %% @doc A number of virtual-nodes for the redundant-manager
 {mapping,
