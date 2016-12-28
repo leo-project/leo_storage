@@ -558,7 +558,12 @@ get_disk_usage() ->
                    [] -> [];
                    Devices ->
                        lists:map(fun(Item) ->
-                                         leo_misc:get_value(path, Item)
+                                         %% https://github.com/leo-project/leofs/issues/533
+                                         %% as leo_file:get_mount_path expect to take a path
+                                         %% that represets a file|directory on a mount point(not mount point itself)
+                                         %% also need to take care such leo_commons's **semantic** backward compatibility
+                                         %% so we need to add an additional element here.
+                                         filename:join(leo_misc:get_value(path, Item), "log")
                                  end, Devices)
                end,
     get_disk_usage(PathList, dict:new()).
@@ -568,7 +573,18 @@ get_disk_usage([], Dict) ->
                     end,
                     {0, 0},
                     Dict),
-    {ok, Ret};
+    %% https://github.com/leo-project/leofs/issues/536
+    %% div by replication factor n in SystemConf
+    case leo_cluster_tbl_conf:get() of
+        {ok, SystemConf} ->
+            N = SystemConf#?SYSTEM_CONF.n,
+            {Total, Free} = Ret,
+            {ok, {Total / N, Free / N}};
+        not_found ->
+            {error, not_found};
+        {error, Cause} ->
+            {error, Cause}
+    end;
 get_disk_usage([Path|Rest], Dict) ->
     case leo_file:file_get_mount_path(Path) of
         {ok, {MountPath, TotalSize, UsedPercentage}} ->

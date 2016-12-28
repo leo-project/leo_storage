@@ -8,3 +8,4 @@ ring_*
 leo_storage.dot
 leo_storage.png
 .rebar/
+rel/leo_storage

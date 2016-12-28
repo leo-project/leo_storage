@@ -291,6 +291,11 @@ handle_call({consume, ?QUEUE_ID_PER_OBJECT, MessageBin}) ->
                     case correct_redundancies(Key) of
                         ok ->
                             ok;
+                        {error, Cause = not_found} ->
+                            ?warn("handle_call/1 - consume",
+                                  [{addr_id, AddrId},
+                                   {key, Key}, {cause, Cause}]),
+                            ok;
                         {error, Cause} ->
                             ?warn("handle_call/1 - consume",
                                   [{addr_id, AddrId},
@@ -648,7 +653,7 @@ correct_redundancies(Key) ->
 -spec(correct_redundancies_1(binary(), integer(), list(), list(), list()) ->
              ok | {error, any()}).
 correct_redundancies_1(_Key,_AddrId, [], [], _ErrorNodes) ->
-    {error, 'not_solved'};
+    {error, not_found};
 correct_redundancies_1(_Key,_AddrId, [], Metadatas, ErrorNodes) ->
     correct_redundancies_2(Metadatas, ErrorNodes);
 correct_redundancies_1(Key, AddrId, [#redundant_node{node = Node}|T], Metadatas, ErrorNodes) ->
@@ -678,7 +683,7 @@ correct_redundancies_1(Key, AddrId, [#redundant_node{node = Node}|T], Metadatas,
 
 %% @doc correct_redundancies_2/3
 %% @private
--spec(correct_redundancies_2(list(), list()) ->
+-spec(correct_redundancies_2(list(), [any()]) ->
              ok | {error, any()}).
 correct_redundancies_2(ListOfMetadata, ErrorNodes) ->
     H = case (erlang:length(ListOfMetadata) == 1) of
@@ -697,7 +702,6 @@ correct_redundancies_2(ListOfMetadata, ErrorNodes) ->
                 erlang:hd(RetL)
         end,
     {_,Metadata} = H,
-
     {_Dest, CorrectNodes, InconsistentNodes} =
         lists:foldl(
           fun({Node,_Metadata}, {{DestNode, _Metadata} = Dest, C, R}) when Node =:= DestNode ->

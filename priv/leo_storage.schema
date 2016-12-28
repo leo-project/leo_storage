@@ -122,7 +122,7 @@
  "leo_storage.system_version",
  [
   {datatype, string},
-  {default, "1.3.0"}
+  {default, "1.3.1"}
  ]}.
 
 %% @doc Path of object-container
@@ -188,6 +188,35 @@
   {default, 'leveldb'}
  ]}.
 
+%% Leo' Object-Storage (v1.3.1-)
+%% @doc eleveldb Write Buffer Size
+{mapping,
+ "backend_db.eleveldb.write_buf_size",
+ "leo_backend_db.eleveldb_write_buf_size",
+ [
+  {datatype, integer},
+  {default, 62914560}
+ ]}.
+
+%% Leo' Object-Storage (v1.3.1-)
+%% @doc eleveldb Max Open Files
+{mapping,
+ "backend_db.eleveldb.max_open_files",
+ "leo_backend_db.eleveldb_max_open_files",
+ [
+  {datatype, integer},
+  {default, 1000}
+ ]}.
+
+%% Leo' Object-Storage (v1.3.1-)
+%% @doc eleveldb SST Block Size
+{mapping,
+ "backend_db.eleveldb.sst_block_size",
+ "leo_backend_db.eleveldb_sst_block_size",
+ [
+  {datatype, integer},
+  {default, 4096}
+ ]}.
 
 %% @doc A number of virtual-nodes for the redundant-manager
 {mapping,
@@ -654,6 +683,17 @@
   {default, 4}
  ]}.
 
+
+%% @doc Perfetch size when skipping garbage
+{mapping,
+ "compaction.skip_prefetch_size",
+ "leo_object_storage.skip_prefetch_size",
+ [
+  {datatype, integer},
+  {default, 512}
+ ]}.
+
+
 %% @doc Regular waiting time/batch-proc (msec)
 {mapping,
  "compaction.waiting_time_regular",
@@ -843,6 +883,15 @@
  [
   {datatype, integer}, %% >> enum
   {default, 1}
+ ]}.
+
+%% @doc Is enable access log
+{mapping,
+ "log.is_enable_access_log",
+ "leo_storage.is_enable_access_log",
+ [
+  {datatype, {enum, [true, false]}},
+  {default, false}
  ]}.
 
 %% @doc Output log file(s) - erlang
@@ -1277,7 +1326,7 @@
 
 
 %% @doc configuration path of the leofs gateway's snmp-agent
-%% See: http://www.leofs.org/docs/configuration.html#snmpa-setup
+%% See: http://leo-project.net/leofs/docs/configuration/configuration_4.html#index-2
 {mapping,
  "snmp_conf",
  "vm_args.-config",
