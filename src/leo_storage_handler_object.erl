@@ -790,7 +790,16 @@ prefix_search(ParentDir, Marker, MaxKeys) ->
 
 %% @private
 prefix_search_1(ParentDir, Marker, Key, V, Acc) ->
-    Meta = binary_to_term(V),
+    Meta_Pre = binary_to_term(V),
+    case leo_object_storage_transformer:transform_metadata(Meta_Pre) of
+        {error, Cause} ->
+            ?error("prefix_search_1/5", [{key, Key}, {error, Cause}]),
+            Acc;
+        Meta ->
+            prefix_search_2(ParentDir, Marker, Key, Meta, Acc)
+    end.
+
+prefix_search_2(ParentDir, Marker, Key, Meta, Acc) ->
     InRange = case Marker of
                   [] ->
                       true;
